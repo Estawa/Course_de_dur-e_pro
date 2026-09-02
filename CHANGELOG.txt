@@ -1,0 +1,24 @@
+v1.2.0 — Bibliothèque, Séance vierge, Outils, Full Power
+- Écran d'accueil élève restructuré en 3 tuiles : Séance vierge / Bibliothèque / Outils
+- Bibliothèque : séances préparées par l'enseignant et rendues visibles au fil du cycle (visibilité activable/désactivable depuis le tableau de bord), + historique élève avec synthèse
+- Séance vierge : l'élève compose sa propre séance façon "Full Power" (types A/B/C/D en %VMA + séquence de répétitions), la réalise en solo, avec les mêmes bilans de bloc, Borg et observation finale qu'une séance assignée
+- Côté enseignant : chaque bloc d'un niveau peut être configuré en mode "Simple" (distance/temps/allure) ou "Full Power" (types A/B/C/D + séquence), au choix, pour comparaison
+- Outils : VMA personnelle (saisie/màj), tests de VMA (Demi-Cooper 6min, 4×3min avec détection d'anomalie, Gacon 45/15 avec demi-palier), chronomètre avec distance/vitesse, échelle de Borg de référence, performances estimées par distance à partir de la VMA (et %VMA inverse à partir d'une perf réalisée)
+- Guidage GPS/minuteur géré phase par phase (travail/récupération) avec gong à chaque transition
+
+v1.1.0 — Découpage en blocs
+- Chaque niveau est désormais une suite de blocs de course successifs (nombre libre par niveau)
+- Bilan après chaque bloc : Réussi / Partiellement réussi / Non réussi, avec note d'explication si le bloc n'est pas pleinement réussi
+- En fin de séance : échelle de Borg (11 niveaux 0-10, même module que VMA Pro) puis observation générale libre
+- Note de séance calculée à partir de la moyenne des notes de blocs (Réussi=20, Partiellement=14, Non réussi=8)
+- Éditeur de séance enseignant mis à jour : ajout/suppression de blocs par niveau
+
+v1.0.0 — Première version
+- Identification élève (nom/prénom/classe), roster auto-alimenté par classe
+- Bibliothèque de séances configurable par l'enseignant (espace protégé par code PIN)
+- Chaque séance propose 3 niveaux (Facile/Moyen/Difficile) combinant distance, durée cible et allure/%VMA
+- Guidage GPS (bips de régulation d'allure, distance en temps réel) ou guidage minuteur (repères sonores) selon le niveau
+- Bilan de fin de séance : course terminée oui/non, allure respectée oui/non, note sur 20
+- Historique élève avec synthèse (moyenne, nombre de séances, progression)
+- Tableau de bord enseignant : vue par classe, synthèse de cycle par élève, export CSV
+- PWA installable pour un usage hors ligne
