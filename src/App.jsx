@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Header from './components/Header'
 import EleveLogin from './components/EleveLogin'
 import AccueilTuiles from './components/AccueilTuiles'
@@ -13,18 +13,14 @@ import EnseignantDashboard from './components/EnseignantDashboard'
 import { storage } from './utils/storage'
 
 export default function App() {
-  const [eleve, setEleve] = useState(() => storage.getEleve())
+  const [eleve, setEleve] = useState(() => storage.getEleveActif())
   const [seances, setSeancesState] = useState(() => storage.getSeances())
   const [realisations, setRealisations] = useState(() => storage.getRealisations())
 
-  const [ecran, setEcran] = useState('accueil')
+  const [ecran, setEcran] = useState(() => (storage.getEleveActif() ? 'tuiles' : 'accueil'))
   const [seanceActive, setSeanceActive] = useState(null)
   const [niveauActif, setNiveauActif] = useState(null)
   const [dernierResultat, setDernierResultat] = useState(null)
-
-  useEffect(() => {
-    if (eleve) storage.setEleve(eleve)
-  }, [eleve])
 
   function setSeances(nouvelles) {
     setSeancesState(nouvelles)
@@ -37,7 +33,7 @@ export default function App() {
   }
 
   function handleDeconnexion() {
-    storage.clearEleve()
+    storage.clearEleveActif()
     setEleve(null)
     setEcran('accueil')
   }
@@ -91,7 +87,11 @@ export default function App() {
   }
 
   const mesRealisations = eleve
-    ? realisations.filter((r) => r.eleve.nom === eleve.nom && r.eleve.prenom === eleve.prenom && r.eleve.classe === eleve.classe)
+    ? realisations.filter((r) =>
+        r.eleve.id
+          ? r.eleve.id === eleve.id
+          : r.eleve.nom === eleve.nom && r.eleve.prenom === eleve.prenom && r.eleve.classe === eleve.classe
+      )
     : []
   const vmaRef = eleve ? storage.getVma(eleve) : null
 
