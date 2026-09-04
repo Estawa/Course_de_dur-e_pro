@@ -1,3 +1,8 @@
+v1.7.0 — Suppression de classe entière + champ Sexe
+- Bouton "Supprimer la classe" dans l'onglet "Élèves & suivi" : retire tous les élèves de la classe d'un coup (l'historique de leurs séances est conservé)
+- Le mapping de colonnes à l'import propose désormais "Sexe" (en plus de Nom/Prénom/Nom+Prénom/Classe), avec reconnaissance automatique de F/M/Fille/Garçon/Femme/Homme
+- Le sexe peut aussi être renseigné ou modifié manuellement à l'ajout ou à l'édition d'un élève, et s'affiche à côté de son nom
+
 v1.6.0 — Import des classes revu (aperçu brut + mapping manuel)
 - L'import ne tente plus de deviner automatiquement les colonnes : le fichier est d'abord affiché brut (aperçu tableau), puis chaque colonne est associée manuellement (Nom, Prénom, Nom+Prénom combinés, Classe, ou Ignorer)
 - Prise en charge des exports type Pronote : BOM UTF-8, séparateur point-virgule, et colonne unique "Nom Prénom" (le nom de famille en MAJUSCULES est détecté automatiquement pour séparer nom et prénom, avec un ordre de repli configurable si aucune majuscule n'est présente)
