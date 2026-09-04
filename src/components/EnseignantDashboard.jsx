@@ -130,7 +130,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
 
   function exporterCSV() {
     const cible = classeActive ? realisations.filter((r) => r.eleve.classe === classeActive) : realisations
-    const lignes = [['Classe', 'Nom', 'Prénom', 'Séance', 'Niveau', 'Date', 'Blocs réussis', 'Borg', 'Note', 'Observation']]
+    const lignes = [['Classe', 'Nom', 'Prénom', 'Séance', 'Niveau', 'Date', 'Blocs réussis', 'Borg', 'Note déclarée', 'Note réelle', 'Source', 'Observation']]
     cible.forEach((r) => {
       const nbReussis = r.blocsResultats.filter((b) => b.reussite === 'reussi').length
       lignes.push([
@@ -143,6 +143,8 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
         `${nbReussis}/${r.blocsResultats.length}`,
         r.borg,
         r.note,
+        r.noteReelle ?? r.note,
+        r.noteReelleAvecGps === undefined ? '' : r.noteReelleAvecGps ? 'avec GPS' : 'sans GPS',
         r.observationGenerale || ''
       ])
     })
@@ -381,6 +383,8 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
                             .sort((a, b) => b.date - a.date)
                             .map((r) => {
                               const nbReussis = r.blocsResultats?.filter((b) => b.reussite === 'reussi').length ?? 0
+                              const noteAffichee = r.noteReelle ?? r.note
+                              const labelGps = r.noteReelleAvecGps === undefined ? null : r.noteReelleAvecGps ? '(ac GPS)' : '(Sans GPS)'
                               return (
                                 <div key={r.id} className="bg-white rounded-lg px-3 py-2.5 flex items-center justify-between">
                                   <div>
@@ -389,7 +393,10 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
                                       {new Date(r.date).toLocaleDateString('fr-FR')} · {nbReussis}/{r.blocsResultats?.length ?? 0} blocs · Borg {r.borg}
                                     </p>
                                   </div>
-                                  <span className="font-display text-piste-900">{r.note}/20</span>
+                                  <div className="text-right">
+                                    <span className="font-display text-piste-900">{noteAffichee}/20</span>
+                                    {labelGps && <p className="text-[10px] text-piste-500">{labelGps}</p>}
+                                  </div>
                                 </div>
                               )
                             })}

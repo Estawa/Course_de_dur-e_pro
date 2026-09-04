@@ -132,16 +132,29 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
         ? Math.abs(vitesseMoyenne - vitesseCibleMoyenneTravail) / vitesseCibleMoyenneTravail <= TOLERANCE_GPS
         : false
       onTermineBloc({
+        guidage,
         termine,
         respectAllure,
         distanceRealisee: Math.round(distance),
+        distanceCible: Math.round(distanceCible || 0),
         dureeRealisee: dureeReelle,
-        vitesseMoyenne: Math.round(vitesseMoyenne * 10) / 10
+        vitesseMoyenne: Math.round(vitesseMoyenne * 10) / 10,
+        vitesseCible: Math.round(vitesseCibleMoyenneTravail * 10) / 10
       })
     } else {
       termine = automatique || dureeReelle >= dureeCible * 0.9
       respectAllure = Math.abs(dureeReelle - dureeCible) / dureeCible <= 0.1
-      onTermineBloc({ termine, respectAllure, distanceRealisee: distanceCible, dureeRealisee: dureeReelle, vitesseMoyenne: null })
+      onTermineBloc({
+        guidage,
+        termine,
+        respectAllure,
+        distanceRealisee: distanceCible,
+        distanceCible,
+        dureeRealisee: dureeReelle,
+        dureeCible,
+        vitesseMoyenne: null,
+        vitesseCible: null
+      })
     }
   }
 
