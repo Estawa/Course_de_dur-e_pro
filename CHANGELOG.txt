@@ -1,3 +1,10 @@
+v1.8.0 — Import repris sur le modèle d'EPS Pro (fiable)
+- Remplacement complet du moteur d'import par celui, éprouvé, d'EPS Pro : lecture en ArrayBuffer avec détection d'encodage (UTF-8 avec BOM, repli automatique en Windows-1252 si des caractères invalides sont détectés — cas fréquent des exports Pronote), parseur CSV maison gérant guillemets et séparateur `,`/`;` détecté automatiquement
+- Nouvel écran d'aperçu brut du fichier tel quel (avant tout mapping), comme sur EPS Pro
+- À l'étape d'aperçu final, chaque élève détecté est listé avec case à cocher, étiqueté "nouveau" ou "mise à jour" selon qu'il correspond déjà à un élève existant de la classe
+- Deux modes d'import : "Mettre à jour / ajouter" (ne supprime jamais personne) et "Remplacer la liste" (retire de chaque classe concernée les élèves absents du fichier, en conservant id/PIN/historique de ceux reconnus)
+- Suppression de la dépendance papaparse, devenue inutile
+
 v1.7.1 — Correctif import : colonnes décalées
 - Correction d'un bug où des lignes plus courtes que d'autres (cellules vides en fin de ligne omises par certains exports) décalaient la lecture des colonnes suivantes (Sexe, Classe) : toutes les lignes sont désormais complétées à la même longueur avant lecture
 - Reconnaissance élargie pour la colonne Sexe : H et G sont maintenant reconnus en plus de F/M/Fille/Garçon/Femme/Homme
