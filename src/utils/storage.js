@@ -52,22 +52,40 @@ export const storage = {
   getClasses: () => Object.keys(getRosterBrut()).sort(),
   getElevesClasse: (classe) => (getRosterBrut()[classe] || []).slice().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')),
 
-  // Fusionne une liste plate {nom, prenom, classe, sexe?} dans le roster, en conservant id/pin existants
-  fusionnerRoster: (listeEleves) => {
+  // Applique une liste plate d'élèves importés {nom, prenom, classe, sexe?} au roster.
+  // mode "ajouter" : met à jour les élèves déjà présents (par nom/prénom) et ajoute les nouveaux, sans rien supprimer.
+  // mode "remplacer" : pour chaque classe présente dans l'import, la liste de la classe est remplacée par
+  // le contenu du fichier (les élèves reconnus gardent leur id/pin, ceux absents du fichier sont retirés).
+  appliquerImportRoster: (listeEleves, mode = 'ajouter') => {
     const roster = getRosterBrut()
-    listeEleves.forEach(({ nom, prenom, classe, sexe }) => {
-      if (!roster[classe]) roster[classe] = []
-      const existant = roster[classe].find(
-        (e) => e.nom.toLowerCase() === nom.toLowerCase() && e.prenom.toLowerCase() === prenom.toLowerCase()
-      )
-      if (!existant) {
-        roster[classe].push({ id: idEleve(), nom, prenom, pin: null, sexe: sexe || null })
-      } else if (sexe && !existant.sexe) {
-        existant.sexe = sexe
-      }
-    })
+
+    if (mode === 'remplacer') {
+      const classesConcernees = Array.from(new Set(listeEleves.map((e) => e.classe)))
+      classesConcernees.forEach((classe) => {
+        const importesClasse = listeEleves.filter((e) => e.classe === classe)
+        const existants = roster[classe] || []
+        roster[classe] = importesClasse.map((imp) => {
+          const trouve = existants.find(
+            (e) => e.nom.toLowerCase() === imp.nom.toLowerCase() && e.prenom.toLowerCase() === imp.prenom.toLowerCase()
+          )
+          if (trouve) return { ...trouve, sexe: imp.sexe || trouve.sexe || null }
+          return { id: idEleve(), nom: imp.nom, prenom: imp.prenom, pin: null, sexe: imp.sexe || null }
+        })
+      })
+    } else {
+      listeEleves.forEach(({ nom, prenom, classe, sexe }) => {
+        if (!roster[classe]) roster[classe] = []
+        const existant = roster[classe].find(
+          (e) => e.nom.toLowerCase() === nom.toLowerCase() && e.prenom.toLowerCase() === prenom.toLowerCase()
+        )
+        if (existant) {
+          if (sexe && !existant.sexe) existant.sexe = sexe
+        } else {
+          roster[classe].push({ id: idEleve(), nom, prenom, pin: null, sexe: sexe || null })
+        }
+      })
+    }
     write(KEYS.ROSTER, roster)
-    return roster
   },
 
   ajouterEleveManuel: (classe, nom, prenom, sexe = null) => {

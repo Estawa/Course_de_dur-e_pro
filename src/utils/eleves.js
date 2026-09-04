@@ -1,100 +1,139 @@
-import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 
 // Normalise une chaîne pour la comparaison (accents, casse, espaces)
-export function normaliser(str) {
-  return (str || '')
-    .toString()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase()
+export function normaliser(s) {
+  return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
 }
 
-function retirerBOM(texte) {
-  if (texte.charCodeAt(0) === 0xfeff) return texte.slice(1)
+// Ramène toute variante de sexe importée ou saisie ("Masculin", "Féminin", "M", "F", "H"...) à "M" ou "F".
+export function normaliserSexe(valeur) {
+  const t = normaliser(valeur)
+  if (['m', 'masculin', 'garcon', 'homme', 'h'].includes(t)) return 'M'
+  if (['f', 'feminin', 'fille', 'femme'].includes(t)) return 'F'
+  return (valeur || '').toString().trim()
+}
+
+// Sépare une cellule "NOM Prénom" (convention Pronote : le nom de famille est en majuscules)
+// en { nom, prenom }. Repli sur une coupure au premier mot si aucun mot n'est en majuscules.
+export function separerNomPrenom(chaine) {
+  const txt = (chaine || '').toString().trim().replace(/\s+/g, ' ')
+  if (!txt) return { nom: '', prenom: '' }
+  const mots = txt.split(' ')
+  const estMajuscule = (m) => m.replace(/[^A-Za-zÀ-ÿ]/g, '').length > 0 && m === m.toUpperCase()
+  let i = 0
+  while (i < mots.length && estMajuscule(mots[i])) i++
+  if (i === 0 || i === mots.length) {
+    // Aucun mot tout en majuscules détecté (ou tous) : repli simple sur le premier mot.
+    return { nom: mots[0] || '', prenom: mots.slice(1).join(' ') }
+  }
+  return { nom: mots.slice(0, i).join(' '), prenom: mots.slice(i).join(' ') }
+}
+
+// ---------- Lecture robuste de fichiers CSV (séparateur , ou ; + détection d'encodage) ----------
+function decoderTexteFichier(buffer) {
+  const octets = new Uint8Array(buffer)
+  const aBom = octets.length > 3 && octets[0] === 0xef && octets[1] === 0xbb && octets[2] === 0xbf
+  let texte = new TextDecoder('utf-8').decode(octets)
+  const nbRemplacement = (texte.match(/\uFFFD/g) || []).length
+  if (!aBom && nbRemplacement > 0) {
+    try {
+      texte = new TextDecoder('windows-1252').decode(octets)
+    } catch (e) {
+      // Encodage windows-1252 indisponible : on garde le texte UTF-8 décodé.
+    }
+  }
   return texte
 }
 
-// Parse n'importe quel fichier (CSV/XLSX/ODS/XLS) et retourne un tableau BRUT de lignes
-// (tableaux de cellules texte), sans aucune interprétation des colonnes.
-// Gère le BOM UTF-8 et les délimiteurs `;` / `,` / tabulation (exports Pronote notamment).
-export async function parserLignesBrutes(file) {
-  let lignes
-  const nomFichier = file.name.toLowerCase()
-  if (nomFichier.endsWith('.csv') || nomFichier.endsWith('.txt') || file.type === 'text/csv') {
-    let texte = await file.text()
-    texte = retirerBOM(texte).trim()
-    const resultat = Papa.parse(texte, { skipEmptyLines: true })
-    lignes = resultat.data
-      .map((row) => row.map((cell) => (cell ?? '').toString().trim()))
-      .filter((row) => row.some((c) => c !== ''))
-  } else {
-    const buffer = await file.arrayBuffer()
-    const classeur = XLSX.read(buffer, { type: 'array' })
-    let toutesLignes = []
-    classeur.SheetNames.forEach((nomFeuille) => {
-      const feuille = classeur.Sheets[nomFeuille]
-      const feuilleLignes = XLSX.utils.sheet_to_json(feuille, { header: 1, defval: '' })
-      toutesLignes = toutesLignes.concat(feuilleLignes.map((row) => row.map((cell) => (cell ?? '').toString().trim())))
-    })
-    lignes = toutesLignes.filter((row) => row.some((c) => c !== ''))
+function parseCsvTexte(texte) {
+  const premiereLigne = texte.split(/\r\n|\n|\r/).find((l) => l.trim() !== '') || ''
+  const nbVirgules = (premiereLigne.match(/,/g) || []).length
+  const nbPointsVirgules = (premiereLigne.match(/;/g) || []).length
+  const sep = nbPointsVirgules > nbVirgules ? ';' : ','
+
+  const lignes = []
+  let ligneCourante = []
+  let champ = ''
+  let dansGuillemets = false
+  for (let i = 0; i < texte.length; i++) {
+    const c = texte[i]
+    const suivant = texte[i + 1]
+    if (dansGuillemets) {
+      if (c === '"' && suivant === '"') {
+        champ += '"'
+        i++
+      } else if (c === '"') {
+        dansGuillemets = false
+      } else {
+        champ += c
+      }
+    } else if (c === '"') {
+      dansGuillemets = true
+    } else if (c === sep) {
+      ligneCourante.push(champ)
+      champ = ''
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && suivant === '\n') i++
+      ligneCourante.push(champ)
+      champ = ''
+      lignes.push(ligneCourante)
+      ligneCourante = []
+    } else {
+      champ += c
+    }
   }
-  // Uniformise la longueur de toutes les lignes : certains exports omettent les cellules
-  // vides en fin de ligne, ce qui décalerait sinon la lecture des colonnes suivantes (ex. Sexe, Classe).
-  const nbColonnes = lignes.reduce((max, row) => Math.max(max, row.length), 0)
-  return lignes.map((row) => {
-    if (row.length >= nbColonnes) return row
-    return [...row, ...Array(nbColonnes - row.length).fill('')]
+  if (champ !== '' || ligneCourante.length) {
+    ligneCourante.push(champ)
+    lignes.push(ligneCourante)
+  }
+  return lignes.map((l) => l.map((c) => c.trim()))
+}
+
+// Lit un fichier CSV/XLSX/ODS déjà chargé en ArrayBuffer et retourne un tableau brut de lignes.
+export function lireLignesTableur(file, buffer) {
+  const extension = file.name.split('.').pop().toLowerCase()
+  if (extension === 'csv' || extension === 'txt') {
+    const texte = decoderTexteFichier(buffer)
+    return parseCsvTexte(texte)
+  }
+  const wb = XLSX.read(buffer, { type: 'array' })
+  const feuille = wb.Sheets[wb.SheetNames[0]]
+  if (!feuille) throw new Error('Aucune feuille trouvée dans ce fichier.')
+  return XLSX.utils.sheet_to_json(feuille, { header: 1, defval: '' })
+}
+
+// Charge un fichier (File) et retourne une Promise résolue avec le tableau brut de lignes.
+export function parserLignesBrutes(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Lecture du fichier impossible.'))
+    reader.onload = (evt) => {
+      try {
+        const lignes = lireLignesTableur(file, evt.target.result)
+        const nonVides = lignes
+          .filter((l) => Array.isArray(l) && l.some((c) => String(c ?? '').trim() !== ''))
+          .map((l) => l.map((c) => String(c ?? '').trim()))
+        resolve(nonVides)
+      } catch (err) {
+        reject(err)
+      }
+    }
+    reader.readAsArrayBuffer(file)
   })
 }
 
-const ALIAS_NOM = ['nom', 'nom de famille', 'lastname', 'last name']
-const ALIAS_PRENOM = ['prenom', 'prénom', 'firstname', 'first name']
-const ALIAS_CLASSE = ['classe', 'class', 'groupe']
-const ALIAS_SEXE = ['sexe', 'genre', 'sex', 'gender']
-const ALIAS_NOM_COMPLET = ['eleve', 'eleves', 'élève', 'élèves', 'nom complet', 'nom et prenom', 'nom prenom', 'nom prénom', 'etudiant', 'élèves de la classe']
-
 // Devine un rôle de colonne par défaut à partir de son en-tête (simple suggestion, toujours modifiable)
 export function deviverRole(enTete) {
-  const c = normaliser(enTete)
-  if (ALIAS_NOM.includes(c)) return 'nom'
-  if (ALIAS_PRENOM.includes(c)) return 'prenom'
-  if (ALIAS_CLASSE.includes(c)) return 'classe'
-  if (ALIAS_SEXE.includes(c)) return 'sexe'
-  if (ALIAS_NOM_COMPLET.includes(c)) return 'nomComplet'
+  const t = normaliser(enTete)
+  if (t === 'nom') return 'nom'
+  if (t === 'prenom') return 'prenom'
+  if (t === 'sexe') return 'sexe'
+  if (t.includes('classe') || t.includes('rattachement')) return 'classe'
+  if (['eleve', 'eleves', 'identite', 'nom et prenom', 'nom prenom'].includes(t)) return 'nomComplet'
   return 'ignorer'
 }
 
-// Normalise une valeur de sexe en 'F' / 'M', ou renvoie la valeur brute si non reconnue
-export function normaliserSexe(valeur) {
-  const v = normaliser(valeur)
-  if (['f', 'fi', 'fille', 'femme', 'girl', 'feminin', 'féminin'].includes(v)) return 'F'
-  if (['m', 'h', 'g', 'garcon', 'garçon', 'homme', 'boy', 'masculin'].includes(v)) return 'M'
-  return valeur ? valeur.toString().trim() : ''
-}
-
-// Sépare "NOM Prénom" (format Pronote : nom de famille en MAJUSCULES) en {nom, prenom}.
-// Si aucun motif de majuscules n'est détecté, se rabat sur l'ordre indiqué.
-export function separerNomComplet(valeur, ordre = 'nomPrenom') {
-  const mots = (valeur || '').trim().split(/\s+/).filter(Boolean)
-  if (mots.length === 0) return { nom: '', prenom: '' }
-  if (mots.length === 1) return ordre === 'nomPrenom' ? { nom: mots[0], prenom: '' } : { nom: '', prenom: mots[0] }
-
-  const estMajuscule = (m) => m === m.toLocaleUpperCase('fr-FR') && m !== m.toLocaleLowerCase('fr-FR')
-  let i = 0
-  while (i < mots.length - 1 && estMajuscule(mots[i])) i++
-
-  if (i > 0) {
-    return { nom: mots.slice(0, i).join(' '), prenom: mots.slice(i).join(' ') }
-  }
-  if (ordre === 'nomPrenom') {
-    return { nom: mots[0], prenom: mots.slice(1).join(' ') }
-  }
-  return { nom: mots.slice(1).join(' '), prenom: mots[0] }
-}
-
-// Regroupe une liste plate d'élèves {nom, prenom, classe} par classe
+// Regroupe une liste plate d'élèves {nom, prenom, classe, sexe?} par classe
 export function regrouperParClasse(listeEleves) {
   const groupes = {}
   listeEleves.forEach((e) => {
