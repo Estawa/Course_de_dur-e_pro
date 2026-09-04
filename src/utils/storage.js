@@ -58,11 +58,12 @@ export const storage = {
   // le contenu du fichier (les élèves reconnus gardent leur id/pin, ceux absents du fichier sont retirés).
   appliquerImportRoster: (listeEleves, mode = 'ajouter') => {
     const roster = getRosterBrut()
+    const listeValide = listeEleves.filter((e) => e.classe)
 
     if (mode === 'remplacer') {
-      const classesConcernees = Array.from(new Set(listeEleves.map((e) => e.classe)))
+      const classesConcernees = Array.from(new Set(listeValide.map((e) => e.classe)))
       classesConcernees.forEach((classe) => {
-        const importesClasse = listeEleves.filter((e) => e.classe === classe)
+        const importesClasse = listeValide.filter((e) => e.classe === classe)
         const existants = roster[classe] || []
         roster[classe] = importesClasse.map((imp) => {
           const trouve = existants.find(
@@ -73,7 +74,7 @@ export const storage = {
         })
       })
     } else {
-      listeEleves.forEach(({ nom, prenom, classe, sexe }) => {
+      listeValide.forEach(({ nom, prenom, classe, sexe }) => {
         if (!roster[classe]) roster[classe] = []
         const existant = roster[classe].find(
           (e) => e.nom.toLowerCase() === nom.toLowerCase() && e.prenom.toLowerCase() === prenom.toLowerCase()
