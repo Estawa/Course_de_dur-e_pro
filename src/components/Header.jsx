@@ -16,7 +16,7 @@ export default function Header({ title, onBack, onEnseignant, showEnseignant = t
           )}
           <div className="min-w-0">
             <h1 className="font-display text-lg leading-tight truncate">{title}</h1>
-            <p className="text-[11px] text-piste-300 tracking-wide">Course de Durée Pro by C. Guilhem · v1.7.1</p>
+            <p className="text-[11px] text-piste-300 tracking-wide">Course de Durée Pro by C. Guilhem · v1.8.0</p>
           </div>
         </div>
         {showEnseignant && (
