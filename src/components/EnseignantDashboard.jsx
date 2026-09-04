@@ -30,10 +30,10 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [realisations, rosterVersion])
 
-  const classeActive = classeSelectionnee || classes[0] || null
+  const classeActive = classeSelectionnee !== null ? classeSelectionnee : classes.length > 0 ? classes[0] : null
 
   const elevesDeLaClasse = useMemo(() => {
-    if (!classeActive) return []
+    if (classeActive === null) return []
     // eslint-disable-next-line react-hooks/exhaustive-deps
     return storage.getElevesClasse(classeActive)
   }, [classeActive, rosterVersion])
@@ -50,7 +50,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
 
   // Élèves de la classe (roster) + élèves "orphelins" présents seulement dans les réalisations (ancien format)
   const lignesEleves = useMemo(() => {
-    if (!classeActive) return []
+    if (classeActive === null) return []
     const lignes = elevesDeLaClasse.map((e) => ({
       id: e.id,
       nom: e.nom,
@@ -86,14 +86,14 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
   }
 
   function supprimerEleve(eleveId) {
-    if (!eleveId || !classeActive) return
+    if (!eleveId || classeActive === null) return
     if (!confirm('Supprimer cet élève de la classe ? Son historique de séances est conservé.')) return
     storage.supprimerEleve(classeActive, eleveId)
     setRosterVersion((v) => v + 1)
   }
 
   function supprimerClasseActive() {
-    if (!classeActive) return
+    if (classeActive === null) return
     if (!confirm(`Supprimer entièrement la classe ${classeActive} et tous ses élèves ? L'historique de leurs séances est conservé.`)) return
     storage.supprimerClasse(classeActive)
     setClasseSelectionnee(null)
@@ -102,7 +102,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
   }
 
   function reinitialiserPin(eleveId) {
-    if (!eleveId || !classeActive) return
+    if (!eleveId || classeActive === null) return
     storage.reinitialiserPin(classeActive, eleveId)
     setRosterVersion((v) => v + 1)
   }
@@ -115,7 +115,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
   }
 
   function enregistrerEdition(eleveId) {
-    if (!editNom.trim() || !editPrenom.trim() || !classeActive) return
+    if (!editNom.trim() || !editPrenom.trim() || classeActive === null) return
     storage.modifierEleve(classeActive, eleveId, { nom: editNom, prenom: editPrenom, sexe: editSexe })
     setEleveEnEdition(null)
     setRosterVersion((v) => v + 1)
@@ -123,7 +123,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
 
   function ajouterEleve(e) {
     e.preventDefault()
-    if (!nouvelEleveNom.trim() || !nouvelElevePrenom.trim() || !classeActive) return
+    if (!nouvelEleveNom.trim() || !nouvelElevePrenom.trim() || classeActive === null) return
     storage.ajouterEleveManuel(classeActive, nouvelEleveNom, nouvelElevePrenom, nouvelEleveSexe || null)
     setNouvelEleveNom('')
     setNouvelElevePrenom('')
@@ -143,7 +143,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
   }
 
   function exporterCSV() {
-    const cible = classeActive ? realisations.filter((r) => r.eleve.classe === classeActive) : realisations
+    const cible = classeActive !== null ? realisations.filter((r) => r.eleve.classe === classeActive) : realisations
     const lignes = [['Classe', 'Nom', 'Prénom', 'Séance', 'Niveau', 'Date', 'Blocs réussis', 'Borg', 'Note déclarée', 'Note réelle', 'Source', 'Observation']]
     cible.forEach((r) => {
       const nbReussis = r.blocsResultats.filter((b) => b.reussite === 'reussi').length
@@ -167,7 +167,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `course-duree-pro_${classeActive || 'toutes'}.csv`
+    a.download = `course-duree-pro_${classeActive !== null ? (classeActive || 'sans-nom') : 'toutes'}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -243,7 +243,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
               <button onClick={exporterCSV} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
                 <Download size={14} /> Exporter CSV
               </button>
-              {classeActive && (
+              {classeActive !== null && (
                 <button onClick={supprimerClasseActive} className="flex items-center gap-1.5 text-xs font-medium text-alerte hover:text-alerte/80">
                   <FolderX size={14} /> Supprimer la classe
                 </button>
@@ -282,7 +282,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
                     }}
                     className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition ${classeActive === c ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-600'}`}
                   >
-                    {c}
+                    {c || '(sans nom)'}
                   </button>
                 ))}
               </div>

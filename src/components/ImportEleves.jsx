@@ -77,7 +77,8 @@ export default function ImportEleves({ onImporte, onFermer }) {
       nom = sep.nom
       prenom = sep.prenom
     }
-    const classe = (iClasse !== undefined ? String(ligne[iClasse] || '').trim() : classeParDefaut).trim().toUpperCase()
+    const classeBrute = iClasse !== undefined ? String(ligne[iClasse] || '').trim() : ''
+    const classe = (classeBrute || classeParDefaut.trim()).toUpperCase()
     const sexe = iSexe !== undefined ? normaliserSexe(ligne[iSexe]) : ''
     const existant = classe
       ? storage.getElevesClasse(classe).find(
@@ -91,7 +92,7 @@ export default function ImportEleves({ onImporte, onFermer }) {
     return lignesDonnees
       .filter((_, i) => cochees[i])
       .map(construireLigne)
-      .filter((e) => e.nom !== '' || e.prenom !== '')
+      .filter((e) => (e.nom !== '' || e.prenom !== '') && e.classe !== '')
   }
 
   function valider(mode) {
