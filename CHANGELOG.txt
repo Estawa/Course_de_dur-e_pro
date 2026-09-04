@@ -1,3 +1,17 @@
+v1.4.0 — Gestion des élèves côté enseignant
+- Ajout d'un élève à une classe existante, directement depuis l'onglet "Élèves & suivi"
+- Modification du nom/prénom d'un élève (élève arrivé en cours de cycle mal orthographié, changement, etc.)
+- Création d'une nouvelle classe vide, pour accueillir un groupe qui n'a pas encore été importé
+- Suppression d'élève déjà existante, conservée (l'historique de séances n'est jamais perdu)
+
+v1.3.0 — Import des classes, connexion par PIN personnel, suivi enseignant
+- Nouvelle icône (chronomètre + piste) sur fond dégradé, favicon + icônes PWA régénérées
+- Import des listes de classe : export CSV d'EPS Pro, ou fichier CSV/ODS/Excel (colonnes Nom/Prénom/Classe détectées automatiquement)
+- Écran d'accès élève repensé : choix de la classe, puis du nom dans une liste déroulante, puis code PIN personnel (défini par l'élève à sa première connexion)
+- Isolation stricte entre élèves et entre classes : impossible d'accéder à une session sans le bon nom + le bon PIN
+- Espace enseignant : onglet "Élèves & suivi" listant toutes les classes et tous les élèves importés, avec le détail de chacune de leurs séances (date, niveau, blocs réussis, Borg, note), réinitialisation de PIN et retrait d'élève
+- Repli conservé : si aucune classe n'est encore importée, l'élève peut toujours se créer une fiche par saisie libre (nom/prénom/classe) puis définir son PIN
+
 v1.2.0 — Bibliothèque, Séance vierge, Outils, Full Power
 - Écran d'accueil élève restructuré en 3 tuiles : Séance vierge / Bibliothèque / Outils
 - Bibliothèque : séances préparées par l'enseignant et rendues visibles au fil du cycle (visibilité activable/désactivable depuis le tableau de bord), + historique élève avec synthèse
