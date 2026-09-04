@@ -1,3 +1,8 @@
+v1.7.1 — Correctif import : colonnes décalées
+- Correction d'un bug où des lignes plus courtes que d'autres (cellules vides en fin de ligne omises par certains exports) décalaient la lecture des colonnes suivantes (Sexe, Classe) : toutes les lignes sont désormais complétées à la même longueur avant lecture
+- Reconnaissance élargie pour la colonne Sexe : H et G sont maintenant reconnus en plus de F/M/Fille/Garçon/Femme/Homme
+- Ajout d'un indicateur "X/Y valeurs renseignées" sous chaque colonne de l'écran de mapping, pour repérer immédiatement une colonne vide ou mal choisie
+
 v1.7.0 — Suppression de classe entière + champ Sexe
 - Bouton "Supprimer la classe" dans l'onglet "Élèves & suivi" : retire tous les élèves de la classe d'un coup (l'historique de leurs séances est conservé)
 - Le mapping de colonnes à l'import propose désormais "Sexe" (en plus de Nom/Prénom/Nom+Prénom/Classe), avec reconnaissance automatique de F/M/Fille/Garçon/Femme/Homme
