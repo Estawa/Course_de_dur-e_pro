@@ -1,3 +1,8 @@
+v1.8.1 — Correctif : classe au nom vide impossible à supprimer
+- Correction d'un bug où une classe créée sans nom (chaîne vide) était traitée comme "aucune sélection" : impossible de l'ouvrir ni d'afficher le bouton "Supprimer la classe" dessus
+- Une telle classe s'affiche désormais comme "(sans nom)" dans les onglets et peut être supprimée normalement
+- L'import ignore désormais toute ligne sans classe exploitable (ni colonne Classe renseignée, ni classe par défaut) au lieu de créer une classe vide
+
 v1.8.0 — Import repris sur le modèle d'EPS Pro (fiable)
 - Remplacement complet du moteur d'import par celui, éprouvé, d'EPS Pro : lecture en ArrayBuffer avec détection d'encodage (UTF-8 avec BOM, repli automatique en Windows-1252 si des caractères invalides sont détectés — cas fréquent des exports Pronote), parseur CSV maison gérant guillemets et séparateur `,`/`;` détecté automatiquement
 - Nouvel écran d'aperçu brut du fichier tel quel (avant tout mapping), comme sur EPS Pro
