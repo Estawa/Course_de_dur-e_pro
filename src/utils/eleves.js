@@ -20,24 +20,33 @@ function retirerBOM(texte) {
 // (tableaux de cellules texte), sans aucune interprétation des colonnes.
 // Gère le BOM UTF-8 et les délimiteurs `;` / `,` / tabulation (exports Pronote notamment).
 export async function parserLignesBrutes(file) {
+  let lignes
   const nomFichier = file.name.toLowerCase()
   if (nomFichier.endsWith('.csv') || nomFichier.endsWith('.txt') || file.type === 'text/csv') {
     let texte = await file.text()
     texte = retirerBOM(texte).trim()
     const resultat = Papa.parse(texte, { skipEmptyLines: true })
-    return resultat.data
+    lignes = resultat.data
       .map((row) => row.map((cell) => (cell ?? '').toString().trim()))
       .filter((row) => row.some((c) => c !== ''))
+  } else {
+    const buffer = await file.arrayBuffer()
+    const classeur = XLSX.read(buffer, { type: 'array' })
+    let toutesLignes = []
+    classeur.SheetNames.forEach((nomFeuille) => {
+      const feuille = classeur.Sheets[nomFeuille]
+      const feuilleLignes = XLSX.utils.sheet_to_json(feuille, { header: 1, defval: '' })
+      toutesLignes = toutesLignes.concat(feuilleLignes.map((row) => row.map((cell) => (cell ?? '').toString().trim())))
+    })
+    lignes = toutesLignes.filter((row) => row.some((c) => c !== ''))
   }
-  const buffer = await file.arrayBuffer()
-  const classeur = XLSX.read(buffer, { type: 'array' })
-  let toutesLignes = []
-  classeur.SheetNames.forEach((nomFeuille) => {
-    const feuille = classeur.Sheets[nomFeuille]
-    const lignes = XLSX.utils.sheet_to_json(feuille, { header: 1, defval: '' })
-    toutesLignes = toutesLignes.concat(lignes.map((row) => row.map((cell) => (cell ?? '').toString().trim())))
+  // Uniformise la longueur de toutes les lignes : certains exports omettent les cellules
+  // vides en fin de ligne, ce qui décalerait sinon la lecture des colonnes suivantes (ex. Sexe, Classe).
+  const nbColonnes = lignes.reduce((max, row) => Math.max(max, row.length), 0)
+  return lignes.map((row) => {
+    if (row.length >= nbColonnes) return row
+    return [...row, ...Array(nbColonnes - row.length).fill('')]
   })
-  return toutesLignes.filter((row) => row.some((c) => c !== ''))
 }
 
 const ALIAS_NOM = ['nom', 'nom de famille', 'lastname', 'last name']
@@ -60,9 +69,9 @@ export function deviverRole(enTete) {
 // Normalise une valeur de sexe en 'F' / 'M', ou renvoie la valeur brute si non reconnue
 export function normaliserSexe(valeur) {
   const v = normaliser(valeur)
-  if (['f', 'fille', 'femme', 'girl', 'feminin', 'féminin'].includes(v)) return 'F'
-  if (['m', 'garcon', 'garçon', 'homme', 'boy', 'masculin'].includes(v)) return 'M'
-  return valeur ? valeur.trim() : ''
+  if (['f', 'fi', 'fille', 'femme', 'girl', 'feminin', 'féminin'].includes(v)) return 'F'
+  if (['m', 'h', 'g', 'garcon', 'garçon', 'homme', 'boy', 'masculin'].includes(v)) return 'M'
+  return valeur ? valeur.toString().trim() : ''
 }
 
 // Sépare "NOM Prénom" (format Pronote : nom de famille en MAJUSCULES) en {nom, prenom}.
