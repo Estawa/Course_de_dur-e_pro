@@ -43,6 +43,7 @@ export async function parserLignesBrutes(file) {
 const ALIAS_NOM = ['nom', 'nom de famille', 'lastname', 'last name']
 const ALIAS_PRENOM = ['prenom', 'prénom', 'firstname', 'first name']
 const ALIAS_CLASSE = ['classe', 'class', 'groupe']
+const ALIAS_SEXE = ['sexe', 'genre', 'sex', 'gender']
 const ALIAS_NOM_COMPLET = ['eleve', 'eleves', 'élève', 'élèves', 'nom complet', 'nom et prenom', 'nom prenom', 'nom prénom', 'etudiant', 'élèves de la classe']
 
 // Devine un rôle de colonne par défaut à partir de son en-tête (simple suggestion, toujours modifiable)
@@ -51,8 +52,17 @@ export function deviverRole(enTete) {
   if (ALIAS_NOM.includes(c)) return 'nom'
   if (ALIAS_PRENOM.includes(c)) return 'prenom'
   if (ALIAS_CLASSE.includes(c)) return 'classe'
+  if (ALIAS_SEXE.includes(c)) return 'sexe'
   if (ALIAS_NOM_COMPLET.includes(c)) return 'nomComplet'
   return 'ignorer'
+}
+
+// Normalise une valeur de sexe en 'F' / 'M', ou renvoie la valeur brute si non reconnue
+export function normaliserSexe(valeur) {
+  const v = normaliser(valeur)
+  if (['f', 'fille', 'femme', 'girl', 'feminin', 'féminin'].includes(v)) return 'F'
+  if (['m', 'garcon', 'garçon', 'homme', 'boy', 'masculin'].includes(v)) return 'M'
+  return valeur ? valeur.trim() : ''
 }
 
 // Sépare "NOM Prénom" (format Pronote : nom de famille en MAJUSCULES) en {nom, prenom}.

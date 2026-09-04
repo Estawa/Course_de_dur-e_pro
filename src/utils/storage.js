@@ -52,24 +52,28 @@ export const storage = {
   getClasses: () => Object.keys(getRosterBrut()).sort(),
   getElevesClasse: (classe) => (getRosterBrut()[classe] || []).slice().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')),
 
-  // Fusionne une liste plate {nom, prenom, classe} dans le roster, en conservant id/pin existants
+  // Fusionne une liste plate {nom, prenom, classe, sexe?} dans le roster, en conservant id/pin existants
   fusionnerRoster: (listeEleves) => {
     const roster = getRosterBrut()
-    listeEleves.forEach(({ nom, prenom, classe }) => {
+    listeEleves.forEach(({ nom, prenom, classe, sexe }) => {
       if (!roster[classe]) roster[classe] = []
-      const existe = roster[classe].some(
+      const existant = roster[classe].find(
         (e) => e.nom.toLowerCase() === nom.toLowerCase() && e.prenom.toLowerCase() === prenom.toLowerCase()
       )
-      if (!existe) roster[classe].push({ id: idEleve(), nom, prenom, pin: null })
+      if (!existant) {
+        roster[classe].push({ id: idEleve(), nom, prenom, pin: null, sexe: sexe || null })
+      } else if (sexe && !existant.sexe) {
+        existant.sexe = sexe
+      }
     })
     write(KEYS.ROSTER, roster)
     return roster
   },
 
-  ajouterEleveManuel: (classe, nom, prenom) => {
+  ajouterEleveManuel: (classe, nom, prenom, sexe = null) => {
     const roster = getRosterBrut()
     if (!roster[classe]) roster[classe] = []
-    const eleve = { id: idEleve(), nom: nom.trim(), prenom: prenom.trim(), pin: null }
+    const eleve = { id: idEleve(), nom: nom.trim(), prenom: prenom.trim(), pin: null, sexe: sexe || null }
     roster[classe].push(eleve)
     write(KEYS.ROSTER, roster)
     return eleve
@@ -85,12 +89,13 @@ export const storage = {
     return nom
   },
 
-  modifierEleve: (classe, eleveId, { nom, prenom }) => {
+  modifierEleve: (classe, eleveId, { nom, prenom, sexe }) => {
     const roster = getRosterBrut()
     const eleve = (roster[classe] || []).find((e) => e.id === eleveId)
     if (eleve) {
       eleve.nom = nom.trim()
       eleve.prenom = prenom.trim()
+      if (sexe !== undefined) eleve.sexe = sexe || null
       write(KEYS.ROSTER, roster)
       return true
     }
