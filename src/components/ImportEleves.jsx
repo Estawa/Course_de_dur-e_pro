@@ -26,6 +26,10 @@ export default function ImportEleves({ onImporte, onFermer }) {
   const nbColonnes = lignesBrutes ? Math.max(...lignesBrutes.map((r) => r.length)) : 0
   const ligneEnTete = lignesBrutes && premiereLigneEnTete ? lignesBrutes[0] : null
   const lignesApercuBrut = lignesBrutes ? lignesBrutes.slice(premiereLigneEnTete ? 1 : 0, premiereLigneEnTete ? 9 : 8) : []
+  const lignesDonneesToutes = lignesBrutes ? lignesBrutes.slice(premiereLigneEnTete ? 1 : 0) : []
+  const remplissageParColonne = Array.from({ length: nbColonnes }, (_, i) =>
+    lignesDonneesToutes.filter((row) => (row[i] || '').trim() !== '').length
+  )
 
   async function traiterFichier(file) {
     setErreur('')
@@ -195,6 +199,9 @@ export default function ImportEleves({ onImporte, onFermer }) {
                         <th key={i} className="px-2 py-2 text-left align-top">
                           <p className="text-[10px] text-piste-400 mb-1">
                             Colonne {i + 1}{ligneEnTete?.[i] ? ` · "${ligneEnTete[i]}"` : ''}
+                          </p>
+                          <p className="text-[10px] text-piste-400 mb-1">
+                            {remplissageParColonne[i]}/{lignesDonneesToutes.length} valeurs renseignées
                           </p>
                           <select
                             value={mapping[i] || 'ignorer'}
