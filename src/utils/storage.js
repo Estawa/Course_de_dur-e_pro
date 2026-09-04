@@ -183,4 +183,4 @@ export const storage = {
   }
 }
 
-export const PIN_ENSEIGNANT = '2024'
+export const PIN_ENSEIGNANT = '8484'
