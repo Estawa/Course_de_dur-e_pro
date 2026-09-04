@@ -11,67 +11,68 @@ export function normaliser(str) {
     .toLowerCase()
 }
 
-const ALIAS_NOM = ['nom', 'nom de famille', 'lastname', 'last name']
-const ALIAS_PRENOM = ['prenom', 'prénom', 'firstname', 'first name']
-const ALIAS_CLASSE = ['classe', 'class', 'groupe']
-
-function detecterColonnes(headerRow) {
-  const idx = { nom: -1, prenom: -1, classe: -1 }
-  headerRow.forEach((cell, i) => {
-    const c = normaliser(cell)
-    if (idx.nom === -1 && ALIAS_NOM.includes(c)) idx.nom = i
-    else if (idx.prenom === -1 && ALIAS_PRENOM.includes(c)) idx.prenom = i
-    else if (idx.classe === -1 && ALIAS_CLASSE.includes(c)) idx.classe = i
-  })
-  return idx
+function retirerBOM(texte) {
+  if (texte.charCodeAt(0) === 0xfeff) return texte.slice(1)
+  return texte
 }
 
-// Transforme un tableau de lignes brutes (tableau de tableaux) en liste d'élèves {nom, prenom, classe}
-function lignesVersEleves(rows, classeParDefaut) {
-  const rowsUtiles = rows.filter((r) => r.some((cell) => cell !== undefined && cell !== null && String(cell).trim() !== ''))
-  if (rowsUtiles.length === 0) return []
-
-  let idx = detecterColonnes(rowsUtiles[0])
-  let dataRows = rowsUtiles
-  const enTeteDetectee = idx.nom !== -1 || idx.prenom !== -1 || idx.classe !== -1
-  if (enTeteDetectee) {
-    dataRows = rowsUtiles.slice(1)
-  } else {
-    // Pas d'en-tête reconnue : on suppose l'ordre Nom, Prénom, [Classe]
-    idx = { nom: 0, prenom: 1, classe: rowsUtiles[0].length > 2 ? 2 : -1 }
-  }
-
-  const eleves = []
-  dataRows.forEach((row) => {
-    const nom = idx.nom !== -1 ? String(row[idx.nom] || '').trim() : ''
-    const prenom = idx.prenom !== -1 ? String(row[idx.prenom] || '').trim() : ''
-    const classe = idx.classe !== -1 ? String(row[idx.classe] || '').trim().toUpperCase() : classeParDefaut
-    if (nom && prenom) {
-      eleves.push({ nom, prenom, classe: (classe || classeParDefaut || 'CLASSE').toUpperCase() })
-    }
-  })
-  return eleves
-}
-
-// Parse un fichier (CSV, XLSX, ODS) et retourne une liste d'élèves {nom, prenom, classe}
-export async function parserFichierEleves(file, classeParDefaut) {
+// Parse n'importe quel fichier (CSV/XLSX/ODS/XLS) et retourne un tableau BRUT de lignes
+// (tableaux de cellules texte), sans aucune interprétation des colonnes.
+// Gère le BOM UTF-8 et les délimiteurs `;` / `,` / tabulation (exports Pronote notamment).
+export async function parserLignesBrutes(file) {
   const nomFichier = file.name.toLowerCase()
-  if (nomFichier.endsWith('.csv') || file.type === 'text/csv') {
-    const texte = await file.text()
-    const resultat = Papa.parse(texte.trim(), { skipEmptyLines: true })
-    return lignesVersEleves(resultat.data, classeParDefaut)
+  if (nomFichier.endsWith('.csv') || nomFichier.endsWith('.txt') || file.type === 'text/csv') {
+    let texte = await file.text()
+    texte = retirerBOM(texte).trim()
+    const resultat = Papa.parse(texte, { skipEmptyLines: true })
+    return resultat.data
+      .map((row) => row.map((cell) => (cell ?? '').toString().trim()))
+      .filter((row) => row.some((c) => c !== ''))
   }
-
-  // xlsx / ods / xls
   const buffer = await file.arrayBuffer()
   const classeur = XLSX.read(buffer, { type: 'array' })
   let toutesLignes = []
   classeur.SheetNames.forEach((nomFeuille) => {
     const feuille = classeur.Sheets[nomFeuille]
     const lignes = XLSX.utils.sheet_to_json(feuille, { header: 1, defval: '' })
-    toutesLignes = toutesLignes.concat(lignes)
+    toutesLignes = toutesLignes.concat(lignes.map((row) => row.map((cell) => (cell ?? '').toString().trim())))
   })
-  return lignesVersEleves(toutesLignes, classeParDefaut)
+  return toutesLignes.filter((row) => row.some((c) => c !== ''))
+}
+
+const ALIAS_NOM = ['nom', 'nom de famille', 'lastname', 'last name']
+const ALIAS_PRENOM = ['prenom', 'prénom', 'firstname', 'first name']
+const ALIAS_CLASSE = ['classe', 'class', 'groupe']
+const ALIAS_NOM_COMPLET = ['eleve', 'eleves', 'élève', 'élèves', 'nom complet', 'nom et prenom', 'nom prenom', 'nom prénom', 'etudiant', 'élèves de la classe']
+
+// Devine un rôle de colonne par défaut à partir de son en-tête (simple suggestion, toujours modifiable)
+export function deviverRole(enTete) {
+  const c = normaliser(enTete)
+  if (ALIAS_NOM.includes(c)) return 'nom'
+  if (ALIAS_PRENOM.includes(c)) return 'prenom'
+  if (ALIAS_CLASSE.includes(c)) return 'classe'
+  if (ALIAS_NOM_COMPLET.includes(c)) return 'nomComplet'
+  return 'ignorer'
+}
+
+// Sépare "NOM Prénom" (format Pronote : nom de famille en MAJUSCULES) en {nom, prenom}.
+// Si aucun motif de majuscules n'est détecté, se rabat sur l'ordre indiqué.
+export function separerNomComplet(valeur, ordre = 'nomPrenom') {
+  const mots = (valeur || '').trim().split(/\s+/).filter(Boolean)
+  if (mots.length === 0) return { nom: '', prenom: '' }
+  if (mots.length === 1) return ordre === 'nomPrenom' ? { nom: mots[0], prenom: '' } : { nom: '', prenom: mots[0] }
+
+  const estMajuscule = (m) => m === m.toLocaleUpperCase('fr-FR') && m !== m.toLocaleLowerCase('fr-FR')
+  let i = 0
+  while (i < mots.length - 1 && estMajuscule(mots[i])) i++
+
+  if (i > 0) {
+    return { nom: mots.slice(0, i).join(' '), prenom: mots.slice(i).join(' ') }
+  }
+  if (ordre === 'nomPrenom') {
+    return { nom: mots[0], prenom: mots.slice(1).join(' ') }
+  }
+  return { nom: mots.slice(1).join(' '), prenom: mots[0] }
 }
 
 // Regroupe une liste plate d'élèves {nom, prenom, classe} par classe
