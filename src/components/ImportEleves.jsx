@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Upload, Check, AlertTriangle, X, ChevronLeft } from 'lucide-react'
-import { parserLignesBrutes, deviverRole, separerNomComplet, regrouperParClasse } from '../utils/eleves'
+import { parserLignesBrutes, deviverRole, separerNomComplet, normaliserSexe, regrouperParClasse } from '../utils/eleves'
 import { storage } from '../utils/storage'
 
 const ROLES = [
@@ -8,7 +8,8 @@ const ROLES = [
   { valeur: 'nomComplet', label: 'Nom + Prénom (une seule colonne)' },
   { valeur: 'nom', label: 'Nom' },
   { valeur: 'prenom', label: 'Prénom' },
-  { valeur: 'classe', label: 'Classe' }
+  { valeur: 'classe', label: 'Classe' },
+  { valeur: 'sexe', label: 'Sexe' }
 ]
 
 export default function ImportEleves({ onImporte, onFermer }) {
@@ -65,6 +66,7 @@ export default function ImportEleves({ onImporte, onFermer }) {
     const idxPrenom = colonneIndexPour('prenom')
     const idxNomComplet = colonneIndexPour('nomComplet')
     const idxClasse = colonneIndexPour('classe')
+    const idxSexe = colonneIndexPour('sexe')
 
     const aNomSepare = idxNom !== -1 && idxPrenom !== -1
     const aNomComplet = idxNomComplet !== -1
@@ -92,8 +94,9 @@ export default function ImportEleves({ onImporte, onFermer }) {
         prenom = (row[idxPrenom] || '').trim()
       }
       const classe = idxClasse !== -1 ? (row[idxClasse] || '').trim().toUpperCase() : classeParDefaut.trim().toUpperCase()
+      const sexe = idxSexe !== -1 ? normaliserSexe(row[idxSexe]) : ''
       if (nom && prenom && classe) {
-        liste.push({ nom, prenom, classe })
+        liste.push({ nom, prenom, classe, sexe: sexe || undefined })
       }
     })
 
@@ -284,7 +287,7 @@ export default function ImportEleves({ onImporte, onFermer }) {
                       {classe} · {eleves.length}
                     </p>
                     <p className="text-sm text-piste-800 leading-relaxed">
-                      {eleves.map((e) => `${e.prenom} ${e.nom}`).join(', ')}
+                      {eleves.map((e) => `${e.prenom} ${e.nom}${e.sexe ? ` (${e.sexe})` : ''}`).join(', ')}
                     </p>
                   </div>
                 ))}

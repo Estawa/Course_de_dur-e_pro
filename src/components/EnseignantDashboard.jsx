@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Download, Plus, Trash2, Upload, ChevronDown, ChevronUp, KeyRound, UserX, Pencil, UserPlus, FolderPlus, Check, X } from 'lucide-react'
+import { Download, Plus, Trash2, Upload, ChevronDown, ChevronUp, KeyRound, UserX, Pencil, UserPlus, FolderPlus, FolderX, Check, X } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import { storage } from '../utils/storage'
@@ -15,9 +15,11 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
   const [eleveEnEdition, setEleveEnEdition] = useState(null) // id de l'élève en cours d'édition
   const [editNom, setEditNom] = useState('')
   const [editPrenom, setEditPrenom] = useState('')
+  const [editSexe, setEditSexe] = useState('')
   const [ajoutEleveOuvert, setAjoutEleveOuvert] = useState(false)
   const [nouvelEleveNom, setNouvelEleveNom] = useState('')
   const [nouvelElevePrenom, setNouvelElevePrenom] = useState('')
+  const [nouvelEleveSexe, setNouvelEleveSexe] = useState('')
   const [nouvelleClasseOuverte, setNouvelleClasseOuverte] = useState(false)
   const [nouvelleClasseNom, setNouvelleClasseNom] = useState('')
 
@@ -53,6 +55,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
       id: e.id,
       nom: e.nom,
       prenom: e.prenom,
+      sexe: e.sexe || null,
       pinDefini: !!e.pin,
       realisations: realisationsParEleveId[e.id] || []
     }))
@@ -89,6 +92,15 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
     setRosterVersion((v) => v + 1)
   }
 
+  function supprimerClasseActive() {
+    if (!classeActive) return
+    if (!confirm(`Supprimer entièrement la classe ${classeActive} et tous ses élèves ? L'historique de leurs séances est conservé.`)) return
+    storage.supprimerClasse(classeActive)
+    setClasseSelectionnee(null)
+    setEleveOuvert(null)
+    setRosterVersion((v) => v + 1)
+  }
+
   function reinitialiserPin(eleveId) {
     if (!eleveId || !classeActive) return
     storage.reinitialiserPin(classeActive, eleveId)
@@ -99,11 +111,12 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
     setEleveEnEdition(eleve.id)
     setEditNom(eleve.nom)
     setEditPrenom(eleve.prenom)
+    setEditSexe(eleve.sexe || '')
   }
 
   function enregistrerEdition(eleveId) {
     if (!editNom.trim() || !editPrenom.trim() || !classeActive) return
-    storage.modifierEleve(classeActive, eleveId, { nom: editNom, prenom: editPrenom })
+    storage.modifierEleve(classeActive, eleveId, { nom: editNom, prenom: editPrenom, sexe: editSexe })
     setEleveEnEdition(null)
     setRosterVersion((v) => v + 1)
   }
@@ -111,9 +124,10 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
   function ajouterEleve(e) {
     e.preventDefault()
     if (!nouvelEleveNom.trim() || !nouvelElevePrenom.trim() || !classeActive) return
-    storage.ajouterEleveManuel(classeActive, nouvelEleveNom, nouvelElevePrenom)
+    storage.ajouterEleveManuel(classeActive, nouvelEleveNom, nouvelElevePrenom, nouvelEleveSexe || null)
     setNouvelEleveNom('')
     setNouvelElevePrenom('')
+    setNouvelEleveSexe('')
     setAjoutEleveOuvert(false)
     setRosterVersion((v) => v + 1)
   }
@@ -229,6 +243,11 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
               <button onClick={exporterCSV} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
                 <Download size={14} /> Exporter CSV
               </button>
+              {classeActive && (
+                <button onClick={supprimerClasseActive} className="flex items-center gap-1.5 text-xs font-medium text-alerte hover:text-alerte/80">
+                  <FolderX size={14} /> Supprimer la classe
+                </button>
+              )}
             </div>
           </div>
 
@@ -293,6 +312,15 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
                     placeholder="Nom"
                     className="flex-1 rounded-xl border border-piste-200 px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-piste-500"
                   />
+                  <select
+                    value={nouvelEleveSexe}
+                    onChange={(e) => setNouvelEleveSexe(e.target.value)}
+                    className="rounded-xl border border-piste-200 px-2.5 py-2 text-sm bg-white"
+                  >
+                    <option value="">Sexe</option>
+                    <option value="F">F</option>
+                    <option value="M">M</option>
+                  </select>
                   <button type="submit" className="bg-piste-800 hover:bg-piste-700 text-white text-sm font-medium px-3.5 py-2 rounded-xl transition">
                     Ajouter
                   </button>
@@ -312,7 +340,10 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
                         className="w-full flex items-center justify-between px-4 py-3"
                       >
                         <div className="text-left">
-                          <p className="text-sm font-medium text-piste-900">{eleve.prenom} {eleve.nom}</p>
+                          <p className="text-sm font-medium text-piste-900">
+                            {eleve.prenom} {eleve.nom}
+                            {eleve.sexe && <span className="text-piste-400 font-normal"> ({eleve.sexe})</span>}
+                          </p>
                           <p className="text-xs text-piste-500">
                             {synth ? `${synth.nbSeances} séance${synth.nbSeances > 1 ? 's' : ''}` : 'Aucune séance'}
                             {eleve.id && !eleve.pinDefini && ' · PIN non défini'}
@@ -345,6 +376,15 @@ export default function EnseignantDashboard({ seances, setSeances, realisations 
                                 onChange={(e) => setEditNom(e.target.value)}
                                 className="flex-1 rounded-lg border border-piste-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-piste-500"
                               />
+                              <select
+                                value={editSexe}
+                                onChange={(e) => setEditSexe(e.target.value)}
+                                className="rounded-lg border border-piste-200 px-2 py-1.5 text-sm bg-white"
+                              >
+                                <option value="">Sexe</option>
+                                <option value="F">F</option>
+                                <option value="M">M</option>
+                              </select>
                               <div className="flex gap-1.5">
                                 <button type="submit" className="p-1.5 rounded-full bg-piste-800 text-white hover:bg-piste-700">
                                   <Check size={14} />
