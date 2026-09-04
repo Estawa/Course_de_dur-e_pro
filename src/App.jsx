@@ -11,6 +11,7 @@ import Bilan from './components/Bilan'
 import EnseignantPin from './components/EnseignantPin'
 import EnseignantDashboard from './components/EnseignantDashboard'
 import { storage } from './utils/storage'
+import { calculerNoteReelle } from './utils/calc'
 
 export default function App() {
   const [eleve, setEleve] = useState(() => storage.getEleveActif())
@@ -61,6 +62,7 @@ export default function App() {
   }
 
   function handleFinSeance(resultat) {
+    const { note: noteReelle, avecGps: noteReelleAvecGps } = calculerNoteReelle(resultat.blocsResultats)
     const realisation = {
       id: crypto.randomUUID(),
       eleve,
@@ -69,6 +71,8 @@ export default function App() {
       niveauNom: niveauActif.nom,
       date: Date.now(),
       guidage: niveauActif.guidage,
+      noteReelle,
+      noteReelleAvecGps,
       ...resultat
     }
     storage.ajouterRealisation(realisation)
