@@ -1,3 +1,15 @@
+v1.6.0 — Import des classes revu (aperçu brut + mapping manuel)
+- L'import ne tente plus de deviner automatiquement les colonnes : le fichier est d'abord affiché brut (aperçu tableau), puis chaque colonne est associée manuellement (Nom, Prénom, Nom+Prénom combinés, Classe, ou Ignorer)
+- Prise en charge des exports type Pronote : BOM UTF-8, séparateur point-virgule, et colonne unique "Nom Prénom" (le nom de famille en MAJUSCULES est détecté automatiquement pour séparer nom et prénom, avec un ordre de repli configurable si aucune majuscule n'est présente)
+- Classe par défaut proposée si aucune colonne "Classe" n'est identifiée dans le fichier
+- Étape de confirmation par classe conservée avant l'import définitif dans le roster
+
+v1.5.0 — Note réelle par séance côté enseignant
+- Nouvelle "note réelle" calculée par séance pour chaque élève, qui reflète le décalage effectif entre ce qui était prévu et ce qui a été réalisé
+- Quand le GPS a fonctionné pendant le bloc, la note est calculée à partir de l'écart mesuré entre l'allure prévue et l'allure réellement tenue, avec le libellé "(ac GPS)"
+- Quand le GPS n'a pas été utilisé ou n'a pas capté de données, la note se base sur la déclaration de réussite de l'élève à la fin du bloc (seule donnée observable), avec le libellé "(Sans GPS)"
+- Affichée pour chaque séance dans l'onglet "Élèves & suivi", et ajoutée comme colonne dans l'export CSV (note déclarée, note réelle, source)
+
 v1.4.0 — Gestion des élèves côté enseignant
 - Ajout d'un élève à une classe existante, directement depuis l'onglet "Élèves & suivi"
 - Modification du nom/prénom d'un élève (élève arrivé en cours de cycle mal orthographié, changement, etc.)
