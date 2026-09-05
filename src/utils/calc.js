@@ -56,28 +56,59 @@ export function noteBlocGPS(bloc) {
   return note
 }
 
-// Note "réelle" de la séance, tenant compte du décalage effectif entre prévu et réalisé :
-// mesuré objectivement par GPS quand les données sont disponibles, sinon basé sur la
-// déclaration de l'élève (seule donnée observable sans GPS).
+// Note "réelle" d'un bloc sans GPS, à partir des deux critères mesurés objectivement par le
+// minuteur : respect de l'allure/du temps de passage (respectAllure) et distance/durée totale
+// effectivement parcourue (termine).
+export function noteBlocSansGPS(bloc) {
+  let note = 20
+  if (!bloc.respectAllure) note -= 7
+  if (!bloc.termine) note = Math.min(note, 10)
+  return Math.max(0, note)
+}
+
+// Note "réelle" d'un bloc sur les deux critères retenus (allure, distance/durée totale) :
+// via l'écart GPS quand mesurable, sinon via les mêmes critères évalués par minuteur.
+export function noteBlocCritere(bloc) {
+  return blocAvecGps(bloc) ? noteBlocGPS(bloc) : noteBlocSansGPS(bloc)
+}
+
+// % de réussite de la séance sur chacun des deux critères, tous blocs confondus.
+export function pourcentagesReussite(blocsResultats) {
+  if (!blocsResultats || !blocsResultats.length) return { allure: null, distanceDuree: null }
+  const total = blocsResultats.length
+  const nbAllure = blocsResultats.filter((b) => b.respectAllure).length
+  const nbTermine = blocsResultats.filter((b) => b.termine).length
+  return {
+    allure: Math.round((nbAllure / total) * 100),
+    distanceDuree: Math.round((nbTermine / total) * 100)
+  }
+}
+
+// Note "réelle" de la séance, tenant compte du décalage effectif entre prévu et réalisé sur les
+// critères allure et distance/durée totale : mesuré finement par GPS quand disponible, sinon par minuteur.
 export function calculerNoteReelle(blocsResultats) {
   if (!blocsResultats || !blocsResultats.length) return { note: 0, avecGps: false }
   let somme = 0
   let tousAvecGps = true
   blocsResultats.forEach((b) => {
-    if (blocAvecGps(b)) {
-      somme += noteBlocGPS(b)
-    } else {
-      tousAvecGps = false
-      somme += noteBloc(b.reussite)
-    }
+    somme += noteBlocCritere(b)
+    if (!blocAvecGps(b)) tousAvecGps = false
   })
   const note = Math.round((somme / blocsResultats.length) * 2) / 2
   return { note, avecGps: tousAvecGps }
 }
 
+// Note finale d'une séance = note réelle (ou déclarée à défaut), pondérée par l'ajustement
+// comportement/attitude saisi par le prof (positif ou négatif), bornée entre 0 et 20.
+export function noteFinale(realisation) {
+  const base = realisation.noteReelle ?? realisation.note ?? 0
+  const ajustement = realisation.ajustementComportement || 0
+  return Math.max(0, Math.min(20, Math.round((base + ajustement) * 2) / 2))
+}
+
 export function syntheseCycle(realisationsEleve) {
   if (!realisationsEleve.length) return null
-  const notes = realisationsEleve.map((r) => r.note)
+  const notes = realisationsEleve.map((r) => noteFinale(r))
   const moyenne = notes.reduce((a, b) => a + b, 0) / notes.length
   const tousLesBlocs = realisationsEleve.flatMap((r) => r.blocsResultats || [])
   const nbBlocsReussis = tousLesBlocs.filter((b) => b.reussite === 'reussi').length

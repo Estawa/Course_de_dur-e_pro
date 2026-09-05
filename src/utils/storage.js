@@ -42,6 +42,20 @@ function migrerRosterSiBesoin() {
 }
 migrerRosterSiBesoin()
 
+// --- Migration de la VMA (ancien format : un simple nombre par élève) ---
+function migrerVmaSiBesoin() {
+  const all = read(KEYS.VMA, {})
+  let modifie = false
+  Object.keys(all).forEach((cle) => {
+    if (typeof all[cle] === 'number') {
+      all[cle] = { manuelle: null, manuelleDate: null, auto: all[cle], autoDate: null, autoTest: null, historique: [] }
+      modifie = true
+    }
+  })
+  if (modifie) write(KEYS.VMA, all)
+}
+migrerVmaSiBesoin()
+
 function getRosterBrut() {
   return read(KEYS.ROSTER, {})
 }
@@ -191,19 +205,64 @@ export const storage = {
     all.push(realisation)
     write(KEYS.REALISATIONS, all)
   },
+  // Met à jour une réalisation déjà enregistrée (ex : ajustement comportement saisi a posteriori par le prof).
+  modifierRealisation: (id, patch) => {
+    const all = read(KEYS.REALISATIONS, [])
+    const idx = all.findIndex((r) => r.id === id)
+    if (idx !== -1) {
+      all[idx] = { ...all[idx], ...patch }
+      write(KEYS.REALISATIONS, all)
+    }
+    return all
+  },
 
   getPinOk: () => read(KEYS.PIN_OK, false),
   setPinOk: (val) => write(KEYS.PIN_OK, val),
 
   cleEleve: (eleve) => (eleve.id ? eleve.id : `${eleve.nom}__${eleve.prenom}__${eleve.classe}`.toLowerCase()),
-  getVma: (eleve) => {
+
+  // --- VMA : deux sources possibles (résultat de test auto-enregistré, ou saisie manuelle du prof),
+  // la valeur manuelle du prof est toujours prioritaire quand elle existe.
+  getVmaDetail: (eleve) => {
     const all = read(KEYS.VMA, {})
-    return all[storage.cleEleve(eleve)] || null
+    return all[storage.cleEleve(eleve)] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, historique: [] }
   },
-  setVma: (eleve, vma) => {
+  getVmaRetenue: (eleve) => {
+    const d = storage.getVmaDetail(eleve)
+    return d.manuelle ?? d.auto ?? null
+  },
+  // Enregistre automatiquement le résultat d'un test réalisé par l'élève (ne touche jamais à la valeur manuelle du prof).
+  enregistrerResultatTest: (eleve, vma, test) => {
     const all = read(KEYS.VMA, {})
-    all[storage.cleEleve(eleve)] = vma
+    const cle = storage.cleEleve(eleve)
+    const actuel = all[cle] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, historique: [] }
+    actuel.auto = vma
+    actuel.autoDate = Date.now()
+    actuel.autoTest = test
+    actuel.historique = [...(actuel.historique || []), { valeur: vma, date: Date.now(), source: 'test', test }]
+    all[cle] = actuel
     write(KEYS.VMA, all)
+  },
+  // Saisie manuelle du prof : devient prioritaire sur le résultat de test tant qu'elle n'est pas effacée.
+  definirVmaManuelle: (eleve, vma) => {
+    const all = read(KEYS.VMA, {})
+    const cle = storage.cleEleve(eleve)
+    const actuel = all[cle] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, historique: [] }
+    actuel.manuelle = vma
+    actuel.manuelleDate = Date.now()
+    actuel.historique = [...(actuel.historique || []), { valeur: vma, date: Date.now(), source: 'manuel' }]
+    all[cle] = actuel
+    write(KEYS.VMA, all)
+  },
+  // Efface la valeur manuelle : la VMA retenue revient au dernier résultat de test enregistré automatiquement.
+  effacerVmaManuelle: (eleve) => {
+    const all = read(KEYS.VMA, {})
+    const cle = storage.cleEleve(eleve)
+    if (all[cle]) {
+      all[cle].manuelle = null
+      all[cle].manuelleDate = null
+      write(KEYS.VMA, all)
+    }
   }
 }
 
