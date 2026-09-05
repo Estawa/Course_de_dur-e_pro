@@ -1,0 +1,97 @@
+v1.11.0 — Niveaux visibles par séance et visibilité par classe
+- Éditeur de séance : chaque niveau (Facile/Moyen/Difficile) a désormais une case "Visible aux élèves" — possibilité de n'en proposer qu'un ou deux plutôt que toujours les trois
+- Visibilité repensée : le bouton "Visible / Masquée" sur chaque séance ouvre un sélecteur pour choisir précisément quelles classes la voient (au lieu de la rendre visible à toutes les classes en même temps) ; le badge affiche le nombre de classes concernées, ex. "Visible (2)"
+- Anciennes séances (créées avant cette mise à jour) : leur visibilité globale est conservée telle quelle tant qu'elle n'est pas retouchée via le nouveau sélecteur
+- Côté élève, la bibliothèque et le choix de niveau ne montrent que les séances visibles pour sa classe et les niveaux marqués visibles
+
+v1.10.0 — Édition des séances, aperçu détaillé, échauffement et annonces de phase
+- Espace enseignant : cliquer sur une séance de la bibliothèque l'ouvre désormais en détail/édition (titre, visibilité, niveaux, blocs, échauffement) au lieu de n'en créer que de nouvelles ; "Enregistrer les modifications" remplace la séance existante
+- Nouvel écran "Aperçu de la séance" côté élève : après avoir choisi un niveau dans la bibliothèque, détail complet avant de démarrer (distance/durée totale, échauffement, contenu bloc par bloc : types, répétitions, allures, séries, récupérations)
+- Nouveau : échauffement optionnel par niveau (durée réglable par le prof), avec annonce "Départ Échauffement !" et minuteur dédié avant le premier bloc
+- Mode Full Power : ajout de la récupération entre séries (tours) et d'une récupération / retour au calme final, réglables (durée, % VMA)
+- Pendant la course : annonce visuelle (bandeau) et vocale (synthèse vocale du navigateur) à chaque changement de phase — "Départ !", "Récupération type Répétition", "Récupération type Série", "Récupération Fin de séance"
+- Annonce "Fin de séance !" après le dernier bloc, avant l'échelle de Borg et l'observation finale
+- Récapitulatif de fin de séance enrichi : distance/durée totale réalisée, % de réussite allure et % de réussite distance/durée
+
+v1.9.0 — VMA auto/manuelle, note pondérée comportement, % de réussite par critère
+- VMA : le résultat d'un test se propose désormais automatiquement (source "auto"), mais l'enseignant peut fixer une valeur manuelle depuis le nouvel onglet "VMA" (par classe), qui devient alors prioritaire sur le résultat de test
+- L'élève ne peut plus modifier sa VMA librement (l'ancien champ de saisie libre dans "Outils" a été retiré) : il ne peut plus que consulter sa VMA retenue et sa source, et doit repasser un test (ou voir son professeur) pour la faire évoluer
+- Nouvel onglet "VMA" côté enseignant : vue de tous les élèves de la classe avec leur VMA retenue, sa source (test ou manuelle) et sa date, saisie/mise à jour manuelle, et retour possible à la valeur du test
+- Les objectifs de séance (durée, allure, vitesse) restent calculés pour chaque élève à partir de sa VMA retenue, désormais alignée sur cette priorité manuel > auto
+- Note "réelle" de séance recalculée sur deux critères objectifs (allure et distance/durée totale), y compris sans GPS (mesurés par minuteur), et non plus seulement sur la déclaration de l'élève
+- Nouveau : % de réussite par critère (allure, distance/durée) affiché par séance dans le suivi enseignant et exporté en CSV
+- Nouveau : ajustement comportement/attitude par séance (de -- à ++, avec remarque optionnelle), saisi par l'enseignant depuis "Élèves & suivi", qui pondère la note réelle pour donner la note finale ; la moyenne de cycle par élève est désormais calculée sur cette note finale
+- Export CSV enrichi : colonnes % allure, % distance/durée, ajustement comportement, remarque, note finale
+
+v1.8.1 — Correctif : classe au nom vide impossible à supprimer
+- Correction d'un bug où une classe créée sans nom (chaîne vide) était traitée comme "aucune sélection" : impossible de l'ouvrir ni d'afficher le bouton "Supprimer la classe" dessus
+- Une telle classe s'affiche désormais comme "(sans nom)" dans les onglets et peut être supprimée normalement
+- L'import ignore désormais toute ligne sans classe exploitable (ni colonne Classe renseignée, ni classe par défaut) au lieu de créer une classe vide
+
+v1.8.0 — Import repris sur le modèle d'EPS Pro (fiable)
+- Remplacement complet du moteur d'import par celui, éprouvé, d'EPS Pro : lecture en ArrayBuffer avec détection d'encodage (UTF-8 avec BOM, repli automatique en Windows-1252 si des caractères invalides sont détectés — cas fréquent des exports Pronote), parseur CSV maison gérant guillemets et séparateur `,`/`;` détecté automatiquement
+- Nouvel écran d'aperçu brut du fichier tel quel (avant tout mapping), comme sur EPS Pro
+- À l'étape d'aperçu final, chaque élève détecté est listé avec case à cocher, étiqueté "nouveau" ou "mise à jour" selon qu'il correspond déjà à un élève existant de la classe
+- Deux modes d'import : "Mettre à jour / ajouter" (ne supprime jamais personne) et "Remplacer la liste" (retire de chaque classe concernée les élèves absents du fichier, en conservant id/PIN/historique de ceux reconnus)
+- Suppression de la dépendance papaparse, devenue inutile
+
+v1.7.1 — Correctif import : colonnes décalées
+- Correction d'un bug où des lignes plus courtes que d'autres (cellules vides en fin de ligne omises par certains exports) décalaient la lecture des colonnes suivantes (Sexe, Classe) : toutes les lignes sont désormais complétées à la même longueur avant lecture
+- Reconnaissance élargie pour la colonne Sexe : H et G sont maintenant reconnus en plus de F/M/Fille/Garçon/Femme/Homme
+- Ajout d'un indicateur "X/Y valeurs renseignées" sous chaque colonne de l'écran de mapping, pour repérer immédiatement une colonne vide ou mal choisie
+
+v1.7.0 — Suppression de classe entière + champ Sexe
+- Bouton "Supprimer la classe" dans l'onglet "Élèves & suivi" : retire tous les élèves de la classe d'un coup (l'historique de leurs séances est conservé)
+- Le mapping de colonnes à l'import propose désormais "Sexe" (en plus de Nom/Prénom/Nom+Prénom/Classe), avec reconnaissance automatique de F/M/Fille/Garçon/Femme/Homme
+- Le sexe peut aussi être renseigné ou modifié manuellement à l'ajout ou à l'édition d'un élève, et s'affiche à côté de son nom
+
+v1.6.0 — Import des classes revu (aperçu brut + mapping manuel)
+- L'import ne tente plus de deviner automatiquement les colonnes : le fichier est d'abord affiché brut (aperçu tableau), puis chaque colonne est associée manuellement (Nom, Prénom, Nom+Prénom combinés, Classe, ou Ignorer)
+- Prise en charge des exports type Pronote : BOM UTF-8, séparateur point-virgule, et colonne unique "Nom Prénom" (le nom de famille en MAJUSCULES est détecté automatiquement pour séparer nom et prénom, avec un ordre de repli configurable si aucune majuscule n'est présente)
+- Classe par défaut proposée si aucune colonne "Classe" n'est identifiée dans le fichier
+- Étape de confirmation par classe conservée avant l'import définitif dans le roster
+
+v1.5.0 — Note réelle par séance côté enseignant
+- Nouvelle "note réelle" calculée par séance pour chaque élève, qui reflète le décalage effectif entre ce qui était prévu et ce qui a été réalisé
+- Quand le GPS a fonctionné pendant le bloc, la note est calculée à partir de l'écart mesuré entre l'allure prévue et l'allure réellement tenue, avec le libellé "(ac GPS)"
+- Quand le GPS n'a pas été utilisé ou n'a pas capté de données, la note se base sur la déclaration de réussite de l'élève à la fin du bloc (seule donnée observable), avec le libellé "(Sans GPS)"
+- Affichée pour chaque séance dans l'onglet "Élèves & suivi", et ajoutée comme colonne dans l'export CSV (note déclarée, note réelle, source)
+
+v1.4.0 — Gestion des élèves côté enseignant
+- Ajout d'un élève à une classe existante, directement depuis l'onglet "Élèves & suivi"
+- Modification du nom/prénom d'un élève (élève arrivé en cours de cycle mal orthographié, changement, etc.)
+- Création d'une nouvelle classe vide, pour accueillir un groupe qui n'a pas encore été importé
+- Suppression d'élève déjà existante, conservée (l'historique de séances n'est jamais perdu)
+
+v1.3.0 — Import des classes, connexion par PIN personnel, suivi enseignant
+- Nouvelle icône (chronomètre + piste) sur fond dégradé, favicon + icônes PWA régénérées
+- Import des listes de classe : export CSV d'EPS Pro, ou fichier CSV/ODS/Excel (colonnes Nom/Prénom/Classe détectées automatiquement)
+- Écran d'accès élève repensé : choix de la classe, puis du nom dans une liste déroulante, puis code PIN personnel (défini par l'élève à sa première connexion)
+- Isolation stricte entre élèves et entre classes : impossible d'accéder à une session sans le bon nom + le bon PIN
+- Espace enseignant : onglet "Élèves & suivi" listant toutes les classes et tous les élèves importés, avec le détail de chacune de leurs séances (date, niveau, blocs réussis, Borg, note), réinitialisation de PIN et retrait d'élève
+- Repli conservé : si aucune classe n'est encore importée, l'élève peut toujours se créer une fiche par saisie libre (nom/prénom/classe) puis définir son PIN
+
+v1.2.0 — Bibliothèque, Séance vierge, Outils, Full Power
+- Écran d'accueil élève restructuré en 3 tuiles : Séance vierge / Bibliothèque / Outils
+- Bibliothèque : séances préparées par l'enseignant et rendues visibles au fil du cycle (visibilité activable/désactivable depuis le tableau de bord), + historique élève avec synthèse
+- Séance vierge : l'élève compose sa propre séance façon "Full Power" (types A/B/C/D en %VMA + séquence de répétitions), la réalise en solo, avec les mêmes bilans de bloc, Borg et observation finale qu'une séance assignée
+- Côté enseignant : chaque bloc d'un niveau peut être configuré en mode "Simple" (distance/temps/allure) ou "Full Power" (types A/B/C/D + séquence), au choix, pour comparaison
+- Outils : VMA personnelle (saisie/màj), tests de VMA (Demi-Cooper 6min, 4×3min avec détection d'anomalie, Gacon 45/15 avec demi-palier), chronomètre avec distance/vitesse, échelle de Borg de référence, performances estimées par distance à partir de la VMA (et %VMA inverse à partir d'une perf réalisée)
+- Guidage GPS/minuteur géré phase par phase (travail/récupération) avec gong à chaque transition
+
+v1.1.0 — Découpage en blocs
+- Chaque niveau est désormais une suite de blocs de course successifs (nombre libre par niveau)
+- Bilan après chaque bloc : Réussi / Partiellement réussi / Non réussi, avec note d'explication si le bloc n'est pas pleinement réussi
+- En fin de séance : échelle de Borg (11 niveaux 0-10, même module que VMA Pro) puis observation générale libre
+- Note de séance calculée à partir de la moyenne des notes de blocs (Réussi=20, Partiellement=14, Non réussi=8)
+- Éditeur de séance enseignant mis à jour : ajout/suppression de blocs par niveau
+
+v1.0.0 — Première version
+- Identification élève (nom/prénom/classe), roster auto-alimenté par classe
+- Bibliothèque de séances configurable par l'enseignant (espace protégé par code PIN)
+- Chaque séance propose 3 niveaux (Facile/Moyen/Difficile) combinant distance, durée cible et allure/%VMA
+- Guidage GPS (bips de régulation d'allure, distance en temps réel) ou guidage minuteur (repères sonores) selon le niveau
+- Bilan de fin de séance : course terminée oui/non, allure respectée oui/non, note sur 20
+- Historique élève avec synthèse (moyenne, nombre de séances, progression)
+- Tableau de bord enseignant : vue par classe, synthèse de cycle par élève, export CSV
+- PWA installable pour un usage hors ligne
