@@ -54,3 +54,18 @@ export function gongTransition() {
 export function bipTopPassage() {
   beep({ freq: 900, duration: 0.1, volume: 0.35 })
 }
+
+// Annonce vocale d'une transition de phase (échauffement, départ, récupération...).
+// Silencieux si la synthèse vocale n'est pas disponible sur l'appareil.
+export function annoncerVocal(texte) {
+  try {
+    if (!('speechSynthesis' in window)) return
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(texte)
+    utterance.lang = 'fr-FR'
+    utterance.rate = 1.05
+    window.speechSynthesis.speak(utterance)
+  } catch (e) {
+    // silence si la synthèse vocale échoue
+  }
+}
