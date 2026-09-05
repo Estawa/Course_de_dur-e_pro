@@ -4,6 +4,7 @@ import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import VmaEleveLigne from './VmaEleveLigne'
 import ComportementAjustement from './ComportementAjustement'
+import VisibiliteClasses from './VisibiliteClasses'
 import { storage } from '../utils/storage'
 import { syntheseCycle, noteFinale, pourcentagesReussite } from '../utils/calc'
 
@@ -11,6 +12,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
   const [onglet, setOnglet] = useState('seances') // seances | suivi | vma
   const [editeurOuvert, setEditeurOuvert] = useState(false)
   const [seanceEnEdition, setSeanceEnEdition] = useState(null)
+  const [seancePourVisibilite, setSeancePourVisibilite] = useState(null)
   const [importOuvert, setImportOuvert] = useState(false)
   const [rosterVersion, setRosterVersion] = useState(0) // force refresh après import/suppression
   const [classeSelectionnee, setClasseSelectionnee] = useState(null)
@@ -94,6 +96,17 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
   function ouvrirNouvelleSeance() {
     setSeanceEnEdition(null)
     setEditeurOuvert(true)
+  }
+
+  function validerVisibilite(classesSelectionnees) {
+    setSeances(
+      seances.map((sv) =>
+        sv.id === seancePourVisibilite.id
+          ? { ...sv, classesVisibles: classesSelectionnees, visible: classesSelectionnees.length > 0 }
+          : sv
+      )
+    )
+    setSeancePourVisibilite(null)
   }
 
   function supprimerSeance(id) {
@@ -232,38 +245,42 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
           </div>
           {seances.length === 0 && <p className="text-sm text-piste-500">Aucune séance créée pour l'instant.</p>}
           <div className="space-y-2">
-            {seances.map((s) => (
-              <div
-                key={s.id}
-                onClick={() => ouvrirEditionSeance(s)}
-                className="flex items-center justify-between bg-white border border-piste-100 rounded-xl px-4 py-3 cursor-pointer hover:border-piste-300 transition"
-              >
-                <div>
-                  <p className="text-sm font-medium text-piste-900">{s.titre}</p>
-                  <p className="text-xs text-piste-500">{s.niveaux.length} niveaux · {s.visible ? 'Visible aux élèves' : 'Masquée'} · Voir le détail</p>
+            {seances.map((s) => {
+              const nbClassesVisibles = Array.isArray(s.classesVisibles) ? s.classesVisibles.length : s.visible ? classes.length : 0
+              const nbNiveauxVisibles = s.niveaux.filter((n) => n.visible !== false).length
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => ouvrirEditionSeance(s)}
+                  className="flex items-center justify-between bg-white border border-piste-100 rounded-xl px-4 py-3 cursor-pointer hover:border-piste-300 transition"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-piste-900">{s.titre}</p>
+                    <p className="text-xs text-piste-500">{nbNiveauxVisibles}/{s.niveaux.length} niveaux visibles · Voir le détail</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSeancePourVisibilite(s)
+                      }}
+                      className={`text-[11px] font-medium px-2.5 py-1.5 rounded-full border transition ${nbClassesVisibles > 0 ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-700'}`}
+                    >
+                      {nbClassesVisibles > 0 ? `Visible (${nbClassesVisibles})` : 'Masquée'}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        supprimerSeance(s.id)
+                      }}
+                      className="p-1.5 rounded-full hover:bg-[#fbeeea] text-alerte"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSeances(seances.map((sv) => (sv.id === s.id ? { ...sv, visible: !sv.visible } : sv)))
-                    }}
-                    className={`text-[11px] font-medium px-2.5 py-1.5 rounded-full border transition ${s.visible ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-700'}`}
-                  >
-                    {s.visible ? 'Visible' : 'Masquée'}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      supprimerSeance(s.id)
-                    }}
-                    className="p-1.5 rounded-full hover:bg-[#fbeeea] text-alerte"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       )}
@@ -539,6 +556,15 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
             </>
           )}
         </section>
+      )}
+
+      {seancePourVisibilite && (
+        <VisibiliteClasses
+          seance={seancePourVisibilite}
+          classesDisponibles={classes}
+          onValider={validerVisibilite}
+          onFermer={() => setSeancePourVisibilite(null)}
+        />
       )}
 
       {editeurOuvert && (

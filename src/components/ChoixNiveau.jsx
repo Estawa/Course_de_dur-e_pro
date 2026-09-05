@@ -9,13 +9,19 @@ const COULEURS = {
 }
 
 export default function ChoixNiveau({ seance, vmaRef, onChoisirNiveau }) {
+  const niveauxVisibles = seance.niveaux.filter((n) => n.visible !== false)
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <h2 className="font-display text-2xl text-piste-900 mb-1">{seance.titre}</h2>
       <p className="text-sm text-piste-600 mb-6">Choisis le niveau que tu veux réaliser aujourd'hui. Tu pourras consulter le détail avant de démarrer.</p>
 
+      {niveauxVisibles.length === 0 && (
+        <p className="text-sm text-piste-500">Aucun niveau disponible pour cette séance actuellement.</p>
+      )}
+
       <div className="space-y-4">
-        {seance.niveaux.map((niveau) => {
+        {niveauxVisibles.map((niveau) => {
           const { distance, duree } = totauxNiveau(niveau, vmaRef)
           return (
             <button

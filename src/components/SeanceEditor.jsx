@@ -17,7 +17,7 @@ function echauffementVide() {
 }
 
 function niveauVide(nom) {
-  return { id: crypto.randomUUID(), nom, guidage: 'minuteur', echauffement: echauffementVide(), blocs: [blocSimpleVide(), blocSimpleVide(), blocSimpleVide()] }
+  return { id: crypto.randomUUID(), nom, guidage: 'minuteur', visible: true, echauffement: echauffementVide(), blocs: [blocSimpleVide(), blocSimpleVide(), blocSimpleVide()] }
 }
 
 // Reconstruit l'état éditable d'un niveau déjà enregistré (bloc simple : durée en secondes -> min/sec).
@@ -26,6 +26,7 @@ function niveauDepuisSeance(n) {
     id: n.id,
     nom: n.nom,
     guidage: n.guidage,
+    visible: n.visible !== false,
     echauffement: n.echauffement ? { ...n.echauffement } : echauffementVide(),
     blocs: n.blocs.map((b) =>
       b.mode === 'fullpower'
@@ -37,7 +38,6 @@ function niveauDepuisSeance(n) {
 
 export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }) {
   const [titre, setTitre] = useState(seanceInitiale?.titre || '')
-  const [visible, setVisible] = useState(seanceInitiale?.visible || false)
   const [niveaux, setNiveaux] = useState(
     seanceInitiale ? seanceInitiale.niveaux.map(niveauDepuisSeance) : NOMS_NIVEAUX.map(niveauVide)
   )
@@ -87,6 +87,7 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
       id: n.id,
       nom: n.nom,
       guidage: n.guidage,
+      visible: n.visible !== false,
       echauffement: { active: !!n.echauffement?.active, duree_s: Number(n.echauffement?.duree_s) || 0 },
       blocs: n.blocs.map((b) => {
         if (b.mode === 'fullpower') {
@@ -101,7 +102,10 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
       id: seanceInitiale?.id || crypto.randomUUID(),
       titre: titre.trim(),
       dateCreation: seanceInitiale?.dateCreation || Date.now(),
-      visible,
+      // La visibilité par classe se gère depuis le tableau de bord (bouton "Visible / Masquée"),
+      // pas depuis cet éditeur : on la préserve telle quelle.
+      visible: seanceInitiale?.visible ?? false,
+      classesVisibles: seanceInitiale?.classesVisibles ?? [],
       niveaux: niveauxFinaux
     })
   }
@@ -127,15 +131,23 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
             />
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-piste-800">
-            <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} className="w-4 h-4" />
-            Rendre visible aux élèves dès l'enregistrement
-          </label>
+          <p className="text-xs text-piste-500 -mt-2">
+            La visibilité par classe se choisit depuis le bouton "Visible / Masquée" sur la fiche de la séance, après enregistrement.
+          </p>
 
           {niveaux.map((n) => (
             <div key={n.id} className="border border-piste-100 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="font-display text-base text-piste-900">{n.nom}</p>
+                <label className="flex items-center gap-2 text-xs font-medium text-piste-700">
+                  <input
+                    type="checkbox"
+                    checked={n.visible !== false}
+                    onChange={(e) => majNiveau(n.id, 'visible', e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  Visible aux élèves
+                </label>
               </div>
 
               <div className="flex items-center gap-3 mb-3">

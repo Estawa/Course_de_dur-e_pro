@@ -1,8 +1,8 @@
 import { CheckCircle2, ChevronRight, Timer } from 'lucide-react'
-import { syntheseCycle } from '../utils/calc'
+import { syntheseCycle, seanceVisiblePourClasse } from '../utils/calc'
 
-export default function BibliothequeEleve({ seances, realisations, onChoisirSeance }) {
-  const seancesVisibles = seances.filter((s) => s.visible)
+export default function BibliothequeEleve({ seances, realisations, eleve, onChoisirSeance }) {
+  const seancesVisibles = seances.filter((s) => seanceVisiblePourClasse(s, eleve?.classe))
   const synthese = syntheseCycle(realisations)
 
   return (
@@ -25,7 +25,9 @@ export default function BibliothequeEleve({ seances, realisations, onChoisirSean
           >
             <div>
               <p className="font-display text-lg text-piste-900">{seance.titre}</p>
-              <p className="text-xs text-piste-500 mt-0.5">{seance.niveaux.length} niveaux au choix</p>
+              <p className="text-xs text-piste-500 mt-0.5">
+                {seance.niveaux.filter((n) => n.visible !== false).length} niveaux au choix
+              </p>
             </div>
             <ChevronRight size={18} className="text-piste-400 shrink-0" />
           </button>
