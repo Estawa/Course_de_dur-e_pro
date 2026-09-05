@@ -1,3 +1,9 @@
+v1.11.0 — Niveaux visibles par séance et visibilité par classe
+- Éditeur de séance : chaque niveau (Facile/Moyen/Difficile) a désormais une case "Visible aux élèves" — possibilité de n'en proposer qu'un ou deux plutôt que toujours les trois
+- Visibilité repensée : le bouton "Visible / Masquée" sur chaque séance ouvre un sélecteur pour choisir précisément quelles classes la voient (au lieu de la rendre visible à toutes les classes en même temps) ; le badge affiche le nombre de classes concernées, ex. "Visible (2)"
+- Anciennes séances (créées avant cette mise à jour) : leur visibilité globale est conservée telle quelle tant qu'elle n'est pas retouchée via le nouveau sélecteur
+- Côté élève, la bibliothèque et le choix de niveau ne montrent que les séances visibles pour sa classe et les niveaux marqués visibles
+
 v1.10.0 — Édition des séances, aperçu détaillé, échauffement et annonces de phase
 - Espace enseignant : cliquer sur une séance de la bibliothèque l'ouvre désormais en détail/édition (titre, visibilité, niveaux, blocs, échauffement) au lieu de n'en créer que de nouvelles ; "Enregistrer les modifications" remplace la séance existante
 - Nouvel écran "Aperçu de la séance" côté élève : après avoir choisi un niveau dans la bibliothèque, détail complet avant de démarrer (distance/durée totale, échauffement, contenu bloc par bloc : types, répétitions, allures, séries, récupérations)
