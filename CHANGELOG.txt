@@ -1,3 +1,13 @@
+v1.9.0 — VMA auto/manuelle, note pondérée comportement, % de réussite par critère
+- VMA : le résultat d'un test se propose désormais automatiquement (source "auto"), mais l'enseignant peut fixer une valeur manuelle depuis le nouvel onglet "VMA" (par classe), qui devient alors prioritaire sur le résultat de test
+- L'élève ne peut plus modifier sa VMA librement (l'ancien champ de saisie libre dans "Outils" a été retiré) : il ne peut plus que consulter sa VMA retenue et sa source, et doit repasser un test (ou voir son professeur) pour la faire évoluer
+- Nouvel onglet "VMA" côté enseignant : vue de tous les élèves de la classe avec leur VMA retenue, sa source (test ou manuelle) et sa date, saisie/mise à jour manuelle, et retour possible à la valeur du test
+- Les objectifs de séance (durée, allure, vitesse) restent calculés pour chaque élève à partir de sa VMA retenue, désormais alignée sur cette priorité manuel > auto
+- Note "réelle" de séance recalculée sur deux critères objectifs (allure et distance/durée totale), y compris sans GPS (mesurés par minuteur), et non plus seulement sur la déclaration de l'élève
+- Nouveau : % de réussite par critère (allure, distance/durée) affiché par séance dans le suivi enseignant et exporté en CSV
+- Nouveau : ajustement comportement/attitude par séance (de -- à ++, avec remarque optionnelle), saisi par l'enseignant depuis "Élèves & suivi", qui pondère la note réelle pour donner la note finale ; la moyenne de cycle par élève est désormais calculée sur cette note finale
+- Export CSV enrichi : colonnes % allure, % distance/durée, ajustement comportement, remarque, note finale
+
 v1.8.1 — Correctif : classe au nom vide impossible à supprimer
 - Correction d'un bug où une classe créée sans nom (chaîne vide) était traitée comme "aucune sélection" : impossible de l'ouvrir ni d'afficher le bouton "Supprimer la classe" dessus
 - Une telle classe s'affiche désormais comme "(sans nom)" dans les onglets et peut être supprimée normalement
