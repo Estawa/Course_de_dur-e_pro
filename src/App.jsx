@@ -6,6 +6,7 @@ import BibliothequeEleve from './components/BibliothequeEleve'
 import SeanceVierge from './components/SeanceVierge'
 import OutilsEleve from './components/OutilsEleve'
 import ChoixNiveau from './components/ChoixNiveau'
+import ApercuSeance from './components/ApercuSeance'
 import SeanceRunner from './components/SeanceRunner'
 import Bilan from './components/Bilan'
 import EnseignantPin from './components/EnseignantPin'
@@ -52,6 +53,10 @@ export default function App() {
 
   function handleChoisirNiveau(niveau) {
     setNiveauActif(niveau)
+    setEcran('apercu')
+  }
+
+  function handleDemarrerSeance() {
     setEcran('course')
   }
 
@@ -111,17 +116,19 @@ export default function App() {
     vierge: 'Séance vierge',
     outils: 'Outils',
     choixNiveau: 'Choix du niveau',
+    apercu: 'Aperçu de la séance',
     course: 'Course en cours',
     bilan: 'Bilan de séance',
     enseignantPin: 'Espace enseignant',
     enseignant: 'Espace enseignant'
   }
 
-  const peutRevenir = ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'course', 'bilan', 'enseignant', 'enseignantPin'].includes(ecran)
+  const peutRevenir = ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'course', 'bilan', 'enseignant', 'enseignantPin'].includes(ecran)
 
   function handleRetour() {
     if (['bibliotheque', 'vierge', 'outils'].includes(ecran)) setEcran('tuiles')
     else if (ecran === 'choixNiveau') setEcran('bibliotheque')
+    else if (ecran === 'apercu') setEcran('choixNiveau')
     else if (ecran === 'course') setEcran('tuiles')
     else if (ecran === 'bilan') setEcran('tuiles')
     else if (ecran === 'enseignantPin' || ecran === 'enseignant') setEcran(eleve ? 'tuiles' : 'accueil')
@@ -152,6 +159,10 @@ export default function App() {
 
       {ecran === 'choixNiveau' && seanceActive && (
         <ChoixNiveau seance={seanceActive} vmaRef={vmaRef} onChoisirNiveau={handleChoisirNiveau} />
+      )}
+
+      {ecran === 'apercu' && niveauActif && (
+        <ApercuSeance niveau={niveauActif} seanceTitre={seanceActive?.titre} vmaRef={vmaRef} onDemarrer={handleDemarrerSeance} />
       )}
 
       {ecran === 'course' && niveauActif && (
