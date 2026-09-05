@@ -106,6 +106,13 @@ export function noteFinale(realisation) {
   return Math.max(0, Math.min(20, Math.round((base + ajustement) * 2) / 2))
 }
 
+// Une séance est visible pour une classe donnée si elle figure dans classesVisibles ; à défaut
+// (anciennes séances sans ce champ), on retombe sur l'ancien booléen global "visible".
+export function seanceVisiblePourClasse(seance, classe) {
+  if (Array.isArray(seance.classesVisibles)) return seance.classesVisibles.includes(classe)
+  return !!seance.visible
+}
+
 export function syntheseCycle(realisationsEleve) {
   if (!realisationsEleve.length) return null
   const notes = realisationsEleve.map((r) => noteFinale(r))
