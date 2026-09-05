@@ -150,7 +150,7 @@ export default function App() {
       )}
 
       {ecran === 'bibliotheque' && (
-        <BibliothequeEleve seances={seances} realisations={mesRealisations} onChoisirSeance={handleChoisirSeanceBibliotheque} />
+        <BibliothequeEleve seances={seances} realisations={mesRealisations} eleve={eleve} onChoisirSeance={handleChoisirSeanceBibliotheque} />
       )}
 
       {ecran === 'vierge' && <SeanceVierge onLancer={handleLancerSeanceVierge} />}
