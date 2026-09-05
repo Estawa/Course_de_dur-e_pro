@@ -97,7 +97,12 @@ export default function App() {
           : r.eleve.nom === eleve.nom && r.eleve.prenom === eleve.prenom && r.eleve.classe === eleve.classe
       )
     : []
-  const vmaRef = eleve ? storage.getVma(eleve) : null
+  const vmaRef = eleve ? storage.getVmaRetenue(eleve) : null
+
+  function handleModifierRealisation(id, patch) {
+    const nouvelles = storage.modifierRealisation(id, patch)
+    setRealisations(nouvelles)
+  }
 
   const titres = {
     accueil: eleve ? 'Mes séances' : 'Identification',
@@ -160,7 +165,12 @@ export default function App() {
       {ecran === 'enseignantPin' && <EnseignantPin onValide={handlePinValide} />}
 
       {ecran === 'enseignant' && (
-        <EnseignantDashboard seances={seances} setSeances={setSeances} realisations={realisations} />
+        <EnseignantDashboard
+          seances={seances}
+          setSeances={setSeances}
+          realisations={realisations}
+          onModifierRealisation={handleModifierRealisation}
+        />
       )}
     </div>
   )
