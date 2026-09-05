@@ -1,6 +1,6 @@
 import { MapPin, Timer as TimerIcon, Layers } from 'lucide-react'
 import { formatDuree } from '../utils/calc'
-import { dureeTotaleStructure, distanceTotaleStructure } from '../utils/fullpower'
+import { totauxNiveau } from '../utils/fullpower'
 
 const COULEURS = {
   Facile: 'border-piste-300 bg-piste-50',
@@ -8,26 +8,11 @@ const COULEURS = {
   Difficile: 'border-alerte/40 bg-[#fbeeea]'
 }
 
-function totauxNiveau(niveau, vmaRef) {
-  let distance = 0
-  let duree = 0
-  niveau.blocs.forEach((b) => {
-    if (b.mode === 'fullpower' && b.structure) {
-      duree += dureeTotaleStructure(b.structure)
-      distance += distanceTotaleStructure(b.structure, vmaRef)
-    } else if (b.mode !== 'fullpower') {
-      duree += b.duree_s
-      distance += b.distance_m
-    }
-  })
-  return { distance, duree }
-}
-
 export default function ChoixNiveau({ seance, vmaRef, onChoisirNiveau }) {
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <h2 className="font-display text-2xl text-piste-900 mb-1">{seance.titre}</h2>
-      <p className="text-sm text-piste-600 mb-6">Choisis le niveau que tu veux réaliser aujourd'hui.</p>
+      <p className="text-sm text-piste-600 mb-6">Choisis le niveau que tu veux réaliser aujourd'hui. Tu pourras consulter le détail avant de démarrer.</p>
 
       <div className="space-y-4">
         {seance.niveaux.map((niveau) => {

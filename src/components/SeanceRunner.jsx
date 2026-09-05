@@ -3,6 +3,8 @@ import CourseRun from './CourseRun'
 import BilanBloc from './BilanBloc'
 import BorgScale from './BorgScale'
 import ObservationFinale from './ObservationFinale'
+import Echauffement from './Echauffement'
+import FinSeanceAnnonce from './FinSeanceAnnonce'
 import { calculerNoteSeance } from '../utils/calc'
 import { expanserStructure, dureeTotaleStructure, distanceTotaleStructure } from '../utils/fullpower'
 
@@ -25,7 +27,7 @@ function preparerBloc(bloc, niveau, vmaRef) {
 
 export default function SeanceRunner({ niveau, vmaRef, onFinSeance, onAbandon }) {
   const [indexBloc, setIndexBloc] = useState(0)
-  const [phase, setPhase] = useState('course') // course | bilanBloc | borg | observation
+  const [phase, setPhase] = useState(() => (niveau.echauffement?.active ? 'echauffement' : 'course'))
   const [resultatsCourseBloc, setResultatsCourseBloc] = useState(null)
   const [blocsResultats, setBlocsResultats] = useState([])
   const [borg, setBorg] = useState(null)
@@ -46,12 +48,16 @@ export default function SeanceRunner({ niveau, vmaRef, onFinSeance, onAbandon })
     setBlocsResultats(nouveauxResultats)
 
     if (dernierBloc) {
-      setPhase('borg')
+      setPhase('finAnnonce')
     } else {
       setIndexBloc((i) => i + 1)
       setPhase('course')
       setResultatsCourseBloc(null)
     }
+  }
+
+  function handleFinAnnonceTerminee() {
+    setPhase('borg')
   }
 
   function handleValideBorg(valeurBorg) {
@@ -62,6 +68,10 @@ export default function SeanceRunner({ niveau, vmaRef, onFinSeance, onAbandon })
   function handleValideObservation(observationGenerale) {
     const note = calculerNoteSeance(blocsResultats)
     onFinSeance({ blocsResultats, borg, observationGenerale, note })
+  }
+
+  if (phase === 'echauffement') {
+    return <Echauffement duree_s={niveau.echauffement.duree_s} onTermine={() => setPhase('course')} />
   }
 
   if (phase === 'course') {
@@ -80,6 +90,10 @@ export default function SeanceRunner({ niveau, vmaRef, onFinSeance, onAbandon })
 
   if (phase === 'bilanBloc') {
     return <BilanBloc labelBloc={labelBloc} onValide={handleValideBilanBloc} />
+  }
+
+  if (phase === 'finAnnonce') {
+    return <FinSeanceAnnonce onTermine={handleFinAnnonceTerminee} />
   }
 
   if (phase === 'borg') {

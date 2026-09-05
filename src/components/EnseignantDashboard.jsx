@@ -10,6 +10,7 @@ import { syntheseCycle, noteFinale, pourcentagesReussite } from '../utils/calc'
 export default function EnseignantDashboard({ seances, setSeances, realisations, onModifierRealisation }) {
   const [onglet, setOnglet] = useState('seances') // seances | suivi | vma
   const [editeurOuvert, setEditeurOuvert] = useState(false)
+  const [seanceEnEdition, setSeanceEnEdition] = useState(null)
   const [importOuvert, setImportOuvert] = useState(false)
   const [rosterVersion, setRosterVersion] = useState(0) // force refresh après import/suppression
   const [classeSelectionnee, setClasseSelectionnee] = useState(null)
@@ -78,9 +79,21 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
     return lignes.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
   }, [classeActive, elevesDeLaClasse, realisations, realisationsParEleveId])
 
-  function ajouterSeance(seance) {
-    setSeances([...seances, seance])
+  function enregistrerSeance(seance) {
+    const existe = seances.some((s) => s.id === seance.id)
+    setSeances(existe ? seances.map((s) => (s.id === seance.id ? seance : s)) : [...seances, seance])
     setEditeurOuvert(false)
+    setSeanceEnEdition(null)
+  }
+
+  function ouvrirEditionSeance(seance) {
+    setSeanceEnEdition(seance)
+    setEditeurOuvert(true)
+  }
+
+  function ouvrirNouvelleSeance() {
+    setSeanceEnEdition(null)
+    setEditeurOuvert(true)
   }
 
   function supprimerSeance(id) {
@@ -211,7 +224,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold tracking-wide text-piste-500 uppercase">Bibliothèque de séances</h3>
             <button
-              onClick={() => setEditeurOuvert(true)}
+              onClick={ouvrirNouvelleSeance}
               className="flex items-center gap-1.5 bg-piste-800 hover:bg-piste-700 text-white text-sm font-medium px-3.5 py-2 rounded-full transition"
             >
               <Plus size={16} /> Séance
@@ -220,19 +233,32 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
           {seances.length === 0 && <p className="text-sm text-piste-500">Aucune séance créée pour l'instant.</p>}
           <div className="space-y-2">
             {seances.map((s) => (
-              <div key={s.id} className="flex items-center justify-between bg-white border border-piste-100 rounded-xl px-4 py-3">
+              <div
+                key={s.id}
+                onClick={() => ouvrirEditionSeance(s)}
+                className="flex items-center justify-between bg-white border border-piste-100 rounded-xl px-4 py-3 cursor-pointer hover:border-piste-300 transition"
+              >
                 <div>
                   <p className="text-sm font-medium text-piste-900">{s.titre}</p>
-                  <p className="text-xs text-piste-500">{s.niveaux.length} niveaux · {s.visible ? 'Visible aux élèves' : 'Masquée'}</p>
+                  <p className="text-xs text-piste-500">{s.niveaux.length} niveaux · {s.visible ? 'Visible aux élèves' : 'Masquée'} · Voir le détail</p>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => setSeances(seances.map((sv) => (sv.id === s.id ? { ...sv, visible: !sv.visible } : sv)))}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSeances(seances.map((sv) => (sv.id === s.id ? { ...sv, visible: !sv.visible } : sv)))
+                    }}
                     className={`text-[11px] font-medium px-2.5 py-1.5 rounded-full border transition ${s.visible ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-700'}`}
                   >
                     {s.visible ? 'Visible' : 'Masquée'}
                   </button>
-                  <button onClick={() => supprimerSeance(s.id)} className="p-1.5 rounded-full hover:bg-[#fbeeea] text-alerte">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      supprimerSeance(s.id)
+                    }}
+                    className="p-1.5 rounded-full hover:bg-[#fbeeea] text-alerte"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -515,7 +541,16 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
         </section>
       )}
 
-      {editeurOuvert && <SeanceEditor onEnregistrer={ajouterSeance} onFermer={() => setEditeurOuvert(false)} />}
+      {editeurOuvert && (
+        <SeanceEditor
+          seanceInitiale={seanceEnEdition}
+          onEnregistrer={enregistrerSeance}
+          onFermer={() => {
+            setEditeurOuvert(false)
+            setSeanceEnEdition(null)
+          }}
+        />
+      )}
       {importOuvert && (
         <ImportEleves
           onImporte={() => {

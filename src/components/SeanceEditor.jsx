@@ -12,14 +12,35 @@ function blocFullPowerVide() {
   return { id: crypto.randomUUID(), mode: 'fullpower', structure: null }
 }
 
-function niveauVide(nom) {
-  return { id: crypto.randomUUID(), nom, guidage: 'minuteur', blocs: [blocSimpleVide(), blocSimpleVide(), blocSimpleVide()] }
+function echauffementVide() {
+  return { active: false, duree_s: 300 }
 }
 
-export default function SeanceEditor({ onEnregistrer, onFermer }) {
-  const [titre, setTitre] = useState('')
-  const [visible, setVisible] = useState(false)
-  const [niveaux, setNiveaux] = useState(NOMS_NIVEAUX.map(niveauVide))
+function niveauVide(nom) {
+  return { id: crypto.randomUUID(), nom, guidage: 'minuteur', echauffement: echauffementVide(), blocs: [blocSimpleVide(), blocSimpleVide(), blocSimpleVide()] }
+}
+
+// Reconstruit l'état éditable d'un niveau déjà enregistré (bloc simple : durée en secondes -> min/sec).
+function niveauDepuisSeance(n) {
+  return {
+    id: n.id,
+    nom: n.nom,
+    guidage: n.guidage,
+    echauffement: n.echauffement ? { ...n.echauffement } : echauffementVide(),
+    blocs: n.blocs.map((b) =>
+      b.mode === 'fullpower'
+        ? { id: b.id, mode: 'fullpower', structure: b.structure }
+        : { id: b.id, mode: 'simple', distance_m: b.distance_m, duree_min: Math.floor(b.duree_s / 60), duree_sec: b.duree_s % 60 }
+    )
+  }
+}
+
+export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }) {
+  const [titre, setTitre] = useState(seanceInitiale?.titre || '')
+  const [visible, setVisible] = useState(seanceInitiale?.visible || false)
+  const [niveaux, setNiveaux] = useState(
+    seanceInitiale ? seanceInitiale.niveaux.map(niveauDepuisSeance) : NOMS_NIVEAUX.map(niveauVide)
+  )
 
   function majNiveau(id, champ, valeur) {
     setNiveaux((prev) => prev.map((n) => (n.id === id ? { ...n, [champ]: valeur } : n)))
@@ -66,6 +87,7 @@ export default function SeanceEditor({ onEnregistrer, onFermer }) {
       id: n.id,
       nom: n.nom,
       guidage: n.guidage,
+      echauffement: { active: !!n.echauffement?.active, duree_s: Number(n.echauffement?.duree_s) || 0 },
       blocs: n.blocs.map((b) => {
         if (b.mode === 'fullpower') {
           return { id: b.id, mode: 'fullpower', structure: b.structure }
@@ -75,14 +97,20 @@ export default function SeanceEditor({ onEnregistrer, onFermer }) {
         return { id: b.id, mode: 'simple', distance_m: Number(b.distance_m), duree_s, allure_kmh }
       })
     }))
-    onEnregistrer({ id: crypto.randomUUID(), titre: titre.trim(), dateCreation: Date.now(), visible, niveaux: niveauxFinaux })
+    onEnregistrer({
+      id: seanceInitiale?.id || crypto.randomUUID(),
+      titre: titre.trim(),
+      dateCreation: seanceInitiale?.dateCreation || Date.now(),
+      visible,
+      niveaux: niveauxFinaux
+    })
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center">
       <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto">
         <div className="sticky top-0 bg-white flex items-center justify-between px-5 py-4 border-b border-piste-100">
-          <h3 className="font-display text-lg text-piste-900">Nouvelle séance</h3>
+          <h3 className="font-display text-lg text-piste-900">{seanceInitiale ? 'Modifier la séance' : 'Nouvelle séance'}</h3>
           <button onClick={onFermer} className="p-1.5 rounded-full hover:bg-piste-100">
             <X size={18} />
           </button>
@@ -108,6 +136,27 @@ export default function SeanceEditor({ onEnregistrer, onFermer }) {
             <div key={n.id} className="border border-piste-100 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="font-display text-base text-piste-900">{n.nom}</p>
+              </div>
+
+              <div className="flex items-center gap-3 mb-3">
+                <label className="flex items-center gap-2 text-xs font-medium text-piste-700">
+                  <input
+                    type="checkbox"
+                    checked={!!n.echauffement?.active}
+                    onChange={(e) => majNiveau(n.id, 'echauffement', { ...n.echauffement, active: e.target.checked })}
+                    className="w-4 h-4"
+                  />
+                  Échauffement
+                </label>
+                {n.echauffement?.active && (
+                  <input
+                    type="number"
+                    value={n.echauffement.duree_s}
+                    onChange={(e) => majNiveau(n.id, 'echauffement', { ...n.echauffement, duree_s: Number(e.target.value) })}
+                    placeholder="secondes"
+                    className="w-24 rounded-lg border border-piste-200 px-2.5 py-1.5 text-xs"
+                  />
+                )}
               </div>
 
               <div className="space-y-4 mb-2">
@@ -184,7 +233,7 @@ export default function SeanceEditor({ onEnregistrer, onFermer }) {
             disabled={!titre.trim()}
             className="w-full bg-piste-800 hover:bg-piste-700 disabled:opacity-40 text-white font-medium py-3 rounded-xl transition"
           >
-            Enregistrer la séance
+            {seanceInitiale ? 'Enregistrer les modifications' : 'Enregistrer la séance'}
           </button>
         </div>
       </div>

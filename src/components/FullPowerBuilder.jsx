@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import { typeVide, dureeTotaleStructure } from '../utils/fullpower'
+import { typeVide, dureeTotaleStructure, recupVide } from '../utils/fullpower'
 import { formatDuree } from '../utils/calc'
 
 const LETTRES = ['A', 'B', 'C', 'D']
@@ -10,9 +10,11 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
   const [sequence, setSequence] = useState(structureInitiale?.sequence || [])
   const [nbTours, setNbTours] = useState(structureInitiale?.nbTours || 1)
   const [guidage, setGuidage] = useState(structureInitiale?.guidage || 'gps')
+  const [recupSerie, setRecupSerie] = useState(structureInitiale?.recupSerie || recupVide(120, 50))
+  const [recupFinale, setRecupFinale] = useState(structureInitiale?.recupFinale || recupVide(180, 40))
 
-  function emettre(nTypes, nSequence, nNbTours, nGuidage) {
-    onChange({ types: nTypes, sequence: nSequence, nbTours: nNbTours, guidage: nGuidage })
+  function emettre(nTypes, nSequence, nNbTours, nGuidage, nRecupSerie = recupSerie, nRecupFinale = recupFinale) {
+    onChange({ types: nTypes, sequence: nSequence, nbTours: nNbTours, guidage: nGuidage, recupSerie: nRecupSerie, recupFinale: nRecupFinale })
   }
 
   function ajouterType() {
@@ -65,7 +67,19 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
     emettre(types, sequence, val, guidage)
   }
 
-  const dureeTotale = dureeTotaleStructure({ types, sequence, nbTours: Number(nbTours) || 1 })
+  function majRecupSerie(champ, valeur) {
+    const n = { ...recupSerie, [champ]: valeur }
+    setRecupSerie(n)
+    emettre(types, sequence, nbTours, guidage, n, recupFinale)
+  }
+
+  function majRecupFinale(champ, valeur) {
+    const n = { ...recupFinale, [champ]: valeur }
+    setRecupFinale(n)
+    emettre(types, sequence, nbTours, guidage, recupSerie, n)
+  }
+
+  const dureeTotale = dureeTotaleStructure({ types, sequence, nbTours: Number(nbTours) || 1, recupSerie, recupFinale })
 
   return (
     <div className="space-y-5">
@@ -151,6 +165,42 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="border border-piste-100 rounded-xl p-3 space-y-2">
+        <label className="flex items-center gap-2 text-xs font-medium text-piste-800">
+          <input
+            type="checkbox"
+            checked={recupSerie.active}
+            onChange={(e) => majRecupSerie('active', e.target.checked)}
+            className="w-4 h-4"
+          />
+          Récupération entre séries (tours)
+        </label>
+        {recupSerie.active && (
+          <div className="grid grid-cols-2 gap-2">
+            <ChampNombre label="Temps récup (s)" valeur={recupSerie.duree_s} onChange={(v) => majRecupSerie('duree_s', v)} />
+            <ChampNombre label="% VMA récup" valeur={recupSerie.pct_vma} onChange={(v) => majRecupSerie('pct_vma', v)} />
+          </div>
+        )}
+      </div>
+
+      <div className="border border-piste-100 rounded-xl p-3 space-y-2">
+        <label className="flex items-center gap-2 text-xs font-medium text-piste-800">
+          <input
+            type="checkbox"
+            checked={recupFinale.active}
+            onChange={(e) => majRecupFinale('active', e.target.checked)}
+            className="w-4 h-4"
+          />
+          Récupération / retour au calme final
+        </label>
+        {recupFinale.active && (
+          <div className="grid grid-cols-2 gap-2">
+            <ChampNombre label="Temps récup (s)" valeur={recupFinale.duree_s} onChange={(v) => majRecupFinale('duree_s', v)} />
+            <ChampNombre label="% VMA récup" valeur={recupFinale.pct_vma} onChange={(v) => majRecupFinale('pct_vma', v)} />
+          </div>
+        )}
       </div>
 
       <p className="text-xs text-piste-500">Durée totale estimée : {formatDuree(dureeTotale)}</p>

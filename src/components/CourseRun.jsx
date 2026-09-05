@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Square, TrendingDown, TrendingUp, CheckCircle2 } from 'lucide-react'
-import { beepDepart, beepFin, planifierBipRegulation, gongTransition } from '../utils/audio'
+import { beepDepart, beepFin, planifierBipRegulation, gongTransition, annoncerVocal } from '../utils/audio'
 import { formatDuree, vitesseVersAllure } from '../utils/calc'
+import { libellePhase } from '../utils/fullpower'
 
 const TOLERANCE_GPS = 0.09 // ±9%, même tolérance que Fractionné GPS Pro
 
@@ -11,6 +12,7 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
   const [elapsed, setElapsed] = useState(0)
   const [distance, setDistance] = useState(0)
   const [vitesseInstant, setVitesseInstant] = useState(0)
+  const [annonce, setAnnonce] = useState(null)
 
   const startRef = useRef(null)
   const watchIdRef = useRef(null)
@@ -20,6 +22,7 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
   const vitessesTravailRef = useRef([])
   const dernierIndexPhaseRef = useRef(-1)
   const termineAutoRef = useRef(false)
+  const annonceTimeoutRef = useRef(null)
 
   const cumul = phases.reduce((acc, p, i) => {
     acc.push((acc[i - 1] || 0) + p.duree_s)
@@ -54,14 +57,21 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
     return () => clearInterval(intervalRef.current)
   }, [etat])
 
-  // Gong à chaque changement de phase
+  // Annonce (visuelle + vocale) et gong à chaque changement de phase : "Départ !", "Récupération
+  // type Répétition/Série", etc. Le gong ne joue pas sur la toute première phase (départ du bloc).
   useEffect(() => {
     if (etat !== 'course') return
-    if (dernierIndexPhaseRef.current !== -1 && indexPhase !== dernierIndexPhaseRef.current) {
-      gongTransition()
+    if (dernierIndexPhaseRef.current !== indexPhase) {
+      if (dernierIndexPhaseRef.current !== -1) gongTransition()
+      const texte = libellePhase(phases[indexPhase])
+      setAnnonce(texte)
+      annoncerVocal(texte)
+      clearTimeout(annonceTimeoutRef.current)
+      annonceTimeoutRef.current = setTimeout(() => setAnnonce(null), 1800)
+      dernierIndexPhaseRef.current = indexPhase
     }
-    dernierIndexPhaseRef.current = indexPhase
-  }, [indexPhase, etat])
+    return () => clearTimeout(annonceTimeoutRef.current)
+  }, [indexPhase, etat, phases])
 
   // Fin automatique quand toutes les phases sont écoulées
   useEffect(() => {
@@ -172,6 +182,13 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
 
   return (
     <div className="max-w-md mx-auto px-6 py-8 text-center">
+      {annonce && (
+        <div className="fixed inset-x-0 top-4 z-40 flex justify-center px-6 pointer-events-none">
+          <div className="bg-piste-800 text-white text-sm font-semibold px-5 py-2.5 rounded-full shadow-lg text-center">
+            {annonce}
+          </div>
+        </div>
+      )}
       <p className="text-xs uppercase tracking-wide text-piste-500 mb-1">
         {labelBloc} {phases.length > 1 && `· Phase ${indexPhase + 1}/${phases.length}`}
       </p>
