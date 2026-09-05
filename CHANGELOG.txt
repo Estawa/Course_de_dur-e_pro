@@ -1,3 +1,12 @@
+v1.10.0 — Édition des séances, aperçu détaillé, échauffement et annonces de phase
+- Espace enseignant : cliquer sur une séance de la bibliothèque l'ouvre désormais en détail/édition (titre, visibilité, niveaux, blocs, échauffement) au lieu de n'en créer que de nouvelles ; "Enregistrer les modifications" remplace la séance existante
+- Nouvel écran "Aperçu de la séance" côté élève : après avoir choisi un niveau dans la bibliothèque, détail complet avant de démarrer (distance/durée totale, échauffement, contenu bloc par bloc : types, répétitions, allures, séries, récupérations)
+- Nouveau : échauffement optionnel par niveau (durée réglable par le prof), avec annonce "Départ Échauffement !" et minuteur dédié avant le premier bloc
+- Mode Full Power : ajout de la récupération entre séries (tours) et d'une récupération / retour au calme final, réglables (durée, % VMA)
+- Pendant la course : annonce visuelle (bandeau) et vocale (synthèse vocale du navigateur) à chaque changement de phase — "Départ !", "Récupération type Répétition", "Récupération type Série", "Récupération Fin de séance"
+- Annonce "Fin de séance !" après le dernier bloc, avant l'échelle de Borg et l'observation finale
+- Récapitulatif de fin de séance enrichi : distance/durée totale réalisée, % de réussite allure et % de réussite distance/durée
+
 v1.9.0 — VMA auto/manuelle, note pondérée comportement, % de réussite par critère
 - VMA : le résultat d'un test se propose désormais automatiquement (source "auto"), mais l'enseignant peut fixer une valeur manuelle depuis le nouvel onglet "VMA" (par classe), qui devient alors prioritaire sur le résultat de test
 - L'élève ne peut plus modifier sa VMA librement (l'ancien champ de saisie libre dans "Outils" a été retiré) : il ne peut plus que consulter sa VMA retenue et sa source, et doit repasser un test (ou voir son professeur) pour la faire évoluer
