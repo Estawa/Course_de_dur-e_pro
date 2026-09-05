@@ -25,6 +25,7 @@ export default function Test4x3({ eleve, onRetour }) {
   const [saisieKm, setSaisieKm] = useState('')
   const [saisieM, setSaisieM] = useState('')
   const [vmaFinale, setVmaFinale] = useState(null)
+  const [enregistre, setEnregistre] = useState(false)
   const startRef = useRef(null)
   const intervalRef = useRef(null)
 
@@ -85,7 +86,8 @@ export default function Test4x3({ eleve, onRetour }) {
   }
 
   function enregistrerVma() {
-    storage.setVma(eleve, vmaFinale)
+    storage.enregistrerResultatTest(eleve, vmaFinale, '4x3')
+    setEnregistre(true)
   }
 
   if (phase === 'attente') {
@@ -136,7 +138,11 @@ export default function Test4x3({ eleve, onRetour }) {
     <div className="max-w-md mx-auto px-6 py-16 text-center">
       <h2 className="font-display text-2xl text-piste-900 mb-2">VMA estimée</h2>
       <p className="font-display text-4xl text-piste-900 mb-6">{vmaFinale} km/h</p>
-      <button onClick={enregistrerVma} className="w-full bg-piste-800 text-white font-medium py-3 rounded-xl mb-3">Enregistrer comme ma VMA</button>
+      {enregistre ? (
+        <p className="text-sm text-piste-600 mb-3">Résultat transmis. Il sera pris en compte, sauf si ton professeur a fixé une autre valeur.</p>
+      ) : (
+        <button onClick={enregistrerVma} className="w-full bg-piste-800 text-white font-medium py-3 rounded-xl mb-3">Enregistrer ce résultat</button>
+      )}
       <button onClick={onRetour} className="text-xs text-piste-400 underline">Retour aux tests</button>
     </div>
   )

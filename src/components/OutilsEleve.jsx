@@ -6,13 +6,23 @@ import BorgReference from './BorgReference'
 import PerformancesEstimees from './PerformancesEstimees'
 import { storage } from '../utils/storage'
 
+const LABEL_TEST = { cooper: 'Demi-Cooper', '4x3': '4×3 min', gacon: 'Gacon 45/15' }
+
+function formatDate(ts) {
+  if (!ts) return ''
+  return new Date(ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+}
+
 export default function OutilsEleve({ eleve, onComposerSeance }) {
   const [ecran, setEcran] = useState('menu')
-  const [vma, setVma] = useState(() => storage.getVma(eleve) || '')
-
-  function enregistrerVma() {
-    storage.setVma(eleve, Number(vma))
-  }
+  const detail = storage.getVmaDetail(eleve)
+  const retenue = detail.manuelle ?? detail.auto ?? null
+  const source =
+    detail.manuelle != null
+      ? `Fixée par ton professeur le ${formatDate(detail.manuelleDate)}`
+      : detail.auto != null
+      ? `Issue de ton test ${LABEL_TEST[detail.autoTest] || ''} du ${formatDate(detail.autoDate)}`
+      : null
 
   if (ecran === 'tests') return <VmaTests eleve={eleve} />
   if (ecran === 'chrono') return <Chronometre />
@@ -20,7 +30,6 @@ export default function OutilsEleve({ eleve, onComposerSeance }) {
   if (ecran === 'perfs') return <PerformancesEstimees />
 
   const items = [
-    { id: 'vma', icone: Gauge, titre: 'Ma VMA', description: `Actuellement : ${storage.getVma(eleve) || '—'} km/h` },
     { id: 'compose', icone: TrendingUp, titre: 'Composer ma séance', description: 'Construire et réaliser une séance en solo' },
     { id: 'tests', icone: ListChecks, titre: 'Tests de VMA', description: 'Demi-Cooper, 4×3 min, Gacon (45/15)' },
     { id: 'chrono', icone: Timer, titre: 'Chronomètre', description: 'Temps et vitesse moyenne' },
@@ -39,27 +48,18 @@ export default function OutilsEleve({ eleve, onComposerSeance }) {
 
       {ecran === 'menu' && (
         <div className="space-y-3 mb-6">
-          {items.map(({ id, icone: Icone, titre, description }) =>
-            id === 'vma' ? (
-              <div key={id} className="bg-piste-50 rounded-xl px-4 py-3.5">
-                <div className="flex items-center gap-3 mb-2">
-                  <Icone size={18} className="text-piste-600" />
-                  <p className="text-sm font-medium text-piste-900">{titre}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={vma}
-                    onChange={(e) => setVma(e.target.value)}
-                    placeholder="km/h"
-                    className="w-24 rounded-lg border border-piste-200 px-2 py-1.5 text-sm"
-                  />
-                  <button onClick={enregistrerVma} className="text-xs font-medium bg-piste-800 text-white px-3 py-1.5 rounded-full">
-                    Enregistrer
-                  </button>
-                </div>
-              </div>
-            ) : (
+          <div className="bg-piste-50 rounded-xl px-4 py-3.5">
+            <div className="flex items-center gap-3 mb-1">
+              <Gauge size={18} className="text-piste-600" />
+              <p className="text-sm font-medium text-piste-900">Ma VMA</p>
+            </div>
+            <p className="font-display text-2xl text-piste-900 mb-0.5">{retenue ? `${retenue} km/h` : '—'}</p>
+            {source && <p className="text-xs text-piste-500">{source}</p>}
+            <p className="text-xs text-piste-500 mt-1">
+              Tu ne peux pas la modifier toi-même : refais un test ci-dessous, ou vois ton professeur si besoin.
+            </p>
+          </div>
+          {items.map(({ id, icone: Icone, titre, description }) => (
               <button
                 key={id}
                 onClick={() => handleClick(id)}
@@ -74,8 +74,7 @@ export default function OutilsEleve({ eleve, onComposerSeance }) {
                 </div>
                 <ChevronRight size={16} className="text-piste-400 shrink-0" />
               </button>
-            )
-          )}
+          ))}
         </div>
       )}
     </div>
