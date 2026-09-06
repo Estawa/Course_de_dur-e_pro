@@ -1,6 +1,6 @@
-import { ArrowLeft, GraduationCap } from 'lucide-react'
+import { ArrowLeft, GraduationCap, QrCode } from 'lucide-react'
 
-export default function Header({ title, onBack, onEnseignant, showEnseignant = true }) {
+export default function Header({ title, onBack, onEnseignant, showEnseignant = true, onPartager, showPartage = false }) {
   return (
     <header className="sticky top-0 z-20 bg-piste-900 text-piste-50 shadow-md">
       <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -16,18 +16,29 @@ export default function Header({ title, onBack, onEnseignant, showEnseignant = t
           )}
           <div className="min-w-0">
             <h1 className="font-display text-lg leading-tight truncate">{title}</h1>
-            <p className="text-[11px] text-piste-300 tracking-wide">Course de Durée Pro by C. Guilhem · v1.11.0</p>
+            <p className="text-[11px] text-piste-300 tracking-wide">Course de Durée Pro by C. Guilhem · v1.12.0</p>
           </div>
         </div>
-        {showEnseignant && (
-          <button
-            onClick={onEnseignant}
-            className="flex items-center gap-1.5 text-xs font-medium bg-piste-800 hover:bg-piste-700 px-3 py-1.5 rounded-full transition active:scale-95"
-          >
-            <GraduationCap size={15} />
-            Enseignant
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {showPartage && (
+            <button
+              onClick={onPartager}
+              className="p-1.5 rounded-full hover:bg-piste-800 active:scale-95 transition"
+              aria-label="Partager l'application"
+            >
+              <QrCode size={19} />
+            </button>
+          )}
+          {showEnseignant && (
+            <button
+              onClick={onEnseignant}
+              className="flex items-center gap-1.5 text-xs font-medium bg-piste-800 hover:bg-piste-700 px-3 py-1.5 rounded-full transition active:scale-95"
+            >
+              <GraduationCap size={15} />
+              Enseignant
+            </button>
+          )}
+        </div>
       </div>
     </header>
   )
