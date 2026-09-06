@@ -11,6 +11,7 @@ import SeanceRunner from './components/SeanceRunner'
 import Bilan from './components/Bilan'
 import EnseignantPin from './components/EnseignantPin'
 import EnseignantDashboard from './components/EnseignantDashboard'
+import PartageApp from './components/PartageApp'
 import { storage } from './utils/storage'
 import { calculerNoteReelle } from './utils/calc'
 
@@ -120,10 +121,11 @@ export default function App() {
     course: 'Course en cours',
     bilan: 'Bilan de séance',
     enseignantPin: 'Espace enseignant',
-    enseignant: 'Espace enseignant'
+    enseignant: 'Espace enseignant',
+    partage: 'Partager l\'application'
   }
 
-  const peutRevenir = ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'course', 'bilan', 'enseignant', 'enseignantPin'].includes(ecran)
+  const peutRevenir = ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'course', 'bilan', 'enseignant', 'enseignantPin', 'partage'].includes(ecran)
 
   function handleRetour() {
     if (['bibliotheque', 'vierge', 'outils'].includes(ecran)) setEcran('tuiles')
@@ -132,6 +134,7 @@ export default function App() {
     else if (ecran === 'course') setEcran('tuiles')
     else if (ecran === 'bilan') setEcran('tuiles')
     else if (ecran === 'enseignantPin' || ecran === 'enseignant') setEcran(eleve ? 'tuiles' : 'accueil')
+    else if (ecran === 'partage') setEcran(eleve ? 'tuiles' : 'accueil')
   }
 
   return (
@@ -141,9 +144,13 @@ export default function App() {
         onBack={peutRevenir ? handleRetour : null}
         onEnseignant={handleAccesEnseignant}
         showEnseignant={ecran !== 'course'}
+        onPartager={() => setEcran('partage')}
+        showPartage={ecran === 'accueil'}
       />
 
       {!eleve && ecran === 'accueil' && <EleveLogin onConnecte={handleConnecte} />}
+
+      {ecran === 'partage' && <PartageApp />}
 
       {eleve && ecran === 'tuiles' && (
         <AccueilTuiles eleve={eleve} onChoisirTuile={handleChoisirTuile} onDeconnexion={handleDeconnexion} />
