@@ -1,3 +1,8 @@
+v1.12.0 — Flashcode et lien de partage
+- Raccourci flashcode (QR code) ajouté sur la page d'accueil, avant identification
+- Écran dédié : QR code de l'application, lien affiché en clair et copiable, bouton "Partager" (partage natif du téléphone si disponible)
+- Le lien s'adapte automatiquement à l'adresse réelle où l'application est déployée
+
 v1.11.0 — Niveaux visibles par séance et visibilité par classe
 - Éditeur de séance : chaque niveau (Facile/Moyen/Difficile) a désormais une case "Visible aux élèves" — possibilité de n'en proposer qu'un ou deux plutôt que toujours les trois
 - Visibilité repensée : le bouton "Visible / Masquée" sur chaque séance ouvre un sélecteur pour choisir précisément quelles classes la voient (au lieu de la rendre visible à toutes les classes en même temps) ; le badge affiche le nombre de classes concernées, ex. "Visible (2)"
