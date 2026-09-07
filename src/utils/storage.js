@@ -360,20 +360,23 @@ export const storage = {
   // la valeur manuelle du prof est toujours prioritaire quand elle existe.
   getVmaDetail: (eleve) => {
     const all = read(KEYS.VMA, {})
-    return all[storage.cleEleve(eleve)] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, historique: [] }
+    return all[storage.cleEleve(eleve)] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, derniereCourse: null, historique: [] }
   },
   getVmaRetenue: (eleve) => {
     const d = storage.getVmaDetail(eleve)
     return d.manuelle ?? d.auto ?? null
   },
   // Enregistre automatiquement le résultat d'un test réalisé par l'élève (ne touche jamais à la valeur manuelle du prof).
-  enregistrerResultatTest: (eleve, vma, test) => {
+  // detailCourse (optionnel) : le détail brut du test (ex. les 4 distances du 4x3, la distance du Cooper,
+  // le palier atteint au Gacon...), conservé pour que le prof puisse le consulter, pas seulement le chiffre final.
+  enregistrerResultatTest: (eleve, vma, test, detailCourse = null) => {
     const all = read(KEYS.VMA, {})
     const cle = storage.cleEleve(eleve)
     const actuel = all[cle] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, historique: [] }
     actuel.auto = vma
     actuel.autoDate = Date.now()
     actuel.autoTest = test
+    actuel.derniereCourse = detailCourse ? { test, detail: detailCourse, date: Date.now() } : actuel.derniereCourse
     actuel.historique = [...(actuel.historique || []), { valeur: vma, date: Date.now(), source: 'test', test }]
     all[cle] = actuel
     write(KEYS.VMA, all)
