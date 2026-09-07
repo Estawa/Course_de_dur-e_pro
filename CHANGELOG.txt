@@ -1,3 +1,12 @@
+v1.15.0 — Validation explicite du test 4×3, détail des tests VMA, VMA sur la fiche élève
+- Test 4×3 : chaque distance saisie pendant la récupération nécessite désormais un clic sur « Valider cette distance », avec confirmation visuelle claire (« Distance prise en compte ») et un récapitulatif de toutes les répétitions déjà saisies, affiché en permanence (récupération, dernière répétition, écran de résultat)
+- Les 3 tests VMA enregistrent maintenant le détail brut du test (les 4 distances du 4×3, la distance du Demi-Cooper, le palier du Gacon), pas seulement le chiffre final — visible côté prof
+- Onglet enseignant « Élèves & suivi » : la VMA de l'élève (valeur retenue, source, détail du dernier test, et possibilité de la fixer manuellement) est désormais affichée directement sur sa fiche, sans avoir à changer d'onglet. La VMA fixée manuellement par le prof reste prioritaire même si l'élève n'a jamais passé de test, et s'applique aux séances de préparation calculées à partir de sa VMA
+
+v1.14.2 — Diagnostic + simplification Firestore
+- Retrait temporaire du cache hors-ligne (IndexedDB) de Firestore, souvent restreint en navigation privée sur mobile et pouvant faire échouer toute la synchro silencieusement ; la synchro en ligne reste pleinement fonctionnelle, le mode hors-ligne sera revu séparément
+- Écran de saisie libre (aucune classe trouvée) : ajout d'une ligne de diagnostic discrète en bas d'écran indiquant si le cloud est disponible et si un code de synchro est détecté sur l'appareil, pour identifier la cause en un coup d'œil
+
 v1.14.1 — Correctif : écran de connexion trop pressé
 - Corrige un bug de la synchro cloud (v1.14.0) : sur une connexion lente ou un tout premier chargement (ex. navigation privée, sans cache local), l'écran de connexion élève pouvait s'afficher avant que la liste des classes ne soit arrivée du cloud, et retombait alors à tort sur la saisie libre nom/prénom/classe. L'appli attend désormais spécifiquement la réception des élèves avant d'afficher l'écran de connexion (délai de sécurité repoussé à 6 secondes)
 
