@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { Copy, Check, Share2 } from 'lucide-react'
+import { storage } from '../utils/storage'
 
 export default function PartageApp() {
   const canvasRef = useRef(null)
@@ -8,8 +9,12 @@ export default function PartageApp() {
   const [copie, setCopie] = useState(false)
 
   useEffect(() => {
-    // Lien de l'appli telle qu'elle est réellement déployée (s'adapte à l'adresse utilisée)
-    const url = window.location.origin + window.location.pathname
+    // Lien de l'appli telle qu'elle est réellement déployée (s'adapte à l'adresse utilisée),
+    // avec le code de synchro embarqué pour que chaque élève rejoigne automatiquement le
+    // même espace cloud que le prof (voir utils/cloud.js).
+    const base = window.location.origin + window.location.pathname
+    const code = storage.cloudDisponible() ? storage.assurerCodeSync() : ''
+    const url = code ? `${base}?c=${encodeURIComponent(code)}` : base
     setLien(url)
     if (canvasRef.current) {
       QRCode.toCanvas(canvasRef.current, url, {

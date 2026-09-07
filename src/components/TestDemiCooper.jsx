@@ -38,14 +38,13 @@ export default function TestDemiCooper({ eleve, onRetour }) {
     setEtat('course')
   }
 
+  // Le résultat est enregistré automatiquement dès qu'il est calculé (plus besoin
+  // d'un clic supplémentaire que l'élève pourrait oublier de faire).
   function calculer() {
     const distance = (Number(km) || 0) * 1000 + (Number(m) || 0)
     const vma = Math.round((distance / 100) * 10) / 10
     setVmaCalculee(vma)
-  }
-
-  function enregistrerVma() {
-    storage.enregistrerResultatTest(eleve, vmaCalculee, 'cooper')
+    storage.enregistrerResultatTest(eleve, vma, 'cooper')
     setEnregistre(true)
   }
 
@@ -92,11 +91,7 @@ export default function TestDemiCooper({ eleve, onRetour }) {
       ) : (
         <div>
           <p className="font-display text-3xl text-piste-900 mb-4">{vmaCalculee} km/h</p>
-          {enregistre ? (
-            <p className="text-sm text-piste-600 mb-3">Résultat transmis. Il sera pris en compte, sauf si ton professeur a fixé une autre valeur.</p>
-          ) : (
-            <button onClick={enregistrerVma} className="w-full bg-piste-800 text-white font-medium py-3 rounded-xl mb-3">Enregistrer ce résultat</button>
-          )}
+          {enregistre && <p className="text-sm text-piste-600 mb-3">Résultat transmis. Il sera pris en compte, sauf si ton professeur a fixé une autre valeur.</p>}
           <button onClick={onRetour} className="text-xs text-piste-400 underline">Retour aux tests</button>
         </div>
       )}

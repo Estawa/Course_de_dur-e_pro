@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Download, Plus, Trash2, Upload, ChevronDown, ChevronUp, KeyRound, UserX, Pencil, UserPlus, FolderPlus, FolderX, Check, X } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
@@ -8,7 +8,7 @@ import VisibiliteClasses from './VisibiliteClasses'
 import { storage } from '../utils/storage'
 import { syntheseCycle, noteFinale, pourcentagesReussite } from '../utils/calc'
 
-export default function EnseignantDashboard({ seances, setSeances, realisations, onModifierRealisation }) {
+export default function EnseignantDashboard({ seances, setSeances, realisations, onModifierRealisation, onSupprimerRealisation, onSupprimerRealisationsEleve, onSupprimerRealisationsClasse, cloudTick }) {
   const [onglet, setOnglet] = useState('seances') // seances | suivi | vma
   const [editeurOuvert, setEditeurOuvert] = useState(false)
   const [seanceEnEdition, setSeanceEnEdition] = useState(null)
@@ -27,6 +27,13 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
   const [nouvelEleveSexe, setNouvelEleveSexe] = useState('')
   const [nouvelleClasseOuverte, setNouvelleClasseOuverte] = useState(false)
   const [nouvelleClasseNom, setNouvelleClasseNom] = useState('')
+
+  // Une mise à jour cloud (nouvel élève connecté, PIN défini, séance réalisée sur un autre
+  // appareil...) doit rafraîchir les listes dérivées du roster local, qui viennent d'être
+  // mises à jour par storage.demarrerSynchroCloud juste avant cet appel.
+  useEffect(() => {
+    if (cloudTick !== undefined) setRosterVersion((v) => v + 1)
+  }, [cloudTick])
 
   const classes = useMemo(() => {
     const depuisRoster = storage.getClasses()
@@ -129,6 +136,24 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
     setRosterVersion((v) => v + 1)
   }
 
+  function supprimerUneRealisation(r) {
+    if (!onSupprimerRealisation) return
+    if (!confirm(`Effacer la séance "${r.seanceTitre} · ${r.niveauNom}" du ${new Date(r.date).toLocaleDateString('fr-FR')} ?`)) return
+    onSupprimerRealisation(r.id)
+  }
+
+  function supprimerSeancesEleve(eleve) {
+    if (!onSupprimerRealisationsEleve || classeActive === null) return
+    if (!confirm(`Effacer toutes les séances enregistrées de ${eleve.prenom} ${eleve.nom} ? Cette action est irréversible.`)) return
+    onSupprimerRealisationsEleve(eleve.id, eleve.nom, eleve.prenom, classeActive)
+  }
+
+  function supprimerSeancesClasse() {
+    if (!onSupprimerRealisationsClasse || classeActive === null) return
+    if (!confirm(`Effacer toutes les séances enregistrées de toute la classe ${classeActive} ? Cette action est irréversible.`)) return
+    onSupprimerRealisationsClasse(classeActive)
+  }
+
   function reinitialiserPin(eleveId) {
     if (!eleveId || classeActive === null) return
     storage.reinitialiserPin(classeActive, eleveId)
@@ -216,6 +241,13 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
         <h2 className="font-display text-2xl text-piste-900">Espace enseignant</h2>
       </div>
 
+      {storage.cloudDisponible() && storage.getCodeSync() && (
+        <div className="flex items-center gap-1.5 mb-4 text-[11px] text-piste-500">
+          <span className="w-1.5 h-1.5 rounded-full bg-piste-500" />
+          Synchronisation active — code « {storage.getCodeSync()} » (partage-le via le flashcode)
+        </div>
+      )}
+
       <div className="flex gap-1.5 mb-6 bg-piste-50 rounded-full p-1 w-fit">
         {[
           { id: 'seances', label: 'Séances' },
@@ -300,9 +332,16 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
                 <Download size={14} /> Exporter CSV
               </button>
               {classeActive !== null && (
-                <button onClick={supprimerClasseActive} className="flex items-center gap-1.5 text-xs font-medium text-alerte hover:text-alerte/80">
-                  <FolderX size={14} /> Supprimer la classe
-                </button>
+                <>
+                  {lignesEleves.some((l) => l.realisations.length > 0) && (
+                    <button onClick={supprimerSeancesClasse} className="flex items-center gap-1.5 text-xs font-medium text-alerte hover:text-alerte/80">
+                      <Trash2 size={14} /> Effacer les séances de la classe
+                    </button>
+                  )}
+                  <button onClick={supprimerClasseActive} className="flex items-center gap-1.5 text-xs font-medium text-alerte hover:text-alerte/80">
+                    <FolderX size={14} /> Supprimer la classe
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -465,6 +504,14 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
                               >
                                 <KeyRound size={12} /> Réinitialiser le PIN
                               </button>
+                              {eleve.realisations.length > 0 && (
+                                <button
+                                  onClick={() => supprimerSeancesEleve(eleve)}
+                                  className="flex items-center gap-1 text-[11px] font-medium text-alerte border border-[#f0d3ca] rounded-full px-2.5 py-1 hover:bg-white"
+                                >
+                                  <Trash2 size={12} /> Effacer ses séances
+                                </button>
+                              )}
                               <button
                                 onClick={() => supprimerEleve(eleve.id)}
                                 className="flex items-center gap-1 text-[11px] font-medium text-alerte border border-[#f0d3ca] rounded-full px-2.5 py-1 hover:bg-white"
@@ -498,12 +545,23 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
                                         </p>
                                       )}
                                     </div>
-                                    <div className="text-right">
-                                      <span className="font-display text-piste-900">{noteAvecComportement}/20</span>
-                                      {ajustement !== 0 && (
-                                        <p className="text-[10px] text-piste-500">{noteBase}/20 base {ajustement > 0 ? '+' : ''}{ajustement}</p>
+                                    <div className="flex items-start gap-2">
+                                      <div className="text-right">
+                                        <span className="font-display text-piste-900">{noteAvecComportement}/20</span>
+                                        {ajustement !== 0 && (
+                                          <p className="text-[10px] text-piste-500">{noteBase}/20 base {ajustement > 0 ? '+' : ''}{ajustement}</p>
+                                        )}
+                                        {labelGps && <p className="text-[10px] text-piste-500">{labelGps}</p>}
+                                      </div>
+                                      {onSupprimerRealisation && (
+                                        <button
+                                          onClick={() => supprimerUneRealisation(r)}
+                                          title="Effacer cette séance"
+                                          className="p-1 rounded-full hover:bg-[#fbeeea] text-alerte shrink-0"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
                                       )}
-                                      {labelGps && <p className="text-[10px] text-piste-500">{labelGps}</p>}
                                     </div>
                                   </div>
                                   {onModifierRealisation && (
