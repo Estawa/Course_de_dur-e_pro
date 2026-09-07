@@ -1,3 +1,7 @@
+v1.17.0 — Saisie des temps en minutes/secondes
+- Tous les temps saisis pour construire une séance (durée d'échauffement, durée d'un bloc simple, temps de travail et de récupération d'un type Full Power, récupération entre séries, récupération/retour au calme final) se saisissent désormais via deux menus déroulants Minutes / Secondes, au lieu d'un champ numérique libre
+- Nouveau composant réutilisable de sélection de durée, partagé entre l'éditeur de séance et le constructeur Full Power
+
 v1.16.0 — Choix explicite VMA test / VMA imposée
 - Onglet enseignant « Élèves & suivi » (et vue « VMA ») : la VMA test et la VMA imposée sont désormais affichées côte à côte pour chaque élève, chacune avec un bouton radio permettant de désigner celle qui doit être active
 - La VMA retenue (utilisée pour calculer les séances) ne change plus automatiquement : si un élève repasse un test alors que « VMA test » est la source active, la nouvelle valeur du test s'affiche mais il faut re-cliquer sur le radio « VMA test » pour qu'elle devienne la VMA retenue
