@@ -1,3 +1,5 @@
+import * as cloud from './cloud'
+
 const KEYS = {
   ELEVE_ACTIF_ID: 'cdp_eleve_actif_id',
   ROSTER: 'cdp_roster_v2',
@@ -60,7 +62,93 @@ function getRosterBrut() {
   return read(KEYS.ROSTER, {})
 }
 
+// --- Fusion des mises à jour reçues du cloud dans le stockage local ---
+
+function fusionnerElevesDepuisCloud(elevesCloud) {
+  const idsCloud = new Set(elevesCloud.map((e) => e.id))
+  const roster = getRosterBrut()
+  const classesVues = new Set()
+
+  elevesCloud.forEach((e) => {
+    if (!e.classe) return
+    classesVues.add(e.classe)
+    if (!roster[e.classe]) roster[e.classe] = []
+    const { classe, ...donnees } = e
+    const idx = roster[e.classe].findIndex((x) => x.id === e.id)
+    if (idx === -1) roster[e.classe].push(donnees)
+    else roster[e.classe][idx] = donnees
+  })
+
+  // Dans les classes suivies par le cloud, retire les élèves qui n'y existent plus
+  // (suppression faite depuis un autre appareil).
+  classesVues.forEach((classe) => {
+    const idsClasseCloud = new Set(elevesCloud.filter((e) => e.classe === classe).map((e) => e.id))
+    roster[classe] = (roster[classe] || []).filter((e) => idsClasseCloud.has(e.id))
+    if (roster[classe].length === 0) delete roster[classe]
+  })
+
+  // Rattrapage : élèves connus localement (import fait avant l'activation de la synchro
+  // sur cet appareil, ou écriture pas encore arrivée) mais absents du cloud → on les pousse,
+  // sinon un élève qui ouvre le lien verrait une classe vide.
+  Object.entries(roster).forEach(([classe, eleves]) => {
+    eleves.forEach((e) => { if (!idsCloud.has(e.id)) cloud.cloudEcrireEleve(classe, e) })
+  })
+
+  write(KEYS.ROSTER, roster)
+}
+
+function fusionnerRealisationsDepuisCloud(realisationsCloud) {
+  const local = read(KEYS.REALISATIONS, [])
+  const idsCloud = new Set(realisationsCloud.map((r) => r.id))
+  // Réalisations locales pas encore connues du cloud (ex : créées avant l'activation de la
+  // synchro sur cet appareil, ou écriture pas encore arrivée) : on les pousse et on les garde.
+  const localSeulement = local.filter((r) => !idsCloud.has(r.id))
+  localSeulement.forEach((r) => cloud.cloudEcrireRealisation(r))
+  write(KEYS.REALISATIONS, [...realisationsCloud, ...localSeulement])
+}
+
+function fusionnerVmaDepuisCloud(vmaCloud) {
+  const local = read(KEYS.VMA, {})
+  Object.entries(vmaCloud).forEach(([cle, detail]) => {
+    local[cle] = detail
+  })
+  // Entrées locales inconnues du cloud (avant activation de la synchro) : on les pousse.
+  Object.keys(local).forEach((cle) => {
+    if (!(cle in vmaCloud)) cloud.cloudEcrireVma(cle, local[cle])
+  })
+  write(KEYS.VMA, local)
+}
+
+function fusionnerSeancesDepuisCloud(seancesCloud) {
+  const local = read(KEYS.SEANCES, [])
+  if (seancesCloud.length === 0 && local.length > 0) {
+    // Le cloud ne connaît pas encore les séances de ce prof (première activation) : on les pousse.
+    cloud.cloudEcrireSeances(local)
+    return
+  }
+  write(KEYS.SEANCES, seancesCloud)
+}
+
 export const storage = {
+  // --- Synchronisation cloud ---
+  cloudDisponible: () => cloud.cloudDisponible(),
+  getCodeSync: () => cloud.getCodeSync(),
+  assurerCodeSync: () => cloud.assurerCodeSync(),
+  appliquerCodeDepuisLien: (code) => cloud.appliquerCodeDepuisLien(code),
+
+  // Démarre l'écoute temps réel (si un code de synchro est actif) : à chaque mise à jour
+  // distante, fusionne dans le stockage local puis appelle callback() pour que l'UI se
+  // rafraîchisse. Retourne une fonction pour arrêter l'écoute.
+  demarrerSynchroCloud: (callback) => {
+    return cloud.demarrerSynchro((type, data) => {
+      if (type === 'eleves') fusionnerElevesDepuisCloud(data)
+      else if (type === 'realisations') fusionnerRealisationsDepuisCloud(data)
+      else if (type === 'vma') fusionnerVmaDepuisCloud(data)
+      else if (type === 'seances') fusionnerSeancesDepuisCloud(data)
+      callback()
+    })
+  },
+
   // --- Roster (classes + élèves) ---
   getRoster: () => getRosterBrut(),
   getClasses: () => Object.keys(getRosterBrut()).sort(),
@@ -73,6 +161,7 @@ export const storage = {
   appliquerImportRoster: (listeEleves, mode = 'ajouter') => {
     const roster = getRosterBrut()
     const listeValide = listeEleves.filter((e) => e.classe)
+    const touches = [] // { classe, eleve }
 
     if (mode === 'remplacer') {
       const classesConcernees = Array.from(new Set(listeValide.map((e) => e.classe)))
@@ -83,8 +172,9 @@ export const storage = {
           const trouve = existants.find(
             (e) => e.nom.toLowerCase() === imp.nom.toLowerCase() && e.prenom.toLowerCase() === imp.prenom.toLowerCase()
           )
-          if (trouve) return { ...trouve, sexe: imp.sexe || trouve.sexe || null }
-          return { id: idEleve(), nom: imp.nom, prenom: imp.prenom, pin: null, sexe: imp.sexe || null }
+          const eleve = trouve ? { ...trouve, sexe: imp.sexe || trouve.sexe || null } : { id: idEleve(), nom: imp.nom, prenom: imp.prenom, pin: null, sexe: imp.sexe || null }
+          touches.push({ classe, eleve })
+          return eleve
         })
       })
     } else {
@@ -95,12 +185,16 @@ export const storage = {
         )
         if (existant) {
           if (sexe && !existant.sexe) existant.sexe = sexe
+          touches.push({ classe, eleve: existant })
         } else {
-          roster[classe].push({ id: idEleve(), nom, prenom, pin: null, sexe: sexe || null })
+          const eleve = { id: idEleve(), nom, prenom, pin: null, sexe: sexe || null }
+          roster[classe].push(eleve)
+          touches.push({ classe, eleve })
         }
       })
     }
     write(KEYS.ROSTER, roster)
+    touches.forEach(({ classe, eleve }) => cloud.cloudEcrireEleve(classe, eleve))
   },
 
   ajouterEleveManuel: (classe, nom, prenom, sexe = null) => {
@@ -109,6 +203,7 @@ export const storage = {
     const eleve = { id: idEleve(), nom: nom.trim(), prenom: prenom.trim(), pin: null, sexe: sexe || null }
     roster[classe].push(eleve)
     write(KEYS.ROSTER, roster)
+    cloud.cloudEcrireEleve(classe, eleve)
     return eleve
   },
 
@@ -130,6 +225,7 @@ export const storage = {
       eleve.prenom = prenom.trim()
       if (sexe !== undefined) eleve.sexe = sexe || null
       write(KEYS.ROSTER, roster)
+      cloud.cloudEcrireEleve(classe, eleve)
       return true
     }
     return false
@@ -141,12 +237,15 @@ export const storage = {
     roster[classe] = roster[classe].filter((e) => e.id !== eleveId)
     if (roster[classe].length === 0) delete roster[classe]
     write(KEYS.ROSTER, roster)
+    cloud.cloudSupprimerEleve(eleveId)
   },
 
   supprimerClasse: (classe) => {
     const roster = getRosterBrut()
+    const eleves = roster[classe] || []
     delete roster[classe]
     write(KEYS.ROSTER, roster)
+    eleves.forEach((e) => cloud.cloudSupprimerEleve(e.id))
   },
 
   reinitialiserPin: (classe, eleveId) => {
@@ -155,6 +254,7 @@ export const storage = {
     if (eleve) {
       eleve.pin = null
       write(KEYS.ROSTER, roster)
+      cloud.cloudEcrireEleve(classe, eleve)
     }
   },
 
@@ -169,6 +269,7 @@ export const storage = {
     if (eleve) {
       eleve.pin = pin
       write(KEYS.ROSTER, roster)
+      cloud.cloudEcrireEleve(classe, eleve)
       return true
     }
     return false
@@ -197,13 +298,17 @@ export const storage = {
 
   // --- Séances / réalisations ---
   getSeances: () => read(KEYS.SEANCES, []),
-  setSeances: (seances) => write(KEYS.SEANCES, seances),
+  setSeances: (seances) => {
+    write(KEYS.SEANCES, seances)
+    cloud.cloudEcrireSeances(seances)
+  },
 
   getRealisations: () => read(KEYS.REALISATIONS, []),
   ajouterRealisation: (realisation) => {
     const all = read(KEYS.REALISATIONS, [])
     all.push(realisation)
     write(KEYS.REALISATIONS, all)
+    cloud.cloudEcrireRealisation(realisation)
   },
   // Met à jour une réalisation déjà enregistrée (ex : ajustement comportement saisi a posteriori par le prof).
   modifierRealisation: (id, patch) => {
@@ -212,8 +317,38 @@ export const storage = {
     if (idx !== -1) {
       all[idx] = { ...all[idx], ...patch }
       write(KEYS.REALISATIONS, all)
+      cloud.cloudEcrireRealisation(all[idx])
     }
     return all
+  },
+  // Supprime une séance réalisée précise (retour d'un élève sur un bloc/niveau donné).
+  supprimerRealisation: (id) => {
+    const all = read(KEYS.REALISATIONS, [])
+    const nouvelles = all.filter((r) => r.id !== id)
+    write(KEYS.REALISATIONS, nouvelles)
+    cloud.cloudSupprimerRealisation(id)
+    return nouvelles
+  },
+  // Supprime toutes les séances réalisées d'un élève précis (par id si connu, sinon par nom/prénom/classe
+  // pour les entrées "orphelines" issues d'anciens formats sans id).
+  supprimerRealisationsEleve: (eleveId, nom, prenom, classe) => {
+    const all = read(KEYS.REALISATIONS, [])
+    const aSupprimer = all.filter((r) =>
+      eleveId ? r.eleve.id === eleveId : (r.eleve.nom === nom && r.eleve.prenom === prenom && r.eleve.classe === classe)
+    )
+    const nouvelles = all.filter((r) => !aSupprimer.includes(r))
+    write(KEYS.REALISATIONS, nouvelles)
+    aSupprimer.forEach((r) => cloud.cloudSupprimerRealisation(r.id))
+    return nouvelles
+  },
+  // Supprime toutes les séances réalisées d'une classe entière.
+  supprimerRealisationsClasse: (classe) => {
+    const all = read(KEYS.REALISATIONS, [])
+    const aSupprimer = all.filter((r) => r.eleve.classe === classe)
+    const nouvelles = all.filter((r) => r.eleve.classe !== classe)
+    write(KEYS.REALISATIONS, nouvelles)
+    aSupprimer.forEach((r) => cloud.cloudSupprimerRealisation(r.id))
+    return nouvelles
   },
 
   getPinOk: () => read(KEYS.PIN_OK, false),
@@ -242,6 +377,7 @@ export const storage = {
     actuel.historique = [...(actuel.historique || []), { valeur: vma, date: Date.now(), source: 'test', test }]
     all[cle] = actuel
     write(KEYS.VMA, all)
+    cloud.cloudEcrireVma(cle, actuel)
   },
   // Saisie manuelle du prof : devient prioritaire sur le résultat de test tant qu'elle n'est pas effacée.
   definirVmaManuelle: (eleve, vma) => {
@@ -253,6 +389,7 @@ export const storage = {
     actuel.historique = [...(actuel.historique || []), { valeur: vma, date: Date.now(), source: 'manuel' }]
     all[cle] = actuel
     write(KEYS.VMA, all)
+    cloud.cloudEcrireVma(cle, actuel)
   },
   // Efface la valeur manuelle : la VMA retenue revient au dernier résultat de test enregistré automatiquement.
   effacerVmaManuelle: (eleve) => {
@@ -262,6 +399,7 @@ export const storage = {
       all[cle].manuelle = null
       all[cle].manuelleDate = null
       write(KEYS.VMA, all)
+      cloud.cloudEcrireVma(cle, all[cle])
     }
   }
 }
