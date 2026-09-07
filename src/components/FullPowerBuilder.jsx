@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { typeVide, dureeTotaleStructure, recupVide } from '../utils/fullpower'
 import { formatDuree } from '../utils/calc'
+import SelecteurDuree from './SelecteurDuree'
 
 const LETTRES = ['A', 'B', 'C', 'D']
 
@@ -103,11 +104,19 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="grid grid-cols-2 gap-2 text-sm mb-2">
                 <ChampNombre label="% VMA travail" valeur={t.pct_vma_travail} onChange={(v) => majType(t.id, 'pct_vma_travail', v)} />
-                <ChampNombre label="Temps travail (s)" valeur={t.duree_travail_s} onChange={(v) => majType(t.id, 'duree_travail_s', v)} />
                 <ChampNombre label="% VMA récup" valeur={t.pct_vma_recup} onChange={(v) => majType(t.id, 'pct_vma_recup', v)} />
-                <ChampNombre label="Temps récup (s)" valeur={t.duree_recup_s} onChange={(v) => majType(t.id, 'duree_recup_s', v)} />
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <label className="block text-xs text-piste-600 mb-1">Temps travail</label>
+                  <SelecteurDuree valeurSec={t.duree_travail_s} onChange={(v) => majType(t.id, 'duree_travail_s', v)} />
+                </div>
+                <div>
+                  <label className="block text-xs text-piste-600 mb-1">Temps récup</label>
+                  <SelecteurDuree valeurSec={t.duree_recup_s} onChange={(v) => majType(t.id, 'duree_recup_s', v)} />
+                </div>
               </div>
             </div>
           ))}
@@ -179,7 +188,10 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
         </label>
         {recupSerie.active && (
           <div className="grid grid-cols-2 gap-2">
-            <ChampNombre label="Temps récup (s)" valeur={recupSerie.duree_s} onChange={(v) => majRecupSerie('duree_s', v)} />
+            <div>
+              <label className="block text-xs text-piste-600 mb-1">Temps récup</label>
+              <SelecteurDuree valeurSec={recupSerie.duree_s} onChange={(v) => majRecupSerie('duree_s', v)} />
+            </div>
             <ChampNombre label="% VMA récup" valeur={recupSerie.pct_vma} onChange={(v) => majRecupSerie('pct_vma', v)} />
           </div>
         )}
@@ -197,7 +209,10 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
         </label>
         {recupFinale.active && (
           <div className="grid grid-cols-2 gap-2">
-            <ChampNombre label="Temps récup (s)" valeur={recupFinale.duree_s} onChange={(v) => majRecupFinale('duree_s', v)} />
+            <div>
+              <label className="block text-xs text-piste-600 mb-1">Temps récup</label>
+              <SelecteurDuree valeurSec={recupFinale.duree_s} onChange={(v) => majRecupFinale('duree_s', v)} />
+            </div>
             <ChampNombre label="% VMA récup" valeur={recupFinale.pct_vma} onChange={(v) => majRecupFinale('pct_vma', v)} />
           </div>
         )}

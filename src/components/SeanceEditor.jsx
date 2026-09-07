@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import FullPowerBuilder from './FullPowerBuilder'
+import SelecteurDuree from './SelecteurDuree'
 
 const NOMS_NIVEAUX = ['Facile', 'Moyen', 'Difficile']
 
 function blocSimpleVide() {
-  return { id: crypto.randomUUID(), mode: 'simple', distance_m: 400, duree_min: 2, duree_sec: 0 }
+  return { id: crypto.randomUUID(), mode: 'simple', distance_m: 400, duree_s: 120 }
 }
 
 function blocFullPowerVide() {
@@ -20,7 +21,7 @@ function niveauVide(nom) {
   return { id: crypto.randomUUID(), nom, guidage: 'minuteur', visible: true, echauffement: echauffementVide(), blocs: [blocSimpleVide(), blocSimpleVide(), blocSimpleVide()] }
 }
 
-// Reconstruit l'état éditable d'un niveau déjà enregistré (bloc simple : durée en secondes -> min/sec).
+// Reconstruit l'état éditable d'un niveau déjà enregistré.
 function niveauDepuisSeance(n) {
   return {
     id: n.id,
@@ -31,7 +32,7 @@ function niveauDepuisSeance(n) {
     blocs: n.blocs.map((b) =>
       b.mode === 'fullpower'
         ? { id: b.id, mode: 'fullpower', structure: b.structure }
-        : { id: b.id, mode: 'simple', distance_m: b.distance_m, duree_min: Math.floor(b.duree_s / 60), duree_sec: b.duree_s % 60 }
+        : { id: b.id, mode: 'simple', distance_m: b.distance_m, duree_s: b.duree_s }
     )
   }
 }
@@ -93,7 +94,7 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
         if (b.mode === 'fullpower') {
           return { id: b.id, mode: 'fullpower', structure: b.structure }
         }
-        const duree_s = Number(b.duree_min) * 60 + Number(b.duree_sec)
+        const duree_s = Number(b.duree_s) || 0
         const allure_kmh = duree_s > 0 ? Math.round(((b.distance_m / 1000) / (duree_s / 3600)) * 100) / 100 : 0
         return { id: b.id, mode: 'simple', distance_m: Number(b.distance_m), duree_s, allure_kmh }
       })
@@ -161,12 +162,9 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
                   Échauffement
                 </label>
                 {n.echauffement?.active && (
-                  <input
-                    type="number"
-                    value={n.echauffement.duree_s}
-                    onChange={(e) => majNiveau(n.id, 'echauffement', { ...n.echauffement, duree_s: Number(e.target.value) })}
-                    placeholder="secondes"
-                    className="w-24 rounded-lg border border-piste-200 px-2.5 py-1.5 text-xs"
+                  <SelecteurDuree
+                    valeurSec={n.echauffement.duree_s}
+                    onChange={(v) => majNiveau(n.id, 'echauffement', { ...n.echauffement, duree_s: v })}
                   />
                 )}
               </div>
@@ -197,27 +195,17 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
                     </div>
 
                     {b.mode === 'simple' ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <input
                           type="number"
                           value={b.distance_m}
                           onChange={(e) => majBloc(n.id, b.id, 'distance_m', e.target.value)}
-                          className="w-full rounded-lg border border-piste-200 px-2.5 py-1.5 text-sm"
+                          className="w-24 rounded-lg border border-piste-200 px-2.5 py-1.5 text-sm"
                           placeholder="Distance (m)"
                         />
-                        <input
-                          type="number"
-                          value={b.duree_min}
-                          onChange={(e) => majBloc(n.id, b.id, 'duree_min', e.target.value)}
-                          className="w-16 rounded-lg border border-piste-200 px-2.5 py-1.5 text-sm"
-                          placeholder="min"
-                        />
-                        <input
-                          type="number"
-                          value={b.duree_sec}
-                          onChange={(e) => majBloc(n.id, b.id, 'duree_sec', e.target.value)}
-                          className="w-16 rounded-lg border border-piste-200 px-2.5 py-1.5 text-sm"
-                          placeholder="sec"
+                        <SelecteurDuree
+                          valeurSec={b.duree_s}
+                          onChange={(v) => majBloc(n.id, b.id, 'duree_s', v)}
                         />
                       </div>
                     ) : (
