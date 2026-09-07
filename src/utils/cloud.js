@@ -16,7 +16,7 @@
 
 import { initializeApp } from 'firebase/app'
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  getFirestore,
   doc, setDoc, deleteDoc, getDocs, collection, onSnapshot
 } from 'firebase/firestore'
 
@@ -29,12 +29,13 @@ const firebaseConfig = {
   appId: '1:165570802992:web:5ea14d50283abdbca284f5'
 }
 
+// NB : pas de cache persistant (IndexedDB) pour l'instant — souvent restreint en
+// navigation privée sur mobile, ce qui peut faire échouer Firestore silencieusement.
+// On reviendra sur le mode hors-ligne une fois la synchro de base bien fiable.
 let db = null
 try {
   const app = initializeApp(firebaseConfig)
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-  })
+  db = getFirestore(app)
 } catch (e) {
   // Pas bloquant : l'appli continue de fonctionner en local uniquement.
   console.warn('Firestore indisponible, mode local uniquement.', e)
