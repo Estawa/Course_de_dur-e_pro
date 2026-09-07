@@ -80,6 +80,8 @@ export default function EleveLogin({ onConnecte }) {
   }
 
   if (etape === 'saisieLibre') {
+    const diagCode = storage.getCodeSync()
+    const diagCloud = storage.cloudDisponible()
     return (
       <div className="max-w-md mx-auto px-6 py-14">
         <div className="flex flex-col items-center text-center mb-8">
@@ -109,6 +111,9 @@ export default function EleveLogin({ onConnecte }) {
             Continuer
           </button>
         </form>
+        <p className="text-[10px] text-piste-300 text-center mt-6">
+          Diagnostic synchro — cloud : {diagCloud ? 'disponible' : 'indisponible'} · code : {diagCode || 'aucun'}
+        </p>
       </div>
     )
   }
