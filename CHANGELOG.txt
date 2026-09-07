@@ -1,3 +1,15 @@
+v1.14.0 — Synchronisation cloud élèves ↔ prof
+- Nouveau projet Firebase dédié : les données (roster, PIN, séances réalisées, VMA, bibliothèque de séances) se synchronisent désormais en temps réel entre l'appareil du prof et ceux des élèves, qui ouvrent chacun l'appli sur leur propre téléphone via le flashcode/lien
+- Le lien/flashcode de partage embarque automatiquement le code de synchro : un élève qui l'ouvre rejoint directement le même espace que le prof, sans rien configurer
+- Fonctionne hors ligne : les écritures faites sans réseau sont conservées et se synchronisent dès que la connexion revient (persistance Firestore)
+- Corrige l'origine du bug "PIN non défini"/"aucune séance" alors que les élèves s'étaient bien connectés : leurs données restaient jusqu'ici enfermées sur leur propre téléphone, faute de synchro
+
+v1.13.0 — Suppression de séances, test 4×3 automatisé, VMA auto-enregistrée
+- Espace enseignant : possibilité d'effacer une séance réalisée précise, toutes celles d'un élève, ou toutes celles d'une classe entière (jusqu'ici on ne pouvait que les consulter)
+- Les 3 tests de VMA (Demi-Cooper, 4×3min, Gacon) enregistrent désormais leur résultat automatiquement dès qu'il est obtenu, sans clic supplémentaire à faire (le clic manquant faisait perdre le résultat)
+- Test 4×3 minutes repensé : la récupération démarre automatiquement dès la fin de chaque répétition (plus besoin de saisir la distance avant que le chrono reparte) ; le décompte des 4min30 s'affiche en même temps que la saisie de la distance de la répétition qui vient de se terminer
+- Pendant cette saisie, une correspondance plots/VMA s'affiche en direct (1 plot tous les 50 m ⇒ le nombre de plots parcourus en 3 minutes correspond numériquement à la VMA du tour en km/h)
+
 v1.12.0 — Flashcode et lien de partage
 - Raccourci flashcode (QR code) ajouté sur la page d'accueil, avant identification
 - Écran dédié : QR code de l'application, lien affiché en clair et copiable, bouton "Partager" (partage natif du téléphone si disponible)

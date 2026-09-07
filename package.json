@@ -1,7 +1,7 @@
 {
   "name": "course-duree-pro",
   "private": true,
-  "version": "1.12.0",
+  "version": "1.14.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "firebase": "^10.12.0",
     "lucide-react": "^0.383.0",
     "qrcode": "^1.5.3",
     "react": "^18.2.0",
