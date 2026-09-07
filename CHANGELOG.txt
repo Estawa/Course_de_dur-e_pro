@@ -1,3 +1,9 @@
+v1.16.0 — Choix explicite VMA test / VMA imposée
+- Onglet enseignant « Élèves & suivi » (et vue « VMA ») : la VMA test et la VMA imposée sont désormais affichées côte à côte pour chaque élève, chacune avec un bouton radio permettant de désigner celle qui doit être active
+- La VMA retenue (utilisée pour calculer les séances) ne change plus automatiquement : si un élève repasse un test alors que « VMA test » est la source active, la nouvelle valeur du test s'affiche mais il faut re-cliquer sur le radio « VMA test » pour qu'elle devienne la VMA retenue
+- Fixer une nouvelle VMA imposée l'active toujours immédiatement (comme avant) ; effacer la VMA imposée active fait automatiquement revenir sur la VMA test si elle existe
+- Côté élève (fiche VMA dans « Outils »), l'origine affichée de la VMA suit désormais la même source active que côté prof
+
 v1.15.0 — Validation explicite du test 4×3, détail des tests VMA, VMA sur la fiche élève
 - Test 4×3 : chaque distance saisie pendant la récupération nécessite désormais un clic sur « Valider cette distance », avec confirmation visuelle claire (« Distance prise en compte ») et un récapitulatif de toutes les répétitions déjà saisies, affiché en permanence (récupération, dernière répétition, écran de résultat)
 - Les 3 tests VMA enregistrent maintenant le détail brut du test (les 4 distances du 4×3, la distance du Demi-Cooper, le palier du Gacon), pas seulement le chiffre final — visible côté prof
