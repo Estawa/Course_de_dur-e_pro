@@ -50,17 +50,19 @@ export default function App() {
       return
     }
 
-    let recu = false
-    const arreter = storage.demarrerSynchroCloud(() => {
-      recu = true
+    let recuEleves = false
+    const arreter = storage.demarrerSynchroCloud((type) => {
       setSeancesState(storage.getSeances())
       setRealisations(storage.getRealisations())
       setCloudTick((t) => t + 1)
-      setPretSync(true)
+      if (type === 'eleves') {
+        recuEleves = true
+        setPretSync(true)
+      }
     })
-    // Filet de sécurité si le cloud est injoignable (hors ligne à la toute première ouverture) :
-    // on ne bloque pas l'appli indéfiniment.
-    const delai = setTimeout(() => { if (!recu) setPretSync(true) }, 2500)
+    // Filet de sécurité si le cloud est injoignable ou trop lent (connexion faible, tout
+    // premier chargement sans cache local) : on ne bloque pas l'appli indéfiniment.
+    const delai = setTimeout(() => { if (!recuEleves) setPretSync(true) }, 6000)
     return () => { arreter(); clearTimeout(delai) }
   }, [codeSyncActuel])
 
