@@ -9,11 +9,28 @@ function formatDate(ts) {
   return new Date(ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 }
 
+// Résumé lisible du détail brut d'un test, selon son type.
+function resumeDetail(derniereCourse) {
+  if (!derniereCourse || !derniereCourse.detail) return null
+  const { test, detail } = derniereCourse
+  if (test === '4x3' && Array.isArray(detail.distances)) {
+    return detail.distances.map((d, i) => `Rép. ${i + 1} : ${d} m`).join(' · ')
+  }
+  if (test === 'cooper' && detail.distance != null) {
+    return `${detail.distance} m en 6 min`
+  }
+  if (test === 'gacon' && detail.palier != null) {
+    return `Palier ${detail.palier} atteint`
+  }
+  return null
+}
+
 export default function VmaEleveLigne({ eleve, onChange }) {
   const [valeur, setValeur] = useState('')
   const detail = storage.getVmaDetail(eleve)
   const retenue = detail.manuelle ?? detail.auto ?? null
   const source = detail.manuelle != null ? 'manuel' : detail.auto != null ? 'auto' : null
+  const resume = resumeDetail(detail.derniereCourse)
 
   function fixer() {
     const v = Number(valeur)
@@ -45,6 +62,7 @@ export default function VmaEleveLigne({ eleve, onChange }) {
           )}
         </div>
       </div>
+      {resume && <p className="text-[11px] text-piste-500 mb-2">{resume}</p>}
       <div className="flex items-center gap-2 flex-wrap">
         <input
           type="number"

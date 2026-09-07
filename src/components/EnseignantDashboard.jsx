@@ -520,6 +520,12 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
                               </button>
                             </div>
                           )}
+                          {eleve.id && (
+                            <div className="mb-3">
+                              <p className="text-[11px] font-semibold text-piste-500 uppercase tracking-wide mb-1.5">VMA</p>
+                              <VmaEleveLigne eleve={{ id: eleve.id, nom: eleve.nom, prenom: eleve.prenom, classe: classeActive }} onChange={() => setRosterVersion((v) => v + 1)} />
+                            </div>
+                          )}
                           {eleve.realisations.length === 0 && <p className="text-xs text-piste-500">Pas encore de séance réalisée.</p>}
                           {eleve.realisations
                             .slice()

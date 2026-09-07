@@ -44,7 +44,7 @@ export default function TestDemiCooper({ eleve, onRetour }) {
     const distance = (Number(km) || 0) * 1000 + (Number(m) || 0)
     const vma = Math.round((distance / 100) * 10) / 10
     setVmaCalculee(vma)
-    storage.enregistrerResultatTest(eleve, vma, 'cooper')
+    storage.enregistrerResultatTest(eleve, vma, 'cooper', { distance })
     setEnregistre(true)
   }
 

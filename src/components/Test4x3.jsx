@@ -27,11 +27,33 @@ function calculerVmaFinale(distances) {
   return Math.round(retenue * 10) / 10
 }
 
+function RecapDistances({ distances }) {
+  const entrees = distances.map((d, i) => ({ i, d })).filter((x) => x.d !== null && x.d > 0)
+  if (entrees.length === 0) return null
+  return (
+    <div className="bg-piste-50 border border-piste-100 rounded-2xl p-4 mt-4 text-left">
+      <p className="text-[11px] font-semibold text-piste-700 uppercase tracking-wide mb-2">Récapitulatif</p>
+      <ul className="space-y-1.5">
+        {entrees.map(({ i, d }) => {
+          const c = correspondancePlots(d)
+          return (
+            <li key={i} className="text-xs text-piste-700 flex items-center justify-between">
+              <span>Répétition {i + 1}</span>
+              <span className="font-medium">{d} m{c ? ` · ${c.vma} km/h` : ''}</span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 export default function Test4x3({ eleve, onRetour }) {
   const [rep, setRep] = useState(0) // 0..3, répétition en cours ou juste terminée
   const [phase, setPhase] = useState('attente') // attente | effort | recup | saisie | resultat
   const [elapsed, setElapsed] = useState(0)
   const [distances, setDistances] = useState([null, null, null, null])
+  const [validees, setValidees] = useState([false, false, false, false])
   const [saisieKm, setSaisieKm] = useState('')
   const [saisieM, setSaisieM] = useState('')
   const [vmaFinale, setVmaFinale] = useState(null)
@@ -43,8 +65,9 @@ export default function Test4x3({ eleve, onRetour }) {
   const distanceSaisie = (Number(saisieKm) || 0) * 1000 + (Number(saisieM) || 0)
   const correspondance = correspondancePlots(distanceSaisie)
 
-  // Enregistre en direct, à chaque frappe, la distance de la répétition en cours
-  // dans le tableau — pas besoin d'un bouton "valider" pour que ce soit pris en compte.
+  // Enregistre en direct, à chaque frappe, la distance de la répétition en cours dans le
+  // tableau (jamais perdue même sans clic sur "Valider"), et redemande une validation
+  // explicite si la valeur est retouchée après avoir déjà été validée.
   function saisirDistance(km, m) {
     setSaisieKm(km)
     setSaisieM(m)
@@ -52,6 +75,19 @@ export default function Test4x3({ eleve, onRetour }) {
     setDistances((d) => {
       const copie = [...d]
       copie[rep] = distance
+      return copie
+    })
+    setValidees((v) => {
+      const copie = [...v]
+      copie[rep] = false
+      return copie
+    })
+  }
+
+  function validerRep() {
+    setValidees((v) => {
+      const copie = [...v]
+      copie[rep] = true
       return copie
     })
   }
@@ -115,9 +151,10 @@ export default function Test4x3({ eleve, onRetour }) {
     const toutes = distances.map((d, i) => (i === rep ? distance : d ?? 0))
     const finale = calculerVmaFinale(toutes)
     setDistances(toutes)
+    setValidees((v) => { const copie = [...v]; copie[rep] = true; return copie })
     setVmaFinale(finale)
     setPhase('resultat')
-    storage.enregistrerResultatTest(eleve, finale, '4x3')
+    storage.enregistrerResultatTest(eleve, finale, '4x3', { distances: toutes })
     setEnregistre(true)
   }
 
@@ -178,18 +215,29 @@ export default function Test4x3({ eleve, onRetour }) {
             />
           </div>
           {correspondance ? (
-            <p className="text-xs text-piste-600">
+            <p className="text-xs text-piste-600 mb-3">
               ≈ {correspondance.plots} plot{correspondance.plots > 1 ? 's' : ''} (tous les {ESPACEMENT_PLOT} m) · soit {correspondance.vma} km/h de VMA sur ce tour
             </p>
           ) : (
-            <p className="text-xs text-piste-400">1 plot = {ESPACEMENT_PLOT} m — la correspondance en km/h s'affiche dès la saisie.</p>
+            <p className="text-xs text-piste-400 mb-3">1 plot = {ESPACEMENT_PLOT} m — la correspondance en km/h s'affiche dès la saisie.</p>
           )}
-          {distances[rep] !== null && distances[rep] > 0 && (
-            <p className="text-[11px] text-piste-500 flex items-center justify-center gap-1 mt-2">
-              <Check size={12} /> Distance enregistrée pour cette répétition
+          {validees[rep] ? (
+            <p className="text-xs text-piste-700 font-medium flex items-center justify-center gap-1.5 bg-white border border-piste-200 rounded-xl py-2">
+              <Check size={14} /> Distance prise en compte
             </p>
+          ) : (
+            <button
+              onClick={validerRep}
+              disabled={!distanceSaisie}
+              className={`w-full py-2.5 rounded-xl font-medium text-sm transition ${distanceSaisie ? 'bg-piste-800 text-white' : 'bg-piste-100 text-piste-400'}`}
+            >
+              Valider cette distance
+            </button>
           )}
         </div>
+
+        <RecapDistances distances={distances} />
+
         <p className="text-[11px] text-piste-400 mt-4">La récupération et la répétition suivante démarrent automatiquement.</p>
       </div>
     )
@@ -221,7 +269,14 @@ export default function Test4x3({ eleve, onRetour }) {
             ≈ {correspondance.plots} plot{correspondance.plots > 1 ? 's' : ''} (tous les {ESPACEMENT_PLOT} m) · soit {correspondance.vma} km/h de VMA sur ce tour
           </p>
         )}
-        <button onClick={validerDistanceFinale} className="w-full bg-piste-800 text-white font-medium py-3 rounded-xl">Voir le résultat</button>
+        <button
+          onClick={validerDistanceFinale}
+          disabled={!distanceSaisie}
+          className={`w-full font-medium py-3 rounded-xl ${distanceSaisie ? 'bg-piste-800 text-white' : 'bg-piste-100 text-piste-400'}`}
+        >
+          Valider et voir le résultat
+        </button>
+        <RecapDistances distances={distances} />
       </div>
     )
   }
@@ -230,8 +285,9 @@ export default function Test4x3({ eleve, onRetour }) {
     <div className="max-w-md mx-auto px-6 py-16 text-center">
       <h2 className="font-display text-2xl text-piste-900 mb-2">VMA estimée</h2>
       <p className="font-display text-4xl text-piste-900 mb-6">{vmaFinale} km/h</p>
-      {enregistre && <p className="text-sm text-piste-600 mb-3">Résultat transmis. Il sera pris en compte, sauf si ton professeur a fixé une autre valeur.</p>}
-      <button onClick={onRetour} className="text-xs text-piste-400 underline">Retour aux tests</button>
+      {enregistre && <p className="text-sm text-piste-600 mb-3">Résultat transmis à ton professeur. Il sera pris en compte, sauf s'il a fixé une autre valeur.</p>}
+      <RecapDistances distances={distances} />
+      <button onClick={onRetour} className="text-xs text-piste-400 underline mt-4">Retour aux tests</button>
     </div>
   )
 }

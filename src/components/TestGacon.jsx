@@ -70,7 +70,7 @@ export default function TestGacon({ eleve, onRetour }) {
     setResultat({ palier, vma })
     setPhase('resultat')
     // Enregistrement automatique dès l'obtention du résultat.
-    storage.enregistrerResultatTest(eleve, vma, 'gacon')
+    storage.enregistrerResultatTest(eleve, vma, 'gacon', { palier, elapsedDansPalier: Math.round(elapsed) })
     setEnregistre(true)
   }
 
