@@ -16,11 +16,12 @@ function formatDate(ts) {
 export default function OutilsEleve({ eleve, onComposerSeance }) {
   const [ecran, setEcran] = useState('menu')
   const detail = storage.getVmaDetail(eleve)
-  const retenue = detail.manuelle ?? detail.auto ?? null
+  const retenue = storage.getVmaRetenue(eleve)
+  const actif = detail.retenueSource ?? (detail.manuelle != null ? 'manuelle' : detail.auto != null ? 'auto' : null)
   const source =
-    detail.manuelle != null
+    actif === 'manuelle'
       ? `Fixée par ton professeur le ${formatDate(detail.manuelleDate)}`
-      : detail.auto != null
+      : actif === 'auto'
       ? `Issue de ton test ${LABEL_TEST[detail.autoTest] || ''} du ${formatDate(detail.autoDate)}`
       : null
 

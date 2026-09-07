@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { RotateCcw } from 'lucide-react'
 import { storage } from '../utils/storage'
 
 const LABEL_TEST = { cooper: 'Demi-Cooper', '4x3': '4×3 min', gacon: 'Gacon 45/15' }
@@ -28,8 +27,8 @@ function resumeDetail(derniereCourse) {
 export default function VmaEleveLigne({ eleve, onChange }) {
   const [valeur, setValeur] = useState('')
   const detail = storage.getVmaDetail(eleve)
-  const retenue = detail.manuelle ?? detail.auto ?? null
-  const source = detail.manuelle != null ? 'manuel' : detail.auto != null ? 'auto' : null
+  const retenue = storage.getVmaRetenue(eleve)
+  const actif = detail.retenueSource ?? (detail.manuelle != null ? 'manuelle' : detail.auto != null ? 'auto' : null)
   const resume = resumeDetail(detail.derniereCourse)
 
   function fixer() {
@@ -40,8 +39,8 @@ export default function VmaEleveLigne({ eleve, onChange }) {
     onChange()
   }
 
-  function revenirAuto() {
-    storage.effacerVmaManuelle(eleve)
+  function activer(source) {
+    storage.activerSourceVma(eleve, source)
     onChange()
   }
 
@@ -51,35 +50,73 @@ export default function VmaEleveLigne({ eleve, onChange }) {
         <p className="text-sm font-medium text-piste-900">
           {eleve.prenom} {eleve.nom}
         </p>
-        <div className="text-right">
-          <p className="font-display text-lg text-piste-900">{retenue ? `${retenue} km/h` : '—'}</p>
-          {source && (
-            <p className="text-[10px] text-piste-500">
-              {source === 'manuel'
-                ? `Fixée par le prof · ${formatDate(detail.manuelleDate)}`
-                : `Test ${LABEL_TEST[detail.autoTest] || ''} · ${formatDate(detail.autoDate)}`}
-            </p>
-          )}
-        </div>
+        <p className="font-display text-lg text-piste-900">{retenue ? `${retenue} km/h` : '—'}</p>
       </div>
-      {resume && <p className="text-[11px] text-piste-500 mb-2">{resume}</p>}
-      <div className="flex items-center gap-2 flex-wrap">
+
+      <div className="grid grid-cols-2 gap-2">
+        <label
+          className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 ${
+            detail.auto == null ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+          } ${actif === 'auto' ? 'border-piste-800 bg-white' : 'border-piste-200'}`}
+        >
+          <input
+            type="radio"
+            className="mt-0.5"
+            checked={actif === 'auto'}
+            disabled={detail.auto == null}
+            onChange={() => activer('auto')}
+          />
+          <span>
+            <span className="block text-[10px] uppercase tracking-wide text-piste-500">VMA test</span>
+            <span className="block font-display text-sm text-piste-900">
+              {detail.auto != null ? `${detail.auto} km/h` : '—'}
+            </span>
+            {detail.auto != null && (
+              <span className="block text-[10px] text-piste-500">
+                {LABEL_TEST[detail.autoTest] || ''} · {formatDate(detail.autoDate)}
+              </span>
+            )}
+          </span>
+        </label>
+
+        <label
+          className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 ${
+            detail.manuelle == null ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+          } ${actif === 'manuelle' ? 'border-piste-800 bg-white' : 'border-piste-200'}`}
+        >
+          <input
+            type="radio"
+            className="mt-0.5"
+            checked={actif === 'manuelle'}
+            disabled={detail.manuelle == null}
+            onChange={() => activer('manuelle')}
+          />
+          <span>
+            <span className="block text-[10px] uppercase tracking-wide text-piste-500">VMA imposée</span>
+            <span className="block font-display text-sm text-piste-900">
+              {detail.manuelle != null ? `${detail.manuelle} km/h` : '—'}
+            </span>
+            {detail.manuelle != null && (
+              <span className="block text-[10px] text-piste-500">Fixée le {formatDate(detail.manuelleDate)}</span>
+            )}
+          </span>
+        </label>
+      </div>
+
+      {resume && <p className="text-[11px] text-piste-500 mt-2">{resume}</p>}
+
+      <div className="flex items-center gap-2 flex-wrap mt-2">
         <input
           type="number"
           step="0.1"
           value={valeur}
           onChange={(e) => setValeur(e.target.value)}
-          placeholder="Nouvelle VMA"
-          className="w-28 rounded-lg border border-piste-200 px-2.5 py-1.5 text-sm"
+          placeholder="Nouvelle VMA imposée"
+          className="w-32 rounded-lg border border-piste-200 px-2.5 py-1.5 text-sm"
         />
         <button onClick={fixer} className="text-xs font-medium bg-piste-800 text-white px-3 py-1.5 rounded-full">
           Fixer
         </button>
-        {detail.manuelle != null && detail.auto != null && (
-          <button onClick={revenirAuto} className="flex items-center gap-1 text-[11px] text-piste-500 underline">
-            <RotateCcw size={11} /> Revenir au test ({detail.auto} km/h)
-          </button>
-        )}
       </div>
     </div>
   )
