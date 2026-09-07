@@ -137,15 +137,15 @@ export const storage = {
   appliquerCodeDepuisLien: (code) => cloud.appliquerCodeDepuisLien(code),
 
   // Démarre l'écoute temps réel (si un code de synchro est actif) : à chaque mise à jour
-  // distante, fusionne dans le stockage local puis appelle callback() pour que l'UI se
-  // rafraîchisse. Retourne une fonction pour arrêter l'écoute.
+  // distante, fusionne dans le stockage local puis appelle callback(type) pour que l'UI
+  // se rafraîchisse (type ∈ 'eleves' | 'realisations' | 'vma' | 'seances').
   demarrerSynchroCloud: (callback) => {
     return cloud.demarrerSynchro((type, data) => {
       if (type === 'eleves') fusionnerElevesDepuisCloud(data)
       else if (type === 'realisations') fusionnerRealisationsDepuisCloud(data)
       else if (type === 'vma') fusionnerVmaDepuisCloud(data)
       else if (type === 'seances') fusionnerSeancesDepuisCloud(data)
-      callback()
+      callback(type)
     })
   },
 

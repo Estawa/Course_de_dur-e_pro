@@ -136,21 +136,21 @@ export function demarrerSynchro(callback) {
 
   arrets.push(onSnapshot(colEleves(), (snap) => {
     callback('eleves', snap.docs.map((d) => d.data()))
-  }, () => {}))
+  }, (err) => console.warn('Synchro élèves indisponible', err)))
 
   arrets.push(onSnapshot(colRealisations(), (snap) => {
     callback('realisations', snap.docs.map((d) => d.data()))
-  }, () => {}))
+  }, (err) => console.warn('Synchro séances indisponible', err)))
 
   arrets.push(onSnapshot(colVma(), (snap) => {
     const all = {}
     snap.docs.forEach((d) => { all[d.id] = d.data() })
     callback('vma', all)
-  }, () => {}))
+  }, (err) => console.warn('Synchro VMA indisponible', err)))
 
   arrets.push(onSnapshot(docSeances(), (snap) => {
     callback('seances', snap.exists() ? snap.data().liste || [] : [])
-  }, () => {}))
+  }, (err) => console.warn('Synchro bibliothèque indisponible', err)))
 
   return () => arrets.forEach((arret) => arret())
 }
