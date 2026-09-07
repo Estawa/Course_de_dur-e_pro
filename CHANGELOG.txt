@@ -1,3 +1,6 @@
+v1.14.1 — Correctif : écran de connexion trop pressé
+- Corrige un bug de la synchro cloud (v1.14.0) : sur une connexion lente ou un tout premier chargement (ex. navigation privée, sans cache local), l'écran de connexion élève pouvait s'afficher avant que la liste des classes ne soit arrivée du cloud, et retombait alors à tort sur la saisie libre nom/prénom/classe. L'appli attend désormais spécifiquement la réception des élèves avant d'afficher l'écran de connexion (délai de sécurité repoussé à 6 secondes)
+
 v1.14.0 — Synchronisation cloud élèves ↔ prof
 - Nouveau projet Firebase dédié : les données (roster, PIN, séances réalisées, VMA, bibliothèque de séances) se synchronisent désormais en temps réel entre l'appareil du prof et ceux des élèves, qui ouvrent chacun l'appli sur leur propre téléphone via le flashcode/lien
 - Le lien/flashcode de partage embarque automatiquement le code de synchro : un élève qui l'ouvre rejoint directement le même espace que le prof, sans rien configurer
