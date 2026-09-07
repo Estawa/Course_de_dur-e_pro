@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Header from './components/Header'
 import EleveLogin from './components/EleveLogin'
 import AccueilTuiles from './components/AccueilTuiles'
@@ -19,11 +19,50 @@ export default function App() {
   const [eleve, setEleve] = useState(() => storage.getEleveActif())
   const [seances, setSeancesState] = useState(() => storage.getSeances())
   const [realisations, setRealisations] = useState(() => storage.getRealisations())
+  const [cloudTick, setCloudTick] = useState(0)
+  const [pretSync, setPretSync] = useState(false)
+  const [codeSyncActuel, setCodeSyncActuel] = useState(() => storage.getCodeSync())
 
   const [ecran, setEcran] = useState(() => (storage.getEleveActif() ? 'tuiles' : 'accueil'))
   const [seanceActive, setSeanceActive] = useState(null)
   const [niveauActif, setNiveauActif] = useState(null)
   const [dernierResultat, setDernierResultat] = useState(null)
+
+  // Applique un éventuel code de synchro reçu par lien (?c=XXXXX, cas d'un élève qui
+  // ouvre le flashcode/lien partagé par le prof) une seule fois au démarrage.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('c')
+    if (code) {
+      storage.appliquerCodeDepuisLien(code)
+      params.delete('c')
+      const reste = params.toString()
+      window.history.replaceState({}, '', window.location.pathname + (reste ? `?${reste}` : ''))
+      setCodeSyncActuel(storage.getCodeSync())
+    }
+  }, [])
+
+  // (Re)démarre l'écoute cloud temps réel dès qu'un code de synchro est disponible —
+  // au démarrage s'il existait déjà, ou dès qu'il vient d'être généré/reçu.
+  useEffect(() => {
+    if (!codeSyncActuel) {
+      setPretSync(true)
+      return
+    }
+
+    let recu = false
+    const arreter = storage.demarrerSynchroCloud(() => {
+      recu = true
+      setSeancesState(storage.getSeances())
+      setRealisations(storage.getRealisations())
+      setCloudTick((t) => t + 1)
+      setPretSync(true)
+    })
+    // Filet de sécurité si le cloud est injoignable (hors ligne à la toute première ouverture) :
+    // on ne bloque pas l'appli indéfiniment.
+    const delai = setTimeout(() => { if (!recu) setPretSync(true) }, 2500)
+    return () => { arreter(); clearTimeout(delai) }
+  }, [codeSyncActuel])
 
   function setSeances(nouvelles) {
     setSeancesState(nouvelles)
@@ -88,6 +127,10 @@ export default function App() {
   }
 
   function handleAccesEnseignant() {
+    if (storage.cloudDisponible() && !storage.getCodeSync()) {
+      storage.assurerCodeSync()
+      setCodeSyncActuel(storage.getCodeSync())
+    }
     setEcran(storage.getPinOk() ? 'enseignant' : 'enseignantPin')
   }
 
@@ -107,6 +150,21 @@ export default function App() {
 
   function handleModifierRealisation(id, patch) {
     const nouvelles = storage.modifierRealisation(id, patch)
+    setRealisations(nouvelles)
+  }
+
+  function handleSupprimerRealisation(id) {
+    const nouvelles = storage.supprimerRealisation(id)
+    setRealisations(nouvelles)
+  }
+
+  function handleSupprimerRealisationsEleve(eleveId, nom, prenom, classe) {
+    const nouvelles = storage.supprimerRealisationsEleve(eleveId, nom, prenom, classe)
+    setRealisations(nouvelles)
+  }
+
+  function handleSupprimerRealisationsClasse(classe) {
+    const nouvelles = storage.supprimerRealisationsClasse(classe)
     setRealisations(nouvelles)
   }
 
@@ -148,7 +206,15 @@ export default function App() {
         showPartage={ecran === 'accueil'}
       />
 
-      {!eleve && ecran === 'accueil' && <EleveLogin onConnecte={handleConnecte} />}
+      {!eleve && ecran === 'accueil' && (
+        pretSync
+          ? <EleveLogin onConnecte={handleConnecte} />
+          : (
+            <div className="max-w-md mx-auto px-6 py-24 text-center text-piste-500 text-sm">
+              Chargement…
+            </div>
+          )
+      )}
 
       {ecran === 'partage' && <PartageApp />}
 
@@ -188,6 +254,10 @@ export default function App() {
           setSeances={setSeances}
           realisations={realisations}
           onModifierRealisation={handleModifierRealisation}
+          onSupprimerRealisation={handleSupprimerRealisation}
+          onSupprimerRealisationsEleve={handleSupprimerRealisationsEleve}
+          onSupprimerRealisationsClasse={handleSupprimerRealisationsClasse}
+          cloudTick={cloudTick}
         />
       )}
     </div>
