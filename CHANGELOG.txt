@@ -1,3 +1,6 @@
+v1.21.0 — Correction du bruit GPS à l'arrêt (VAM-EVAL)
+- La vitesse instantanée affichée pendant le test VAM-EVAL est désormais arrondie à 0 km/h tant qu'elle reste sous 0,5 km/h, pour éviter d'afficher une vitesse résiduelle liée au bruit naturel du GPS (dérive de position de quelques mètres) quand l'élève est réellement à l'arrêt
+
 v1.17.0 — Saisie des temps en minutes/secondes
 - Tous les temps saisis pour construire une séance (durée d'échauffement, durée d'un bloc simple, temps de travail et de récupération d'un type Full Power, récupération entre séries, récupération/retour au calme final) se saisissent désormais via deux menus déroulants Minutes / Secondes, au lieu d'un champ numérique libre
 - Nouveau composant réutilisable de sélection de durée, partagé entre l'éditeur de séance et le constructeur Full Power
