@@ -6,7 +6,7 @@ import BorgReference from './BorgReference'
 import PerformancesEstimees from './PerformancesEstimees'
 import { storage } from '../utils/storage'
 
-const LABEL_TEST = { cooper: 'Demi-Cooper', '4x3': '4×3 min', gacon: 'Gacon 45/15' }
+const LABEL_TEST = { cooper: 'Demi-Cooper', '4x3': '4×3 min', gacon: 'Gacon 45/15', vameval: 'VAM-EVAL' }
 
 function formatDate(ts) {
   if (!ts) return ''
@@ -32,7 +32,7 @@ export default function OutilsEleve({ eleve, onComposerSeance }) {
 
   const items = [
     { id: 'compose', icone: TrendingUp, titre: 'Composer ma séance', description: 'Construire et réaliser une séance en solo' },
-    { id: 'tests', icone: ListChecks, titre: 'Tests de VMA', description: 'Demi-Cooper, 4×3 min, Gacon (45/15)' },
+    { id: 'tests', icone: ListChecks, titre: 'Tests de VMA', description: 'Demi-Cooper, 4×3 min, Gacon, VAM-EVAL' },
     { id: 'chrono', icone: Timer, titre: 'Chronomètre', description: 'Temps et vitesse moyenne' },
     { id: 'borg', icone: Smile, titre: 'Échelle de Borg', description: 'Repères de ressenti d\'effort' },
     { id: 'perfs', icone: TrendingUp, titre: 'Performances estimées', description: 'Temps estimés par distance selon ta VMA' }

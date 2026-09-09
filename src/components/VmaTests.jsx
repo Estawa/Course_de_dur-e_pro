@@ -3,11 +3,13 @@ import { ChevronRight } from 'lucide-react'
 import TestDemiCooper from './TestDemiCooper'
 import Test4x3 from './Test4x3'
 import TestGacon from './TestGacon'
+import TestVamEval from './TestVamEval'
 
 const TESTS = [
   { id: 'cooper', titre: 'Demi-Cooper (6 min)', description: 'Distance maximale en 6 minutes' },
   { id: '4x3', titre: 'Test 4×3 minutes', description: '4 répétitions de 3 min avec récupération' },
-  { id: 'gacon', titre: 'Test Gacon (45/15)', description: 'Paliers progressifs de 45 secondes' }
+  { id: 'gacon', titre: 'Test Gacon (45/15)', description: 'Paliers progressifs de 45 secondes' },
+  { id: 'vameval', titre: 'VAM-EVAL', description: 'Paliers continus de 1 min vérifiés par GPS, départ 7 km/h, +0,5 km/h' }
 ]
 
 export default function VmaTests({ eleve }) {
@@ -16,6 +18,7 @@ export default function VmaTests({ eleve }) {
   if (testActif === 'cooper') return <TestDemiCooper eleve={eleve} onRetour={() => setTestActif(null)} />
   if (testActif === '4x3') return <Test4x3 eleve={eleve} onRetour={() => setTestActif(null)} />
   if (testActif === 'gacon') return <TestGacon eleve={eleve} onRetour={() => setTestActif(null)} />
+  if (testActif === 'vameval') return <TestVamEval eleve={eleve} onRetour={() => setTestActif(null)} />
 
   return (
     <div className="max-w-md mx-auto px-6 py-8">

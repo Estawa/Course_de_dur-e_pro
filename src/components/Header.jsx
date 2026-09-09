@@ -1,4 +1,5 @@
 import { ArrowLeft, GraduationCap, QrCode } from 'lucide-react'
+import pkg from '../../package.json'
 
 export default function Header({ title, onBack, onEnseignant, showEnseignant = true, onPartager, showPartage = false }) {
   return (
@@ -16,7 +17,7 @@ export default function Header({ title, onBack, onEnseignant, showEnseignant = t
           )}
           <div className="min-w-0">
             <h1 className="font-display text-lg leading-tight truncate">{title}</h1>
-            <p className="text-[11px] text-piste-300 tracking-wide">Course de Durée Pro by C. Guilhem · v1.17.0</p>
+            <p className="text-[11px] text-piste-300 tracking-wide">Course de Durée Pro by C. Guilhem · v{pkg.version}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
