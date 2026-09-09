@@ -79,8 +79,12 @@ export default function TestVamEval({ eleve, onRetour }) {
           if (dt > 0) {
             const d = haversine(lastPosRef.current, { latitude, longitude })
             const vInstant = speed != null && speed >= 0 ? speed : d / dt
+            const vKmh = vInstant * 3.6
+            // Sous 0,5 km/h, on considère qu'il s'agit de bruit GPS (dérive de position à l'arrêt)
+            // plutôt qu'un déplacement réel, donc on affiche 0 au lieu d'une valeur résiduelle.
+            const vAffichee = vKmh < 0.5 ? 0 : vKmh
             setDistancePalier((prev) => prev + d)
-            setVitesseInstant(vInstant * 3.6)
+            setVitesseInstant(vAffichee)
           }
         }
         lastPosRef.current = { latitude, longitude, time: now }
