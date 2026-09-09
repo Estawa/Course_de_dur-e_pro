@@ -356,10 +356,10 @@ export const storage = {
 
   cleEleve: (eleve) => (eleve.id ? eleve.id : `${eleve.nom}__${eleve.prenom}__${eleve.classe}`.toLowerCase()),
 
-  // --- VMA : deux sources possibles (résultat de test auto-enregistré, ou saisie manuelle du prof).
-  // La VMA réellement utilisée dans les séances ("retenue") est choisie explicitement par le prof
-  // (via activerSourceVma), et ne change jamais toute seule : un nouveau test enregistré met à jour
-  // la valeur "auto" affichée, mais ne touche pas à la VMA retenue tant que le prof ne l'a pas validée.
+  // --- VMA : deux sources possibles (meilleur résultat parmi tous les tests réalisés, ou valeur
+  // imposée par le prof). La VMA réellement utilisée dans les séances ("retenue") est la valeur
+  // imposée si elle est fixée, sinon le meilleur test ; elle évolue donc automatiquement dès qu'un
+  // élève bat son record, sans action du prof, sauf si celui-ci a fixé une valeur qui prime.
   getVmaDetail: (eleve) => {
     const all = read(KEYS.VMA, {})
     return (
@@ -377,76 +377,62 @@ export const storage = {
       }
     )
   },
-  // VMA effectivement utilisée pour les séances. Si le prof n'a jamais fait de choix explicite,
-  // on retombe sur l'ancien comportement par défaut (manuelle prioritaire sur auto).
+  // VMA effectivement utilisée pour les séances : la valeur imposée par le prof prime toujours
+  // si elle est fixée ; sinon, la meilleure valeur parmi tous les tests réalisés par l'élève.
   getVmaRetenue: (eleve) => {
     const d = storage.getVmaDetail(eleve)
-    if (d.retenueSource === 'manuelle') return d.manuelle ?? null
-    if (d.retenueSource === 'auto') return d.auto ?? null
     return d.manuelle ?? d.auto ?? null
   },
-  // Enregistre automatiquement le résultat d'un test réalisé par l'élève (ne touche jamais à la valeur
-  // manuelle du prof, ni à la VMA retenue : même si "VMA test" est la source active, il faut que le prof
-  // revalide explicitement le nouveau résultat pour qu'il devienne la VMA retenue).
-  // detailCourse (optionnel) : le détail brut du test (ex. les 4 distances du 4x3, la distance du Cooper,
-  // le palier atteint au Gacon...), conservé pour que le prof puisse le consulter, pas seulement le chiffre final.
+  // Historique complet des tests réalisés (du plus récent au plus ancien), avec leur détail brut.
+  getHistoriqueTests: (eleve) => {
+    const d = storage.getVmaDetail(eleve)
+    return (d.historique || []).filter((h) => h.source === 'test').slice().reverse()
+  },
+  // Enregistre automatiquement le résultat d'un test réalisé par l'élève, l'ajoute à l'historique
+  // (toujours conservé en entier) et recalcule la VMA "auto" comme la MEILLEURE valeur parmi tous
+  // les tests réalisés à ce jour. Ne touche jamais à la valeur imposée par le prof.
+  // detailCourse (optionnel) : le détail brut du test (ex. les 4 distances du 4x3, le palier
+  // atteint au Gacon/VAM-EVAL...), conservé pour que le prof puisse le consulter par test.
   enregistrerResultatTest: (eleve, vma, test, detailCourse = null) => {
     const all = read(KEYS.VMA, {})
     const cle = storage.cleEleve(eleve)
-    const actuel = all[cle] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, historique: [], retenue: null, retenueSource: null, retenueDate: null }
-    actuel.auto = vma
-    actuel.autoDate = Date.now()
-    actuel.autoTest = test
-    actuel.derniereCourse = detailCourse ? { test, detail: detailCourse, date: Date.now() } : actuel.derniereCourse
-    actuel.historique = [...(actuel.historique || []), { valeur: vma, date: Date.now(), source: 'test', test }]
+    const actuel = all[cle] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, historique: [] }
+    const date = Date.now()
+    actuel.historique = [...(actuel.historique || []), { valeur: vma, date, source: 'test', test, detail: detailCourse }]
+    actuel.derniereCourse = detailCourse ? { test, detail: detailCourse, date } : actuel.derniereCourse
+
+    const meilleur = actuel.historique
+      .filter((h) => h.source === 'test')
+      .reduce((max, h) => (max == null || h.valeur > max.valeur ? h : max), null)
+    actuel.auto = meilleur.valeur
+    actuel.autoDate = meilleur.date
+    actuel.autoTest = meilleur.test
+
     all[cle] = actuel
     write(KEYS.VMA, all)
     cloud.cloudEcrireVma(cle, actuel)
   },
-  // Saisie manuelle du prof : devient immédiatement la VMA retenue (action explicite du prof).
+  // Saisie manuelle du prof : devient immédiatement la VMA retenue (prime sur le meilleur test),
+  // que ce soit une valeur libre ou la valeur d'un test précis que le prof juge plus réaliste.
   definirVmaManuelle: (eleve, vma) => {
     const all = read(KEYS.VMA, {})
     const cle = storage.cleEleve(eleve)
-    const actuel = all[cle] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, historique: [], retenue: null, retenueSource: null, retenueDate: null }
+    const actuel = all[cle] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, historique: [] }
     actuel.manuelle = vma
     actuel.manuelleDate = Date.now()
-    actuel.retenue = vma
-    actuel.retenueSource = 'manuelle'
-    actuel.retenueDate = Date.now()
     actuel.historique = [...(actuel.historique || []), { valeur: vma, date: Date.now(), source: 'manuel' }]
     all[cle] = actuel
     write(KEYS.VMA, all)
     cloud.cloudEcrireVma(cle, actuel)
   },
-  // Active explicitement une des deux sources ('manuelle' ou 'auto') comme VMA retenue pour les séances.
-  // C'est le seul moyen de faire évoluer la VMA retenue vers un nouveau résultat de test.
-  activerSourceVma: (eleve, source) => {
-    const all = read(KEYS.VMA, {})
-    const cle = storage.cleEleve(eleve)
-    const actuel = all[cle]
-    if (!actuel) return
-    const valeur = source === 'manuelle' ? actuel.manuelle : actuel.auto
-    if (valeur == null) return
-    actuel.retenue = valeur
-    actuel.retenueSource = source
-    actuel.retenueDate = Date.now()
-    all[cle] = actuel
-    write(KEYS.VMA, all)
-    cloud.cloudEcrireVma(cle, actuel)
-  },
-  // Efface la valeur manuelle : si elle était la source retenue, la VMA retenue revient au dernier
-  // résultat de test enregistré (sinon reste vide).
+  // Efface la valeur imposée par le prof : la VMA retenue revient automatiquement au meilleur
+  // test enregistré (sinon reste vide).
   effacerVmaManuelle: (eleve) => {
     const all = read(KEYS.VMA, {})
     const cle = storage.cleEleve(eleve)
     if (all[cle]) {
       all[cle].manuelle = null
       all[cle].manuelleDate = null
-      if (all[cle].retenueSource === 'manuelle') {
-        all[cle].retenue = all[cle].auto ?? null
-        all[cle].retenueSource = all[cle].auto != null ? 'auto' : null
-        all[cle].retenueDate = Date.now()
-      }
       write(KEYS.VMA, all)
       cloud.cloudEcrireVma(cle, all[cle])
     }
