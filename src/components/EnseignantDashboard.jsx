@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Plus, Trash2, Upload, ChevronDown, ChevronUp, KeyRound, UserX, Pencil, UserPlus, FolderPlus, FolderX, Check, X } from 'lucide-react'
+import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
-import VmaEleveLigne from './VmaEleveLigne'
-import ComportementAjustement from './ComportementAjustement'
+import VmaEleveLigne, { LABEL_TEST, formatDateVma } from './VmaEleveLigne'
+import FicheSuiviEleve from './FicheSuiviEleve'
 import VisibiliteClasses from './VisibiliteClasses'
 import { storage } from '../utils/storage'
-import { syntheseCycle, noteFinale, pourcentagesReussite } from '../utils/calc'
+import { noteFinale, pourcentagesReussite } from '../utils/calc'
 
 export default function EnseignantDashboard({ seances, setSeances, realisations, onModifierRealisation, onSupprimerRealisation, onSupprimerRealisationsEleve, onSupprimerRealisationsClasse, cloudTick }) {
   const [onglet, setOnglet] = useState('seances') // seances | suivi | vma
@@ -16,11 +16,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
   const [importOuvert, setImportOuvert] = useState(false)
   const [rosterVersion, setRosterVersion] = useState(0) // force refresh après import/suppression
   const [classeSelectionnee, setClasseSelectionnee] = useState(null)
-  const [eleveOuvert, setEleveOuvert] = useState(null)
-  const [eleveEnEdition, setEleveEnEdition] = useState(null) // id de l'élève en cours d'édition
-  const [editNom, setEditNom] = useState('')
-  const [editPrenom, setEditPrenom] = useState('')
-  const [editSexe, setEditSexe] = useState('')
+  const [eleveFicheOuverte, setEleveFicheOuverte] = useState(null) // clé de l'élève dont la fiche de suivi est ouverte
   const [ajoutEleveOuvert, setAjoutEleveOuvert] = useState(false)
   const [nouvelEleveNom, setNouvelEleveNom] = useState('')
   const [nouvelElevePrenom, setNouvelElevePrenom] = useState('')
@@ -124,6 +120,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
     if (!eleveId || classeActive === null) return
     if (!confirm('Supprimer cet élève de la classe ? Son historique de séances est conservé.')) return
     storage.supprimerEleve(classeActive, eleveId)
+    setEleveFicheOuverte(null)
     setRosterVersion((v) => v + 1)
   }
 
@@ -132,14 +129,8 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
     if (!confirm(`Supprimer entièrement la classe ${classeActive} et tous ses élèves ? L'historique de leurs séances est conservé.`)) return
     storage.supprimerClasse(classeActive)
     setClasseSelectionnee(null)
-    setEleveOuvert(null)
+    setEleveFicheOuverte(null)
     setRosterVersion((v) => v + 1)
-  }
-
-  function supprimerUneRealisation(r) {
-    if (!onSupprimerRealisation) return
-    if (!confirm(`Effacer la séance "${r.seanceTitre} · ${r.niveauNom}" du ${new Date(r.date).toLocaleDateString('fr-FR')} ?`)) return
-    onSupprimerRealisation(r.id)
   }
 
   function supprimerSeancesEleve(eleve) {
@@ -152,26 +143,6 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
     if (!onSupprimerRealisationsClasse || classeActive === null) return
     if (!confirm(`Effacer toutes les séances enregistrées de toute la classe ${classeActive} ? Cette action est irréversible.`)) return
     onSupprimerRealisationsClasse(classeActive)
-  }
-
-  function reinitialiserPin(eleveId) {
-    if (!eleveId || classeActive === null) return
-    storage.reinitialiserPin(classeActive, eleveId)
-    setRosterVersion((v) => v + 1)
-  }
-
-  function ouvrirEdition(eleve) {
-    setEleveEnEdition(eleve.id)
-    setEditNom(eleve.nom)
-    setEditPrenom(eleve.prenom)
-    setEditSexe(eleve.sexe || '')
-  }
-
-  function enregistrerEdition(eleveId) {
-    if (!editNom.trim() || !editPrenom.trim() || classeActive === null) return
-    storage.modifierEleve(classeActive, eleveId, { nom: editNom, prenom: editPrenom, sexe: editSexe })
-    setEleveEnEdition(null)
-    setRosterVersion((v) => v + 1)
   }
 
   function ajouterEleve(e) {
@@ -371,8 +342,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
                     key={c}
                     onClick={() => {
                       setClasseSelectionnee(c)
-                      setEleveOuvert(null)
-                      setEleveEnEdition(null)
+                      setEleveFicheOuverte(null)
                       setAjoutEleveOuvert(false)
                     }}
                     className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition ${classeActive === c ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-600'}`}
@@ -426,164 +396,59 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
 
               <div className="space-y-2">
                 {lignesEleves.map((eleve) => {
-                  const synth = syntheseCycle(eleve.realisations)
-                  const ouvert = eleveOuvert === (eleve.id || `${eleve.nom}__${eleve.prenom}`)
+                  const cle = eleve.id || `${eleve.nom}__${eleve.prenom}`
+                  const detailVma = eleve.id ? storage.getVmaDetail({ id: eleve.id, nom: eleve.nom, prenom: eleve.prenom, classe: classeActive }) : null
+                  const vmaRetenue = detailVma ? detailVma.manuelle ?? detailVma.auto ?? null : null
+                  const vmaImposee = detailVma && detailVma.manuelle != null
                   return (
-                    <div key={eleve.id || `${eleve.nom}__${eleve.prenom}`} className="bg-piste-50 rounded-xl overflow-hidden">
-                      <button
-                        onClick={() => setEleveOuvert(ouvert ? null : eleve.id || `${eleve.nom}__${eleve.prenom}`)}
-                        className="w-full flex items-center justify-between px-4 py-3"
-                      >
-                        <div className="text-left">
-                          <p className="text-sm font-medium text-piste-900">
-                            {eleve.prenom} {eleve.nom}
-                            {eleve.sexe && <span className="text-piste-400 font-normal"> ({eleve.sexe})</span>}
-                          </p>
-                          <p className="text-xs text-piste-500">
-                            {synth ? `${synth.nbSeances} séance${synth.nbSeances > 1 ? 's' : ''}` : 'Aucune séance'}
-                            {eleve.id && !eleve.pinDefini && ' · PIN non défini'}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {synth && <span className="font-display text-lg text-piste-900">{synth.moyenne}/20</span>}
-                          {ouvert ? <ChevronUp size={18} className="text-piste-500" /> : <ChevronDown size={18} className="text-piste-500" />}
-                        </div>
-                      </button>
-
-                      {ouvert && (
-                        <div className="px-4 pb-4 space-y-2">
-                          {eleve.id && eleveEnEdition === eleve.id && (
-                            <form
-                              onSubmit={(e) => {
-                                e.preventDefault()
-                                enregistrerEdition(eleve.id)
-                              }}
-                              className="flex flex-col sm:flex-row gap-2 mb-2"
-                            >
-                              <input
-                                value={editPrenom}
-                                onChange={(e) => setEditPrenom(e.target.value)}
-                                autoFocus
-                                className="flex-1 rounded-lg border border-piste-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-piste-500"
-                              />
-                              <input
-                                value={editNom}
-                                onChange={(e) => setEditNom(e.target.value)}
-                                className="flex-1 rounded-lg border border-piste-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-piste-500"
-                              />
-                              <select
-                                value={editSexe}
-                                onChange={(e) => setEditSexe(e.target.value)}
-                                className="rounded-lg border border-piste-200 px-2 py-1.5 text-sm bg-white"
-                              >
-                                <option value="">Sexe</option>
-                                <option value="F">F</option>
-                                <option value="M">M</option>
-                              </select>
-                              <div className="flex gap-1.5">
-                                <button type="submit" className="p-1.5 rounded-full bg-piste-800 text-white hover:bg-piste-700">
-                                  <Check size={14} />
-                                </button>
-                                <button type="button" onClick={() => setEleveEnEdition(null)} className="p-1.5 rounded-full border border-piste-200 text-piste-600 hover:bg-piste-50">
-                                  <X size={14} />
-                                </button>
-                              </div>
-                            </form>
-                          )}
-                          {eleve.id && (
-                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              <button
-                                onClick={() => ouvrirEdition(eleve)}
-                                className="flex items-center gap-1 text-[11px] font-medium text-piste-700 border border-piste-200 rounded-full px-2.5 py-1 hover:bg-white"
-                              >
-                                <Pencil size={12} /> Modifier nom/prénom
-                              </button>
-                              <button
-                                onClick={() => reinitialiserPin(eleve.id)}
-                                className="flex items-center gap-1 text-[11px] font-medium text-piste-700 border border-piste-200 rounded-full px-2.5 py-1 hover:bg-white"
-                              >
-                                <KeyRound size={12} /> Réinitialiser le PIN
-                              </button>
-                              {eleve.realisations.length > 0 && (
-                                <button
-                                  onClick={() => supprimerSeancesEleve(eleve)}
-                                  className="flex items-center gap-1 text-[11px] font-medium text-alerte border border-[#f0d3ca] rounded-full px-2.5 py-1 hover:bg-white"
-                                >
-                                  <Trash2 size={12} /> Effacer ses séances
-                                </button>
-                              )}
-                              <button
-                                onClick={() => supprimerEleve(eleve.id)}
-                                className="flex items-center gap-1 text-[11px] font-medium text-alerte border border-[#f0d3ca] rounded-full px-2.5 py-1 hover:bg-white"
-                              >
-                                <UserX size={12} /> Retirer de la classe
-                              </button>
-                            </div>
-                          )}
-                          {eleve.id && (
-                            <div className="mb-3">
-                              <p className="text-[11px] font-semibold text-piste-500 uppercase tracking-wide mb-1.5">VMA</p>
-                              <VmaEleveLigne eleve={{ id: eleve.id, nom: eleve.nom, prenom: eleve.prenom, classe: classeActive }} onChange={() => setRosterVersion((v) => v + 1)} />
-                            </div>
-                          )}
-                          {eleve.realisations.length === 0 && <p className="text-xs text-piste-500">Pas encore de séance réalisée.</p>}
-                          {eleve.realisations
-                            .slice()
-                            .sort((a, b) => b.date - a.date)
-                            .map((r) => {
-                              const nbReussis = r.blocsResultats?.filter((b) => b.reussite === 'reussi').length ?? 0
-                              const noteBase = r.noteReelle ?? r.note
-                              const noteAvecComportement = noteFinale(r)
-                              const ajustement = r.ajustementComportement || 0
-                              const labelGps = r.noteReelleAvecGps === undefined ? null : r.noteReelleAvecGps ? '(ac GPS)' : '(Sans GPS)'
-                              const pct = pourcentagesReussite(r.blocsResultats)
-                              return (
-                                <div key={r.id} className="bg-white rounded-lg px-3 py-2.5">
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <p className="text-xs font-medium text-piste-900">{r.seanceTitre} · {r.niveauNom}</p>
-                                      <p className="text-[11px] text-piste-500">
-                                        {new Date(r.date).toLocaleDateString('fr-FR')} · {nbReussis}/{r.blocsResultats?.length ?? 0} blocs · Borg {r.borg}
-                                      </p>
-                                      {pct.allure !== null && (
-                                        <p className="text-[11px] text-piste-500">
-                                          Allure {pct.allure}% · Distance/durée {pct.distanceDuree}%
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex items-start gap-2">
-                                      <div className="text-right">
-                                        <span className="font-display text-piste-900">{noteAvecComportement}/20</span>
-                                        {ajustement !== 0 && (
-                                          <p className="text-[10px] text-piste-500">{noteBase}/20 base {ajustement > 0 ? '+' : ''}{ajustement}</p>
-                                        )}
-                                        {labelGps && <p className="text-[10px] text-piste-500">{labelGps}</p>}
-                                      </div>
-                                      {onSupprimerRealisation && (
-                                        <button
-                                          onClick={() => supprimerUneRealisation(r)}
-                                          title="Effacer cette séance"
-                                          className="p-1 rounded-full hover:bg-[#fbeeea] text-alerte shrink-0"
-                                        >
-                                          <Trash2 size={14} />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {onModifierRealisation && (
-                                    <ComportementAjustement realisation={r} onModifier={onModifierRealisation} />
-                                  )}
-                                </div>
-                              )
-                            })}
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      key={cle}
+                      onClick={() => setEleveFicheOuverte(cle)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-piste-50 rounded-xl hover:bg-piste-100 transition text-left"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-piste-900 truncate">
+                          {eleve.prenom} {eleve.nom}
+                          {eleve.sexe && <span className="text-piste-400 font-normal"> ({eleve.sexe})</span>}
+                        </p>
+                        <p className="text-xs text-piste-500 truncate">
+                          {vmaImposee
+                            ? 'VMA imposée par le prof'
+                            : detailVma?.autoTest
+                            ? `${LABEL_TEST[detailVma.autoTest] || detailVma.autoTest} · ${formatDateVma(detailVma.autoDate)}`
+                            : 'Aucun test VMA'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 pl-2">
+                        <span className="font-display text-lg text-piste-900">{vmaRetenue ? `${vmaRetenue} km/h` : '—'}</span>
+                        <ChevronRight size={16} className="text-piste-400" />
+                      </div>
+                    </button>
                   )
                 })}
               </div>
             </>
           )}
+
+          {eleveFicheOuverte !== null && (() => {
+            const eleveFiche = lignesEleves.find((e) => (e.id || `${e.nom}__${e.prenom}`) === eleveFicheOuverte)
+            if (!eleveFiche) return null
+            return (
+              <FicheSuiviEleve
+                key={eleveFicheOuverte}
+                eleve={{ ...eleveFiche, classe: classeActive }}
+                realisations={eleveFiche.realisations}
+                listeEleves={lignesEleves}
+                onNaviguer={(cle) => setEleveFicheOuverte(cle)}
+                onFermer={() => setEleveFicheOuverte(null)}
+                onChange={() => setRosterVersion((v) => v + 1)}
+                onSupprimerEleve={supprimerEleve}
+                onSupprimerSeancesEleve={supprimerSeancesEleve}
+                onModifierRealisation={onModifierRealisation}
+                onSupprimerRealisation={onSupprimerRealisation}
+              />
+            )
+          })()}
         </section>
       )}
 

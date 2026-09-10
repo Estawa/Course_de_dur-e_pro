@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Star } from 'lucide-react'
 import { storage } from '../utils/storage'
 
-const LABEL_TEST = { cooper: 'Demi-Cooper', '4x3': '4×3 min', gacon: 'Gacon 45/15', vameval: 'VAM-EVAL' }
+export const LABEL_TEST = { cooper: 'Demi-Cooper', '4x3': '4×3 min', gacon: 'Gacon 45/15', vameval: 'VAM-EVAL' }
 
-function formatDate(ts) {
+export function formatDateVma(ts) {
   if (!ts) return ''
   return new Date(ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 }
@@ -71,7 +71,7 @@ export default function VmaEleveLigne({ eleve, onChange }) {
           </span>
           {detail.auto != null && (
             <span className="block text-[10px] text-piste-500">
-              {LABEL_TEST[detail.autoTest] || ''} · {formatDate(detail.autoDate)}
+              {LABEL_TEST[detail.autoTest] || ''} · {formatDateVma(detail.autoDate)}
             </span>
           )}
         </div>
@@ -82,7 +82,7 @@ export default function VmaEleveLigne({ eleve, onChange }) {
             {detail.manuelle != null ? `${detail.manuelle} km/h` : '—'}
           </span>
           {detail.manuelle != null && (
-            <span className="block text-[10px] text-piste-500">Fixée le {formatDate(detail.manuelleDate)}</span>
+            <span className="block text-[10px] text-piste-500">Fixée le {formatDateVma(detail.manuelleDate)}</span>
           )}
         </div>
       </div>
@@ -107,7 +107,7 @@ export default function VmaEleveLigne({ eleve, onChange }) {
                 <div key={i} className="flex items-center justify-between bg-white rounded-lg px-2.5 py-1.5 border border-piste-100">
                   <div>
                     <p className="text-xs text-piste-900">
-                      <span className="font-medium">{h.valeur} km/h</span> · {LABEL_TEST[h.test] || h.test} · {formatDate(h.date)}
+                      <span className="font-medium">{h.valeur} km/h</span> · {LABEL_TEST[h.test] || h.test} · {formatDateVma(h.date)}
                     </p>
                     {resumeDetail(h.test, h.detail) && (
                       <p className="text-[10px] text-piste-500">{resumeDetail(h.test, h.detail)}</p>

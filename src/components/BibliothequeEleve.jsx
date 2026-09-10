@@ -1,9 +1,18 @@
-import { CheckCircle2, ChevronRight, Timer } from 'lucide-react'
+import { CheckCircle2, ChevronRight, Timer, Gauge } from 'lucide-react'
 import { syntheseCycle, seanceVisiblePourClasse } from '../utils/calc'
+import { storage } from '../utils/storage'
+import { LABEL_TEST } from './VmaEleveLigne'
 
 export default function BibliothequeEleve({ seances, realisations, eleve, onChoisirSeance }) {
   const seancesVisibles = seances.filter((s) => seanceVisiblePourClasse(s, eleve?.classe))
   const synthese = syntheseCycle(realisations)
+  const historiqueTests = eleve ? storage.getHistoriqueTests(eleve) : []
+
+  // Fusion chronologique (plus récent en premier) des séances réalisées et des tests VMA passés.
+  const evenements = [
+    ...realisations.map((r) => ({ type: 'seance', date: r.date, data: r })),
+    ...historiqueTests.map((h) => ({ type: 'test', date: h.date, data: h }))
+  ].sort((a, b) => b.date - a.date)
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -42,24 +51,41 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
           <StatCard label="Progression" valeur={`${synthese.progression >= 0 ? '+' : ''}${synthese.progression}`} />
         </div>
       )}
-      {realisations.length === 0 && <p className="text-sm text-piste-500 text-center py-8">Tu n'as pas encore réalisé de séance.</p>}
+      {evenements.length === 0 && <p className="text-sm text-piste-500 text-center py-8">Tu n'as pas encore réalisé de séance ni de test.</p>}
       <div className="space-y-3">
-        {[...realisations].reverse().map((r) => {
-          const nbReussis = r.blocsResultats.filter((b) => b.reussite === 'reussi').length
+        {evenements.map((ev) => {
+          if (ev.type === 'seance') {
+            const r = ev.data
+            const nbReussis = r.blocsResultats.filter((b) => b.reussite === 'reussi').length
+            return (
+              <div key={`s-${r.id}`} className="bg-white border border-piste-100 rounded-xl p-4 flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-piste-900 text-sm">{r.seanceTitre} · {r.niveauNom}</p>
+                  <p className="text-xs text-piste-500 mt-0.5">{new Date(r.date).toLocaleDateString('fr-FR')}</p>
+                  <div className="flex items-center gap-3 mt-1.5">
+                    <span className="flex items-center gap-1 text-xs text-piste-600">
+                      <CheckCircle2 size={13} className="text-piste-600" />
+                      {nbReussis}/{r.blocsResultats.length} blocs réussis
+                    </span>
+                    <span className="text-xs text-piste-600">Borg {r.borg}/10</span>
+                  </div>
+                </div>
+                <span className="font-display text-xl text-piste-900">{r.note}</span>
+              </div>
+            )
+          }
+          const h = ev.data
           return (
-            <div key={r.id} className="bg-white border border-piste-100 rounded-xl p-4 flex items-center justify-between">
+            <div key={`t-${h.date}`} className="bg-white border border-piste-100 rounded-xl p-4 flex items-center justify-between">
               <div>
-                <p className="font-medium text-piste-900 text-sm">{r.seanceTitre} · {r.niveauNom}</p>
-                <p className="text-xs text-piste-500 mt-0.5">{new Date(r.date).toLocaleDateString('fr-FR')}</p>
-                <div className="flex items-center gap-3 mt-1.5">
-                  <span className="flex items-center gap-1 text-xs text-piste-600">
-                    <CheckCircle2 size={13} className="text-piste-600" />
-                    {nbReussis}/{r.blocsResultats.length} blocs réussis
-                  </span>
-                  <span className="text-xs text-piste-600">Borg {r.borg}/10</span>
+                <p className="font-medium text-piste-900 text-sm">Test VMA · {LABEL_TEST[h.test] || h.test}</p>
+                <p className="text-xs text-piste-500 mt-0.5">{new Date(h.date).toLocaleDateString('fr-FR')}</p>
+                <div className="flex items-center gap-1 mt-1.5 text-xs text-piste-600">
+                  <Gauge size={13} className="text-piste-600" />
+                  Résultat du test
                 </div>
               </div>
-              <span className="font-display text-xl text-piste-900">{r.note}</span>
+              <span className="font-display text-xl text-piste-900">{h.valeur} km/h</span>
             </div>
           )
         })}

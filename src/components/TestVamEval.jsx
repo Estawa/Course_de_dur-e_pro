@@ -36,6 +36,7 @@ export default function TestVamEval({ eleve, onRetour }) {
   const [gpsOk, setGpsOk] = useState(null) // null = pas encore déterminé, true/false ensuite
   const [resultat, setResultat] = useState(null)
   const [enregistre, setEnregistre] = useState(false)
+  const [confirmationArret, setConfirmationArret] = useState(false)
 
   const startRef = useRef(null)
   const intervalRef = useRef(null)
@@ -43,6 +44,7 @@ export default function TestVamEval({ eleve, onRetour }) {
   const lastPosRef = useRef(null)
   const bipTimeoutRef = useRef(null)
   const arreteRef = useRef(false)
+  const confirmationTimeoutRef = useRef(null)
 
   const dernierPalierValideRef = useRef(0) // dernier palier pleinement tenu (vitesse validée par GPS)
   const distancePalierRef = useRef(0)
@@ -147,9 +149,27 @@ export default function TestVamEval({ eleve, onRetour }) {
     setPhase('effort')
   }
 
-  function arreterManuel() {
+  // Évite d'arrêter le test par un appui accidentel (téléphone tenu en main en courant) :
+  // un premier appui affiche une confirmation, qui disparaît d'elle-même après 3s si elle
+  // n'est pas validée, et il faut alors réappuyer sur "Je n'en peux plus".
+  function demanderArret() {
+    setConfirmationArret(true)
+    clearTimeout(confirmationTimeoutRef.current)
+    confirmationTimeoutRef.current = setTimeout(() => setConfirmationArret(false), 3000)
+  }
+
+  function annulerConfirmationArret() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationArret(false)
+  }
+
+  function confirmerArret() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationArret(false)
     terminer(distancePalierRef.current, distanceRequisePalier(palier))
   }
+
+  useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
 
   function terminer(distanceFaite, requise) {
     if (arreteRef.current) return
@@ -238,7 +258,8 @@ export default function TestVamEval({ eleve, onRetour }) {
 
     return (
       <div className="max-w-md mx-auto px-6 py-10 text-center">
-        <p className="text-xs uppercase tracking-wide text-piste-500 mb-1">Palier {palier} · cible {cible} km/h</p>
+        <p className="font-display text-3xl text-piste-900 mb-0.5 tabular-nums">Palier {palier}</p>
+        <p className="font-display text-2xl text-piste-700 mb-2 tabular-nums">cible {cible} km/h</p>
         <div className="font-display text-6xl text-piste-900 mb-2 tabular-nums">
           {Math.max(0, Math.round(DUREE_PALIER - elapsed))}
         </div>
@@ -250,7 +271,10 @@ export default function TestVamEval({ eleve, onRetour }) {
               {dansLaZone && <CheckCircle2 className="text-piste-600" size={20} />}
               <span className="font-display text-3xl text-piste-900 tabular-nums">{vitesseInstant.toFixed(1)} km/h</span>
             </div>
-            <p className="text-xs text-piste-600">{Math.round(distancePalier)} / {Math.round(distanceRequisePalier(palier))} m sur ce palier</p>
+            <p className="font-display text-2xl text-piste-800 tabular-nums">
+              {Math.round(distancePalier)} / {Math.round(distanceRequisePalier(palier))} m
+            </p>
+            <p className="text-xs text-piste-600">sur ce palier</p>
           </div>
         )}
         {gpsOk === false && (
@@ -263,9 +287,24 @@ export default function TestVamEval({ eleve, onRetour }) {
           <p className="text-xs text-piste-500 mb-6">Recherche du signal GPS…</p>
         )}
 
-        <button onClick={arreterManuel} className="flex items-center gap-2 mx-auto bg-alerte text-white px-5 py-3 rounded-xl">
-          <Square size={16} fill="white" /> Je n'en peux plus
-        </button>
+        {!confirmationArret && (
+          <button onClick={demanderArret} className="flex items-center gap-2 mx-auto bg-alerte text-white px-5 py-3 rounded-xl">
+            <Square size={16} fill="white" /> Je n'en peux plus
+          </button>
+        )}
+        {confirmationArret && (
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs text-piste-600">Confirme pour arrêter le test</p>
+            <div className="flex items-center gap-2">
+              <button onClick={confirmerArret} className="flex items-center gap-2 bg-alerte text-white px-5 py-3 rounded-xl font-medium">
+                <Square size={16} fill="white" /> Confirmer l'arrêt
+              </button>
+              <button onClick={annulerConfirmationArret} className="text-xs text-piste-500 underline px-2">
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
