@@ -25,27 +25,33 @@ export function expanserStructure(structure, vmaRef) {
   const vma = vmaRef || 15
   const nbTours = structure.nbTours || 1
   for (let tour = 0; tour < nbTours; tour++) {
+    // Liste à plat des répétitions du tour, pour savoir si on est sur la toute dernière
+    // (afin de ne pas cumuler la récup individuelle du type ET la récup de série qui suit).
+    const instances = []
     structure.sequence.forEach((item) => {
       const type = structure.types.find((t) => t.id === item.typeId)
       if (!type) return
-      for (let r = 0; r < item.repetitions; r++) {
+      for (let r = 0; r < item.repetitions; r++) instances.push(type)
+    })
+    const skipDerniereRecup = tour < nbTours - 1 && structure.recupSerie?.active
+    instances.forEach((type, i) => {
+      phases.push({
+        phase: 'travail',
+        typeLettre: type.lettre,
+        tourIndex: tour,
+        duree_s: type.duree_travail_s,
+        vitesse_kmh: Math.round((type.pct_vma_travail / 100) * vma * 100) / 100
+      })
+      const estDerniereInstanceDuTour = i === instances.length - 1
+      if (type.duree_recup_s > 0 && !(estDerniereInstanceDuTour && skipDerniereRecup)) {
         phases.push({
-          phase: 'travail',
+          phase: 'recup',
+          recupType: 'repetition',
           typeLettre: type.lettre,
           tourIndex: tour,
-          duree_s: type.duree_travail_s,
-          vitesse_kmh: Math.round((type.pct_vma_travail / 100) * vma * 100) / 100
+          duree_s: type.duree_recup_s,
+          vitesse_kmh: Math.round((type.pct_vma_recup / 100) * vma * 100) / 100
         })
-        if (type.duree_recup_s > 0) {
-          phases.push({
-            phase: 'recup',
-            recupType: 'repetition',
-            typeLettre: type.lettre,
-            tourIndex: tour,
-            duree_s: type.duree_recup_s,
-            vitesse_kmh: Math.round((type.pct_vma_recup / 100) * vma * 100) / 100
-          })
-        }
       }
     })
     if (tour < nbTours - 1 && structure.recupSerie?.active) {
@@ -74,10 +80,17 @@ export function dureeTotaleStructure(structure) {
   let total = 0
   const nbTours = structure.nbTours || 1
   for (let tour = 0; tour < nbTours; tour++) {
+    const instances = []
     structure.sequence.forEach((item) => {
       const type = structure.types.find((t) => t.id === item.typeId)
       if (!type) return
-      total += item.repetitions * (type.duree_travail_s + (type.duree_recup_s || 0))
+      for (let r = 0; r < item.repetitions; r++) instances.push(type)
+    })
+    const skipDerniereRecup = tour < nbTours - 1 && structure.recupSerie?.active
+    instances.forEach((type, i) => {
+      const estDerniereInstanceDuTour = i === instances.length - 1
+      total += type.duree_travail_s
+      if (!(estDerniereInstanceDuTour && skipDerniereRecup)) total += type.duree_recup_s || 0
     })
     if (tour < nbTours - 1 && structure.recupSerie?.active) total += structure.recupSerie.duree_s
   }

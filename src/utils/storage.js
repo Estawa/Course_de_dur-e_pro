@@ -7,7 +7,8 @@ const KEYS = {
   SEANCES: 'cdp_seances',
   REALISATIONS: 'cdp_realisations',
   PIN_OK: 'cdp_pin_ok',
-  VMA: 'cdp_vma_eleves'
+  VMA: 'cdp_vma_eleves',
+  TESTS_VISIBILITE: 'cdp_tests_visibilite'
 }
 
 function read(key, fallback) {
@@ -129,6 +130,15 @@ function fusionnerSeancesDepuisCloud(seancesCloud) {
   write(KEYS.SEANCES, seancesCloud)
 }
 
+function fusionnerTestsVisibiliteDepuisCloud(data) {
+  const local = read(KEYS.TESTS_VISIBILITE, {})
+  if (Object.keys(data).length === 0 && Object.keys(local).length > 0) {
+    cloud.cloudEcrireTestsVisibilite(local)
+    return
+  }
+  write(KEYS.TESTS_VISIBILITE, data)
+}
+
 export const storage = {
   // --- Synchronisation cloud ---
   cloudDisponible: () => cloud.cloudDisponible(),
@@ -145,6 +155,7 @@ export const storage = {
       else if (type === 'realisations') fusionnerRealisationsDepuisCloud(data)
       else if (type === 'vma') fusionnerVmaDepuisCloud(data)
       else if (type === 'seances') fusionnerSeancesDepuisCloud(data)
+      else if (type === 'testsVisibilite') fusionnerTestsVisibiliteDepuisCloud(data)
       callback(type)
     })
   },
@@ -371,6 +382,7 @@ export const storage = {
         autoTest: null,
         derniereCourse: null,
         historique: [],
+        fartlek: [],
         retenue: null,
         retenueSource: null,
         retenueDate: null
@@ -436,6 +448,36 @@ export const storage = {
       write(KEYS.VMA, all)
       cloud.cloudEcrireVma(cle, all[cle])
     }
+  },
+
+  // --- Évaluation Fartlek : stockée dans le même document VMA par élève (champ "fartlek"),
+  // pour bénéficier de la même synchro cloud sans avoir à ajouter une collection dédiée.
+  // La notation complète (note, malus, bonus...) n'est consultée que côté enseignant ; côté
+  // élève, seules les caractéristiques factuelles doivent être affichées (voir BibliothequeEleve).
+  enregistrerResultatFartlek: (eleve, resultat) => {
+    const all = read(KEYS.VMA, {})
+    const cle = storage.cleEleve(eleve)
+    const actuel = all[cle] || { manuelle: null, manuelleDate: null, auto: null, autoDate: null, autoTest: null, historique: [], fartlek: [] }
+    actuel.fartlek = [...(actuel.fartlek || []), { ...resultat, id: crypto.randomUUID(), date: Date.now() }]
+    all[cle] = actuel
+    write(KEYS.VMA, all)
+    cloud.cloudEcrireVma(cle, actuel)
+  },
+  getHistoriqueFartlek: (eleve) => {
+    const d = storage.getVmaDetail(eleve)
+    return (d.fartlek || []).slice().reverse()
+  },
+
+  // --- Bibliothèque "Tests" : visibilité par classe pour les 4 tests VMA + le Fartlek
+  // évaluatif, sur le même principe que la visibilité des séances. Purement informatif côté
+  // élève (le test reste accessible depuis Outils quoi qu'il arrive) : ça sert à annoncer à
+  // l'avance ce qui sera fait, sans jamais exposer la logique de notation.
+  getTestsVisibilite: () => read(KEYS.TESTS_VISIBILITE, {}),
+  setTestVisibilite: (testId, classesVisibles) => {
+    const all = read(KEYS.TESTS_VISIBILITE, {})
+    all[testId] = { classesVisibles }
+    write(KEYS.TESTS_VISIBILITE, all)
+    cloud.cloudEcrireTestsVisibilite(all)
   }
 }
 

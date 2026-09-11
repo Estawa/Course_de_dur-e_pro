@@ -95,6 +95,9 @@ function colVma() {
 function docSeances() {
   return doc(db, 'profs', getCodeSync(), 'meta', 'seances')
 }
+function docTestsVisibilite() {
+  return doc(db, 'profs', getCodeSync(), 'meta', 'testsVisibilite')
+}
 
 // --- Écritures (best effort : jamais bloquantes, jamais d'exception remontée à l'appelant) ---
 
@@ -128,6 +131,11 @@ export function cloudEcrireSeances(seances) {
   setDoc(docSeances(), { liste: seances }).catch(() => {})
 }
 
+export function cloudEcrireTestsVisibilite(visibilite) {
+  if (!actif()) return
+  setDoc(docTestsVisibilite(), { data: visibilite }).catch(() => {})
+}
+
 // --- Lecture initiale (une fois, au démarrage) + écoute temps réel ---
 // callback(type, data) est appelé à chaque mise à jour, avec type ∈ 'eleves' | 'realisations' | 'vma' | 'seances'
 
@@ -152,6 +160,10 @@ export function demarrerSynchro(callback) {
   arrets.push(onSnapshot(docSeances(), (snap) => {
     callback('seances', snap.exists() ? snap.data().liste || [] : [])
   }, (err) => console.warn('Synchro bibliothèque indisponible', err)))
+
+  arrets.push(onSnapshot(docTestsVisibilite(), (snap) => {
+    callback('testsVisibilite', snap.exists() ? snap.data().data || {} : {})
+  }, (err) => console.warn('Synchro tests indisponible', err)))
 
   return () => arrets.forEach((arret) => arret())
 }
