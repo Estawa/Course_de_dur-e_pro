@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight, Gauge, ListChecks, Timer, Smile, TrendingUp } from 'lucide-react'
+import { ChevronRight, Gauge, ListChecks, Timer, Smile, TrendingUp, MapPin } from 'lucide-react'
 import VmaTests from './VmaTests'
 import Chronometre from './Chronometre'
 import BorgReference from './BorgReference'
@@ -13,7 +13,7 @@ function formatDate(ts) {
   return new Date(ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 }
 
-export default function OutilsEleve({ eleve, onComposerSeance }) {
+export default function OutilsEleve({ eleve, onComposerSeance, onLancerFartlek }) {
   const [ecran, setEcran] = useState('menu')
   const detail = storage.getVmaDetail(eleve)
   const retenue = storage.getVmaRetenue(eleve)
@@ -33,6 +33,7 @@ export default function OutilsEleve({ eleve, onComposerSeance }) {
   const items = [
     { id: 'compose', icone: TrendingUp, titre: 'Composer ma séance', description: 'Construire et réaliser une séance en solo' },
     { id: 'tests', icone: ListChecks, titre: 'Tests de VMA', description: 'Demi-Cooper, 4×3 min, Gacon, VAM-EVAL' },
+    { id: 'fartlek', icone: MapPin, titre: 'Fartlek évaluatif', description: 'Zones intenses/récup sur piste, avec ton niveau' },
     { id: 'chrono', icone: Timer, titre: 'Chronomètre', description: 'Temps et vitesse moyenne' },
     { id: 'borg', icone: Smile, titre: 'Échelle de Borg', description: 'Repères de ressenti d\'effort' },
     { id: 'perfs', icone: TrendingUp, titre: 'Performances estimées', description: 'Temps estimés par distance selon ta VMA' }
@@ -40,6 +41,7 @@ export default function OutilsEleve({ eleve, onComposerSeance }) {
 
   function handleClick(id) {
     if (id === 'compose') onComposerSeance()
+    else if (id === 'fartlek') onLancerFartlek()
     else setEcran(id)
   }
 

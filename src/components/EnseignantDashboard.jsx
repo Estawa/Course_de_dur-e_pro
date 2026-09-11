@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus } from 'lucide-react'
+import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import VmaEleveLigne, { LABEL_TEST, formatDateVma } from './VmaEleveLigne'
@@ -7,6 +7,13 @@ import FicheSuiviEleve from './FicheSuiviEleve'
 import VisibiliteClasses from './VisibiliteClasses'
 import { storage } from '../utils/storage'
 import { noteFinale, pourcentagesReussite } from '../utils/calc'
+import { genererSeancesTypesSecondes } from '../utils/seancesTypesSecondes'
+import { TESTS_CATALOGUE } from '../utils/testsCatalogue'
+
+const GROUPES_SCOLAIRES = [
+  { id: 'seconde', label: 'Secondes' },
+  { id: 'premiere_terminale', label: 'Premières / Terminales' }
+]
 
 export default function EnseignantDashboard({ seances, setSeances, realisations, onModifierRealisation, onSupprimerRealisation, onSupprimerRealisationsEleve, onSupprimerRealisationsClasse, cloudTick }) {
   const [onglet, setOnglet] = useState('seances') // seances | suivi | vma
@@ -23,6 +30,54 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
   const [nouvelEleveSexe, setNouvelEleveSexe] = useState('')
   const [nouvelleClasseOuverte, setNouvelleClasseOuverte] = useState(false)
   const [nouvelleClasseNom, setNouvelleClasseNom] = useState('')
+  const [draggedId, setDraggedId] = useState(null)
+  const [testPourVisibilite, setTestPourVisibilite] = useState(null)
+
+  // Groupe + trie les séances par espace (Secondes / Premières-Terminales), en traitant
+  // toute séance sans niveauScolaire (créée avant cette fonctionnalité) comme "seconde".
+  const seancesParGroupe = useMemo(() => {
+    const groupes = { seconde: [], premiere_terminale: [] }
+    seances.forEach((s) => {
+      const g = s.niveauScolaire === 'premiere_terminale' ? 'premiere_terminale' : 'seconde'
+      groupes[g].push(s)
+    })
+    Object.keys(groupes).forEach((g) => groupes[g].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0)))
+    return groupes
+  }, [seances])
+
+  function importerSeancesTypes() {
+    const dejaImportees = new Set(seances.map((s) => s.codeType).filter(Boolean))
+    const nouvelles = genererSeancesTypesSecondes().filter((s) => !dejaImportees.has(s.codeType))
+    if (nouvelles.length === 0) return
+    const maxOrdre = seances.reduce((acc, s) => Math.max(acc, s.ordre ?? 0), 0)
+    const avecOrdre = nouvelles.map((s, i) => ({ ...s, ordre: maxOrdre + 1 + i }))
+    setSeances([...seances, ...avecOrdre])
+  }
+
+  function deplacerSeance(idDeplacee, groupeCible, idCible) {
+    if (idDeplacee === idCible) return
+    const groupes = {
+      seconde: [...seancesParGroupe.seconde],
+      premiere_terminale: [...seancesParGroupe.premiere_terminale]
+    }
+    let seanceDeplacee = null
+    Object.keys(groupes).forEach((g) => {
+      const idx = groupes[g].findIndex((s) => s.id === idDeplacee)
+      if (idx !== -1) [seanceDeplacee] = groupes[g].splice(idx, 1)
+    })
+    if (!seanceDeplacee) return
+    seanceDeplacee = { ...seanceDeplacee, niveauScolaire: groupeCible }
+    const cible = groupes[groupeCible]
+    const idxCible = idCible ? cible.findIndex((s) => s.id === idCible) : cible.length
+    cible.splice(idxCible === -1 ? cible.length : idxCible, 0, seanceDeplacee)
+    const toutesReordonnees = [
+      ...groupes.seconde.map((s, i) => ({ ...s, ordre: i })),
+      ...groupes.premiere_terminale.map((s, i) => ({ ...s, ordre: i }))
+    ]
+    setSeances(toutesReordonnees)
+    setDraggedId(null)
+  }
+
 
   // Une mise à jour cloud (nouvel élève connecté, PIN défini, séance réalisée sur un autre
   // appareil...) doit rafraîchir les listes dérivées du roster local, qui viennent d'être
@@ -110,6 +165,12 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
       )
     )
     setSeancePourVisibilite(null)
+  }
+
+  function validerVisibiliteTest(classesSelectionnees) {
+    storage.setTestVisibilite(testPourVisibilite.id, classesSelectionnees)
+    setTestPourVisibilite(null)
+    setRosterVersion((v) => v + 1)
   }
 
   function supprimerSeance(id) {
@@ -222,6 +283,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
       <div className="flex gap-1.5 mb-6 bg-piste-50 rounded-full p-1 w-fit">
         {[
           { id: 'seances', label: 'Séances' },
+          { id: 'tests', label: 'Tests' },
           { id: 'suivi', label: 'Élèves & suivi' },
           { id: 'vma', label: 'VMA' }
         ].map((o) => (
@@ -239,48 +301,123 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
         <section>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold tracking-wide text-piste-500 uppercase">Bibliothèque de séances</h3>
-            <button
-              onClick={ouvrirNouvelleSeance}
-              className="flex items-center gap-1.5 bg-piste-800 hover:bg-piste-700 text-white text-sm font-medium px-3.5 py-2 rounded-full transition"
-            >
-              <Plus size={16} /> Séance
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={importerSeancesTypes}
+                className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900"
+              >
+                <Sparkles size={14} /> Importer les séances types
+              </button>
+              <button
+                onClick={ouvrirNouvelleSeance}
+                className="flex items-center gap-1.5 bg-piste-800 hover:bg-piste-700 text-white text-sm font-medium px-3.5 py-2 rounded-full transition"
+              >
+                <Plus size={16} /> Séance
+              </button>
+            </div>
           </div>
+
           {seances.length === 0 && <p className="text-sm text-piste-500">Aucune séance créée pour l'instant.</p>}
+
+          {GROUPES_SCOLAIRES.map((groupe) => (
+            <div key={groupe.id} className="mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-[11px] font-semibold tracking-wide text-piste-400 uppercase">{groupe.label}</p>
+                <div className="h-px flex-1 bg-piste-100" />
+              </div>
+              <div
+                className="space-y-2 min-h-[8px]"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  if (draggedId) deplacerSeance(draggedId, groupe.id, null)
+                }}
+              >
+                {seancesParGroupe[groupe.id].length === 0 && (
+                  <p className="text-xs text-piste-400 italic px-1">Glisse une séance ici, ou importe les séances types.</p>
+                )}
+                {seancesParGroupe[groupe.id].map((s) => {
+                  const nbClassesVisibles = Array.isArray(s.classesVisibles) ? s.classesVisibles.length : s.visible ? classes.length : 0
+                  const nbNiveauxVisibles = s.niveaux.filter((n) => n.visible !== false).length
+                  return (
+                    <div
+                      key={s.id}
+                      draggable
+                      onDragStart={() => setDraggedId(s.id)}
+                      onDragEnd={() => setDraggedId(null)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        if (draggedId) deplacerSeance(draggedId, groupe.id, s.id)
+                      }}
+                      onClick={() => ouvrirEditionSeance(s)}
+                      className={`flex items-center justify-between bg-white border rounded-xl px-3 py-3 cursor-pointer hover:border-piste-300 transition ${draggedId === s.id ? 'opacity-40 border-piste-300' : 'border-piste-100'}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-piste-300 shrink-0 cursor-grab" title="Glisser pour réorganiser">
+                          <GripVertical size={16} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-piste-900 truncate">{s.titre}</p>
+                          <p className="text-xs text-piste-500">{nbNiveauxVisibles}/{s.niveaux.length} niveaux visibles · Voir le détail</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSeancePourVisibilite(s)
+                          }}
+                          className={`text-[11px] font-medium px-2.5 py-1.5 rounded-full border transition ${nbClassesVisibles > 0 ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-700'}`}
+                        >
+                          {nbClassesVisibles > 0 ? `Visible (${nbClassesVisibles})` : 'Masquée'}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            supprimerSeance(s.id)
+                          }}
+                          className="p-1.5 rounded-full hover:bg-[#fbeeea] text-alerte"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {onglet === 'tests' && (
+        <section>
+          <h3 className="text-xs font-semibold tracking-wide text-piste-500 uppercase mb-3">
+            Tests VMA et évaluation Fartlek
+          </h3>
+          <p className="text-xs text-piste-500 mb-4">
+            Rends un test visible pour que les élèves d'une classe sachent à l'avance ce qu'ils vont
+            réaliser (objectif, déroulement, niveaux). Le test reste accessible depuis leurs Outils
+            quoi qu'il arrive ; la notation ne leur est jamais montrée.
+          </p>
           <div className="space-y-2">
-            {seances.map((s) => {
-              const nbClassesVisibles = Array.isArray(s.classesVisibles) ? s.classesVisibles.length : s.visible ? classes.length : 0
-              const nbNiveauxVisibles = s.niveaux.filter((n) => n.visible !== false).length
+            {TESTS_CATALOGUE.map((t) => {
+              const v = storage.getTestsVisibilite()[t.id]
+              const nbClassesVisibles = Array.isArray(v?.classesVisibles) ? v.classesVisibles.length : 0
               return (
-                <div
-                  key={s.id}
-                  onClick={() => ouvrirEditionSeance(s)}
-                  className="flex items-center justify-between bg-white border border-piste-100 rounded-xl px-4 py-3 cursor-pointer hover:border-piste-300 transition"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-piste-900">{s.titre}</p>
-                    <p className="text-xs text-piste-500">{nbNiveauxVisibles}/{s.niveaux.length} niveaux visibles · Voir le détail</p>
+                <div key={t.id} className="flex items-center justify-between bg-white border border-piste-100 rounded-xl px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-piste-900 truncate">{t.titre}</p>
+                    <p className="text-xs text-piste-500 truncate">{t.objectif}</p>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSeancePourVisibilite(s)
-                      }}
-                      className={`text-[11px] font-medium px-2.5 py-1.5 rounded-full border transition ${nbClassesVisibles > 0 ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-700'}`}
-                    >
-                      {nbClassesVisibles > 0 ? `Visible (${nbClassesVisibles})` : 'Masquée'}
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        supprimerSeance(s.id)
-                      }}
-                      className="p-1.5 rounded-full hover:bg-[#fbeeea] text-alerte"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setTestPourVisibilite(t)}
+                    className={`shrink-0 text-[11px] font-medium px-2.5 py-1.5 rounded-full border transition ${nbClassesVisibles > 0 ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-700'}`}
+                  >
+                    {nbClassesVisibles > 0 ? `Visible (${nbClassesVisibles})` : 'Masqué'}
+                  </button>
                 </div>
               )
             })}
@@ -493,6 +630,18 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
           classesDisponibles={classes}
           onValider={validerVisibilite}
           onFermer={() => setSeancePourVisibilite(null)}
+        />
+      )}
+
+      {testPourVisibilite && (
+        <VisibiliteClasses
+          seance={{
+            titre: testPourVisibilite.titre,
+            classesVisibles: storage.getTestsVisibilite()[testPourVisibilite.id]?.classesVisibles || []
+          }}
+          classesDisponibles={classes}
+          onValider={validerVisibiliteTest}
+          onFermer={() => setTestPourVisibilite(null)}
         />
       )}
 

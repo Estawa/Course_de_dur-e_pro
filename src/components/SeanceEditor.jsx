@@ -39,6 +39,7 @@ function niveauDepuisSeance(n) {
 
 export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }) {
   const [titre, setTitre] = useState(seanceInitiale?.titre || '')
+  const [regleParticuliere, setRegleParticuliere] = useState(seanceInitiale?.regleParticuliere || '')
   const [niveaux, setNiveaux] = useState(
     seanceInitiale ? seanceInitiale.niveaux.map(niveauDepuisSeance) : NOMS_NIVEAUX.map(niveauVide)
   )
@@ -102,7 +103,13 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
     onEnregistrer({
       id: seanceInitiale?.id || crypto.randomUUID(),
       titre: titre.trim(),
+      regleParticuliere: regleParticuliere.trim() || null,
       dateCreation: seanceInitiale?.dateCreation || Date.now(),
+      // Classement Secondes / Premières-Terminales : géré depuis la bibliothèque (glisser-déposer
+      // entre les deux espaces), pas depuis cet éditeur. Ordre d'affichage idem.
+      niveauScolaire: seanceInitiale?.niveauScolaire || 'seconde',
+      ordre: seanceInitiale?.ordre ?? Date.now(),
+      codeType: seanceInitiale?.codeType,
       // La visibilité par classe se gère depuis le tableau de bord (bouton "Visible / Masquée"),
       // pas depuis cet éditeur : on la préserve telle quelle.
       visible: seanceInitiale?.visible ?? false,
@@ -135,6 +142,19 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
           <p className="text-xs text-piste-500 -mt-2">
             La visibilité par classe se choisit depuis le bouton "Visible / Masquée" sur la fiche de la séance, après enregistrement.
           </p>
+
+          <div>
+            <label className="block text-sm font-medium text-piste-800 mb-1">
+              Règle particulière <span className="text-piste-400 font-normal">(optionnel, visible aux élèves)</span>
+            </label>
+            <textarea
+              value={regleParticuliere}
+              onChange={(e) => setRegleParticuliere(e.target.value)}
+              placeholder="Ex : 1 pause possible dans la zone des 20m du départ, durée < 1 min, toutes les 8 min de course."
+              rows={2}
+              className="w-full rounded-xl border border-piste-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-piste-500"
+            />
+          </div>
 
           {niveaux.map((n) => (
             <div key={n.id} className="border border-piste-100 rounded-xl p-4">

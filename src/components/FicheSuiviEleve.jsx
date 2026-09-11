@@ -255,6 +255,39 @@ export default function FicheSuiviEleve({
               })}
             </div>
           </div>
+
+          {eleve.id && (() => {
+            const historiqueFartlek = storage.getHistoriqueFartlek(eleve)
+            if (historiqueFartlek.length === 0) return null
+            return (
+              <div>
+                <p className="text-[11px] font-semibold text-piste-500 uppercase tracking-wide mb-1.5">
+                  Fartlek — évaluations
+                </p>
+                <div className="space-y-2">
+                  {historiqueFartlek.map((h) => (
+                    <div key={h.id} className="bg-piste-50 rounded-lg px-3 py-2.5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-medium text-piste-900">Fartlek · {h.niveauNom}</p>
+                          <p className="text-[11px] text-piste-500">
+                            {new Date(h.date).toLocaleDateString('fr-FR')} · {h.distanceReelleM}m / {h.distanceAttendueM}m attendus ({h.pctDistance}%)
+                          </p>
+                          <p className="text-[11px] text-piste-500">
+                            Arrêts repos {h.nbArretsRepos} · Arrêts hors zone {h.nbArretsHorsZone} (malus -{h.malusTotal}) · Bonus +{h.bonus} · Borg {h.borg}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-display text-piste-900">{h.noteFinale}/{h.plafond}</span>
+                          <p className="text-[10px] text-piste-500">base {h.noteBase}/20</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
         </div>
       </div>
     </div>

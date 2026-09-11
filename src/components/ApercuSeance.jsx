@@ -1,4 +1,4 @@
-import { Flame, Layers, MapPin, Timer as TimerIcon } from 'lucide-react'
+import { Flame, Info, Layers, MapPin, Timer as TimerIcon } from 'lucide-react'
 import { formatDuree, vitesseVersAllure } from '../utils/calc'
 import { totauxNiveau } from '../utils/fullpower'
 
@@ -27,13 +27,20 @@ function detailBlocFullPower(b, vmaRef) {
   return lignes
 }
 
-export default function ApercuSeance({ niveau, seanceTitre, vmaRef, onDemarrer }) {
+export default function ApercuSeance({ niveau, seanceTitre, vmaRef, regleParticuliere, onDemarrer }) {
   const { distance, duree } = totauxNiveau(niveau, vmaRef)
 
   return (
     <div className="max-w-md mx-auto px-6 py-6">
       <p className="text-xs uppercase tracking-wide text-piste-500 mb-1 text-center">{seanceTitre}</p>
       <h2 className="font-display text-2xl text-piste-900 mb-4 text-center">{niveau.nom}</h2>
+
+      {regleParticuliere && (
+        <div className="flex items-start gap-2 bg-[#eef4f1] rounded-xl px-4 py-3 mb-3">
+          <Info size={16} className="text-piste-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-piste-800">{regleParticuliere}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="bg-piste-50 rounded-xl px-3 py-3 flex items-center gap-2">
