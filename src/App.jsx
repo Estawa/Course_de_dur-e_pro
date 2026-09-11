@@ -12,6 +12,7 @@ import Bilan from './components/Bilan'
 import EnseignantPin from './components/EnseignantPin'
 import EnseignantDashboard from './components/EnseignantDashboard'
 import PartageApp from './components/PartageApp'
+import FartlekEval from './components/FartlekEval'
 import { storage } from './utils/storage'
 import { calculerNoteReelle } from './utils/calc'
 
@@ -182,10 +183,11 @@ export default function App() {
     bilan: 'Bilan de séance',
     enseignantPin: 'Espace enseignant',
     enseignant: 'Espace enseignant',
-    partage: 'Partager l\'application'
+    partage: 'Partager l\'application',
+    fartlek: 'Fartlek évaluatif'
   }
 
-  const peutRevenir = ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'course', 'bilan', 'enseignant', 'enseignantPin', 'partage'].includes(ecran)
+  const peutRevenir = ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'course', 'bilan', 'enseignant', 'enseignantPin', 'partage', 'fartlek'].includes(ecran)
 
   function handleRetour() {
     if (['bibliotheque', 'vierge', 'outils'].includes(ecran)) setEcran('tuiles')
@@ -193,6 +195,7 @@ export default function App() {
     else if (ecran === 'apercu') setEcran('choixNiveau')
     else if (ecran === 'course') setEcran('tuiles')
     else if (ecran === 'bilan') setEcran('tuiles')
+    else if (ecran === 'fartlek') setEcran('tuiles')
     else if (ecran === 'enseignantPin' || ecran === 'enseignant') setEcran(eleve ? 'tuiles' : 'accueil')
     else if (ecran === 'partage') setEcran(eleve ? 'tuiles' : 'accueil')
   }
@@ -225,19 +228,23 @@ export default function App() {
       )}
 
       {ecran === 'bibliotheque' && (
-        <BibliothequeEleve seances={seances} realisations={mesRealisations} eleve={eleve} onChoisirSeance={handleChoisirSeanceBibliotheque} />
+        <BibliothequeEleve seances={seances} realisations={mesRealisations} eleve={eleve} onChoisirSeance={handleChoisirSeanceBibliotheque} onLancerFartlek={() => setEcran('fartlek')} />
       )}
 
       {ecran === 'vierge' && <SeanceVierge onLancer={handleLancerSeanceVierge} />}
 
-      {ecran === 'outils' && <OutilsEleve eleve={eleve} onComposerSeance={() => setEcran('vierge')} />}
+      {ecran === 'outils' && <OutilsEleve eleve={eleve} onComposerSeance={() => setEcran('vierge')} onLancerFartlek={() => setEcran('fartlek')} />}
+
+      {ecran === 'fartlek' && (
+        <FartlekEval eleve={eleve} vmaRef={vmaRef} onTermine={() => setEcran('tuiles')} />
+      )}
 
       {ecran === 'choixNiveau' && seanceActive && (
         <ChoixNiveau seance={seanceActive} vmaRef={vmaRef} onChoisirNiveau={handleChoisirNiveau} />
       )}
 
       {ecran === 'apercu' && niveauActif && (
-        <ApercuSeance niveau={niveauActif} seanceTitre={seanceActive?.titre} vmaRef={vmaRef} onDemarrer={handleDemarrerSeance} />
+        <ApercuSeance niveau={niveauActif} seanceTitre={seanceActive?.titre} vmaRef={vmaRef} regleParticuliere={seanceActive?.regleParticuliere} onDemarrer={handleDemarrerSeance} />
       )}
 
       {ecran === 'course' && niveauActif && (
