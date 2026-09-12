@@ -11,7 +11,7 @@ import ApercuSeance from './components/ApercuSeance'
 import SeanceRunner from './components/SeanceRunner'
 import Bilan from './components/Bilan'
 import EnseignantPin from './components/EnseignantPin'
-import EnseignantDashboard from './components/EnseignantDashboard'
+import EnseignantShell from './components/EnseignantShell'
 import PartageApp from './components/PartageApp'
 import FartlekEval from './components/FartlekEval'
 import { storage } from './utils/storage'
@@ -29,6 +29,15 @@ export default function App() {
   const [seanceActive, setSeanceActive] = useState(null)
   const [niveauActif, setNiveauActif] = useState(null)
   const [dernierResultat, setDernierResultat] = useState(null)
+
+  // --- Accès enseignant (admin + collègues) ---
+  const [accesConfig, setAccesConfig] = useState({ pinAdmin: '8484', nomAdmin: 'Mr Guilhem', adminCode: '', collegues: [] })
+  const [role, setRole] = useState(() => storage.getRoleEnseignant())
+  const [codeAdminPersonnel, setCodeAdminPersonnel] = useState(() => storage.getCodeAdminPersonnel())
+
+  useEffect(() => {
+    storage.loadAccesConfig().then(setAccesConfig)
+  }, [])
 
   // Applique un éventuel code de synchro reçu par lien (?c=XXXXX, cas d'un élève qui
   // ouvre le flashcode/lien partagé par le prof) une seule fois au démarrage.
@@ -130,17 +139,48 @@ export default function App() {
     setEcran('bilan')
   }
 
-  function handleAccesEnseignant() {
-    if (storage.cloudDisponible() && !storage.getCodeSync()) {
-      storage.assurerCodeSync()
-      setCodeSyncActuel(storage.getCodeSync())
-    }
-    setEcran(storage.getPinOk() ? 'enseignant' : 'enseignantPin')
+  // Bascule cet appareil vers un autre espace (code de synchro) : utilisé quand un élève
+  // choisit son professeur, ou quand l'administrateur consulte l'espace d'un collègue
+  // (Vue globale). Ne fait rien si c'est déjà l'espace actif.
+  function handleChangerEspace(code) {
+    if (!code || code === storage.getCodeSync()) return
+    storage.viderCacheLocal()
+    storage.definirCodeSync(code)
+    setPretSync(false)
+    setCodeSyncActuel(code)
   }
 
-  function handlePinValide() {
+  function handleAccesEnseignant() {
+    // getRoleEnseignant() est requis en plus de getPinOk() pour forcer une nouvelle saisie
+    // du code après cette mise à jour (anciennes sessions sans rôle enregistré).
+    const dejaConnecte = storage.getPinOk() && storage.getRoleEnseignant()
+    setEcran(dejaConnecte ? 'enseignant' : 'enseignantPin')
+  }
+
+  function handlePinValide({ role: roleValide, nom, code }) {
     storage.setPinOk(true)
+    storage.setRoleEnseignant(roleValide)
+    storage.setNomCollegue(roleValide === 'collegue' ? nom : null)
+    setRole(roleValide)
+
+    if (roleValide === 'admin') {
+      storage.setCodeAdminPersonnel(code)
+      setCodeAdminPersonnel(code)
+      if (accesConfig.adminCode !== code) {
+        const next = { ...accesConfig, adminCode: code }
+        setAccesConfig(next)
+        storage.saveAccesConfig(next)
+      }
+    }
+
+    handleChangerEspace(code)
     setEcran('enseignant')
+  }
+
+  function handleDeconnexionEnseignant() {
+    storage.clearSessionEnseignant()
+    setRole(null)
+    setEcran(eleve ? 'tuiles' : 'demarrage')
   }
 
   function handleRetourEleve() {
@@ -225,13 +265,14 @@ export default function App() {
       )}
 
       {!eleve && ecran === 'accueil' && (
-        pretSync
-          ? <EleveLogin onConnecte={handleConnecte} onAccesEnseignant={handleAccesEnseignant} />
-          : (
-            <div className="max-w-md mx-auto px-6 py-24 text-center text-piste-500 text-sm">
-              Chargement…
-            </div>
-          )
+        <EleveLogin
+          accesConfig={accesConfig}
+          onConnecte={handleConnecte}
+          onAccesEnseignant={handleAccesEnseignant}
+          onChoisirProfesseur={handleChangerEspace}
+          chargementEspace={!pretSync}
+          refreshKey={cloudTick}
+        />
       )}
 
       {ecran === 'partage' && <PartageApp />}
@@ -268,10 +309,19 @@ export default function App() {
         <Bilan resultat={dernierResultat} niveau={niveauActif} onRetourAccueil={() => setEcran('tuiles')} />
       )}
 
-      {ecran === 'enseignantPin' && <EnseignantPin onValide={handlePinValide} onRetourEleve={handleRetourEleve} />}
+      {ecran === 'enseignantPin' && (
+        <EnseignantPin accesConfig={accesConfig} onValide={handlePinValide} onRetourEleve={handleRetourEleve} />
+      )}
 
       {ecran === 'enseignant' && (
-        <EnseignantDashboard
+        <EnseignantShell
+          role={role}
+          accesConfig={accesConfig}
+          onSauverAcces={(next) => { setAccesConfig(next); storage.saveAccesConfig(next) }}
+          espaceActif={codeSyncActuel}
+          codeAdminPersonnel={codeAdminPersonnel}
+          onChangerEspace={handleChangerEspace}
+          onDeconnexionEnseignant={handleDeconnexionEnseignant}
           seances={seances}
           setSeances={setSeances}
           realisations={realisations}
