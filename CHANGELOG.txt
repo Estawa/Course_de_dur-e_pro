@@ -1,3 +1,13 @@
+v1.31.0 — Onglet "Accès" : collègues, bases séparées, Mes classes / Vue globale
+- Nouveau système multi-professeurs : un onglet "Accès" (visible pour toi uniquement) permet d'ajouter/retirer des collègues avec un nom (civilité Mr/Mme + nom) et un code PIN personnel, et de réinitialiser le PIN d'un collègue existant sans perdre ses données
+- Chaque collègue dispose de sa propre base totalement isolée : classes, élèves, PIN, réalisations, VMA et bibliothèque de séances — rien n'est partagé avec les autres collègues ni avec toi
+- Toi seul peux consulter l'espace d'un collègue, depuis un nouvel onglet "Vue globale" (sélection du collègue dans un menu déroulant), sans que cela affecte tes propres classes ; l'onglet "Mes classes" reste toujours ton espace personnel
+- Écran "Connexion professeur" : sélection du nom (toi ou un collègue) en menu déroulant + code d'accès personnel, au lieu du code unique précédent
+- Écran d'identification élève : ajout d'un menu déroulant "Ton professeur d'EPS" en tête de page (toi ou un collègue) — l'appareil de l'élève bascule automatiquement vers les classes du professeur choisi
+- Bouton "Partager mon lien" ajouté dans l'espace enseignant (partage le lien propre à l'espace actuellement affiché)
+- Bouton "Se déconnecter" ajouté dans l'espace enseignant
+- Aucune donnée existante déplacée ni supprimée : tes classes, élèves, réalisations, VMA et bibliothèque actuels restent intacts sous ton propre espace ("Mes classes")
+
 v1.30.0 — Identification élève refondue en une seule page (modèle Muscu Pro / Escalade Pro)
 - L'écran de démarrage bascule désormais automatiquement vers l'identification élève après un bref affichage de l'icône, sans aucun clic à faire
 - Tout se passe sur UNE SEULE page : partage de l'appli (flashcode + lien), accès "Tu es professeur ? Connexion ici", puis classe, nom et code PIN qui s'enchaînent verticalement au fur et à mesure des choix, sans changement d'écran (fin des étapes séparées "Choisis ta classe" / "Trouve ton nom" / écran PIN dédié)
