@@ -18,9 +18,11 @@ export default function ImportEleves({ onImporte, onFermer }) {
   const [lignesDonnees, setLignesDonnees] = useState([])
   const [cibles, setCibles] = useState({}) // { indexColonne: 'nom' | 'prenom' | 'nomComplet' | 'classe' | 'sexe' }
   const [cochees, setCochees] = useState([])
-  const [classeParDefaut, setClasseParDefaut] = useState('')
+  const [classeCible, setClasseCible] = useState('')
+  const [forcerClasseUnique, setForcerClasseUnique] = useState(false)
   const [erreur, setErreur] = useState('')
   const inputRef = useRef(null)
+  const classesExistantes = storage.getClasses()
 
   const indexPour = (cible) => {
     const trouve = Object.entries(cibles).find(([, c]) => c === cible)
@@ -78,14 +80,15 @@ export default function ImportEleves({ onImporte, onFermer }) {
       prenom = sep.prenom
     }
     const classeBrute = iClasse !== undefined ? String(ligne[iClasse] || '').trim() : ''
-    const classe = (classeBrute || classeParDefaut.trim()).toUpperCase()
+    const classe = (forcerClasseUnique || !classeBrute ? classeCible.trim() : classeBrute).toUpperCase()
+    const classeOrigine = classeBrute ? classeBrute.toUpperCase() : ''
     const sexe = iSexe !== undefined ? normaliserSexe(ligne[iSexe]) : ''
     const existant = classe
       ? storage.getElevesClasse(classe).find(
           (e) => normaliser(e.nom) === normaliser(nom) && normaliser(e.prenom) === normaliser(prenom)
         )
       : null
-    return { matchId: existant ? existant.id : null, nom, prenom, classe, sexe }
+    return { matchId: existant ? existant.id : null, nom, prenom, classe, classeOrigine, sexe }
   }
 
   function construire() {
@@ -96,8 +99,8 @@ export default function ImportEleves({ onImporte, onFermer }) {
   }
 
   function valider(mode) {
-    if (!classeMappee && !classeParDefaut.trim()) {
-      setErreur("Indique une classe par défaut, ou associe une colonne \"Classe\".")
+    if ((!classeMappee || forcerClasseUnique) && !classeCible.trim()) {
+      setErreur('Choisis ou saisis la classe cible pour cet import.')
       return
     }
     const eleves = construire()
@@ -114,6 +117,8 @@ export default function ImportEleves({ onImporte, onFermer }) {
     setLignesDonnees([])
     setCibles({})
     setCochees([])
+    setClasseCible('')
+    setForcerClasseUnique(false)
     setErreur('')
     setEtape('choix')
   }
@@ -236,17 +241,44 @@ export default function ImportEleves({ onImporte, onFermer }) {
                 ))}
               </div>
 
-              {!classeMappee && (
-                <div>
-                  <label className="block text-sm font-medium text-piste-800 mb-1">
-                    Aucune colonne "Classe" choisie : classe à appliquer à tous ces élèves
-                  </label>
+              {classeMappee && (
+                <label className="flex items-center gap-2 text-sm text-piste-700">
                   <input
-                    value={classeParDefaut}
-                    onChange={(e) => setClasseParDefaut(e.target.value)}
-                    placeholder="Ex : 2NDE4"
+                    type="checkbox"
+                    checked={forcerClasseUnique}
+                    onChange={(e) => setForcerClasseUnique(e.target.checked)}
+                    className="rounded"
+                  />
+                  Ignorer la colonne "Classe" du fichier et tout mettre dans une seule classe
+                </label>
+              )}
+
+              {(!classeMappee || forcerClasseUnique) && (
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-piste-800">
+                    Classe cible pour tous les élèves sélectionnés
+                  </label>
+                  {classesExistantes.length > 0 && (
+                    <select
+                      value={classesExistantes.includes(classeCible.toUpperCase()) ? classeCible.toUpperCase() : ''}
+                      onChange={(e) => e.target.value && setClasseCible(e.target.value)}
+                      className="w-full rounded-xl border border-piste-200 px-3.5 py-2 text-sm bg-white"
+                    >
+                      <option value="">— Choisir une classe existante —</option>
+                      {classesExistantes.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    value={classeCible}
+                    onChange={(e) => setClasseCible(e.target.value)}
+                    placeholder="Ou saisir/ajuster le nom de la classe (ex : 2NDE4)"
                     className="w-full rounded-xl border border-piste-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-piste-500"
                   />
+                  <p className="text-[11px] text-piste-500">
+                    Tous les élèves cochés seront rattachés à cette classe, quelle que soit la valeur lue dans le fichier.
+                  </p>
                 </div>
               )}
 
@@ -290,6 +322,9 @@ export default function ImportEleves({ onImporte, onFermer }) {
                     <input type="checkbox" checked={cochees[i]} onChange={() => toggle(i)} className="rounded" />
                     <span className="text-sm text-piste-900 flex-1">
                       {e.prenom} {e.nom} <span className="text-piste-400 text-xs">· {e.classe}</span>
+                      {e.classeOrigine && e.classeOrigine !== e.classe && (
+                        <span className="text-piste-400 text-xs"> (origine {e.classeOrigine})</span>
+                      )}
                       {e.sexe && <span className="text-piste-400 text-xs"> · {e.sexe}</span>}
                     </span>
                     {(e.nom || e.prenom) && (

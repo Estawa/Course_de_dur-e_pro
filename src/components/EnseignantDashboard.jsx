@@ -119,6 +119,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
       nom: e.nom,
       prenom: e.prenom,
       sexe: e.sexe || null,
+      classeOrigine: e.classeOrigine || null,
       pinDefini: !!e.pin,
       realisations: realisationsParEleveId[e.id] || []
     }))
@@ -136,7 +137,7 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
           })
         }
       })
-    return lignes.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+    return lignes.sort((a, b) => (a.classeOrigine || '').localeCompare(b.classeOrigine || '', 'fr') || a.nom.localeCompare(b.nom, 'fr'))
   }, [classeActive, elevesDeLaClasse, realisations, realisationsParEleveId])
 
   function enregistrerSeance(seance) {
@@ -549,6 +550,9 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
                           {eleve.sexe && <span className="text-piste-400 font-normal"> ({eleve.sexe})</span>}
                         </p>
                         <p className="text-xs text-piste-500 truncate">
+                          {eleve.classeOrigine && eleve.classeOrigine !== classeActive && (
+                            <span className="text-piste-600 font-medium">{eleve.classeOrigine} · </span>
+                          )}
                           {vmaImposee
                             ? 'VMA imposée par le prof'
                             : detailVma?.autoTest

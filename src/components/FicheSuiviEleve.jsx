@@ -110,6 +110,9 @@ export default function FicheSuiviEleve({
               {eleve.prenom} {eleve.nom}
               {eleve.sexe && <span className="text-piste-400 font-normal"> ({eleve.sexe})</span>}
             </h3>
+            {eleve.classeOrigine && eleve.classeOrigine !== eleve.classe && (
+              <p className="text-[11px] text-piste-500">Classe d'origine : {eleve.classeOrigine}</p>
+            )}
             {eleve.id && !eleve.pinDefini && <p className="text-[11px] text-piste-500">PIN non défini</p>}
           </div>
           {listeEleves && (
