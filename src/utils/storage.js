@@ -183,22 +183,25 @@ export const storage = {
           const trouve = existants.find(
             (e) => e.nom.toLowerCase() === imp.nom.toLowerCase() && e.prenom.toLowerCase() === imp.prenom.toLowerCase()
           )
-          const eleve = trouve ? { ...trouve, sexe: imp.sexe || trouve.sexe || null } : { id: idEleve(), nom: imp.nom, prenom: imp.prenom, pin: null, sexe: imp.sexe || null }
+          const eleve = trouve
+            ? { ...trouve, sexe: imp.sexe || trouve.sexe || null, classeOrigine: imp.classeOrigine || trouve.classeOrigine || null }
+            : { id: idEleve(), nom: imp.nom, prenom: imp.prenom, pin: null, sexe: imp.sexe || null, classeOrigine: imp.classeOrigine || null }
           touches.push({ classe, eleve })
           return eleve
         })
       })
     } else {
-      listeValide.forEach(({ nom, prenom, classe, sexe }) => {
+      listeValide.forEach(({ nom, prenom, classe, sexe, classeOrigine }) => {
         if (!roster[classe]) roster[classe] = []
         const existant = roster[classe].find(
           (e) => e.nom.toLowerCase() === nom.toLowerCase() && e.prenom.toLowerCase() === prenom.toLowerCase()
         )
         if (existant) {
           if (sexe && !existant.sexe) existant.sexe = sexe
+          if (classeOrigine) existant.classeOrigine = classeOrigine
           touches.push({ classe, eleve: existant })
         } else {
-          const eleve = { id: idEleve(), nom, prenom, pin: null, sexe: sexe || null }
+          const eleve = { id: idEleve(), nom, prenom, pin: null, sexe: sexe || null, classeOrigine: classeOrigine || null }
           roster[classe].push(eleve)
           touches.push({ classe, eleve })
         }
