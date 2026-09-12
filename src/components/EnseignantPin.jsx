@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Lock } from 'lucide-react'
 import { PIN_ENSEIGNANT } from '../utils/storage'
 
-export default function EnseignantPin({ onValide }) {
+export default function EnseignantPin({ onValide, onRetourEleve }) {
   const [pin, setPin] = useState('')
   const [erreur, setErreur] = useState(false)
 
@@ -21,7 +21,7 @@ export default function EnseignantPin({ onValide }) {
       <div className="w-14 h-14 rounded-2xl bg-piste-800 flex items-center justify-center mx-auto mb-5">
         <Lock className="text-piste-200" size={24} />
       </div>
-      <h2 className="font-display text-xl text-piste-900 mb-1">Espace enseignant</h2>
+      <h2 className="font-display text-xl text-piste-900 mb-1">Connexion professeur</h2>
       <p className="text-sm text-piste-600 mb-6">Saisis le code d'accès.</p>
       <form onSubmit={valider}>
         <input
@@ -38,9 +38,14 @@ export default function EnseignantPin({ onValide }) {
           type="submit"
           className="w-full bg-piste-800 hover:bg-piste-700 text-white font-medium py-3 rounded-xl transition active:scale-[0.98]"
         >
-          Valider
+          Se connecter
         </button>
       </form>
+      {onRetourEleve && (
+        <button onClick={onRetourEleve} className="mt-6 text-sm text-piste-500 hover:text-piste-700 transition">
+          ← Je suis élève
+        </button>
+      )}
     </div>
   )
 }
