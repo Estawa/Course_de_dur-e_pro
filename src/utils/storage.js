@@ -8,7 +8,10 @@ const KEYS = {
   REALISATIONS: 'cdp_realisations',
   PIN_OK: 'cdp_pin_ok',
   VMA: 'cdp_vma_eleves',
-  TESTS_VISIBILITE: 'cdp_tests_visibilite'
+  TESTS_VISIBILITE: 'cdp_tests_visibilite',
+  ROLE_ENSEIGNANT: 'cdp_role_enseignant',
+  NOM_COLLEGUE: 'cdp_nom_collegue',
+  CODE_ADMIN_PERSONNEL: 'cdp_code_admin_personnel'
 }
 
 function read(key, fallback) {
@@ -145,6 +148,40 @@ export const storage = {
   getCodeSync: () => cloud.getCodeSync(),
   assurerCodeSync: () => cloud.assurerCodeSync(),
   appliquerCodeDepuisLien: (code) => cloud.appliquerCodeDepuisLien(code),
+  // Bascule explicitement ce device vers un autre espace (code de synchro) — utilisé quand
+  // un élève choisit son professeur, ou quand l'administrateur consulte l'espace d'un
+  // collègue (Vue globale). Toujours appelé après storage.viderCacheLocal().
+  definirCodeSync: (code) => cloud.definirCodeSync(code),
+  // Vide le cache local (roster, séances, réalisations, VMA, tests) avant de basculer vers
+  // un autre espace, pour ne jamais mélanger les données de deux professeurs différents sur
+  // le même appareil le temps que la synchro cloud du nouvel espace arrive.
+  viderCacheLocal: () => {
+    write(KEYS.ROSTER, {})
+    write(KEYS.SEANCES, [])
+    write(KEYS.REALISATIONS, [])
+    write(KEYS.VMA, {})
+    write(KEYS.TESTS_VISIBILITE, {})
+  },
+
+  // --- Accès enseignant (admin + collègues) ---
+  loadAccesConfig: () => cloud.loadAccesConfig(cloud.getCodeSync()),
+  saveAccesConfig: (config) => cloud.saveAccesConfig(config),
+  genererCode: () => cloud.genererCode(),
+
+  // --- Session enseignant (qui est connecté : admin ou tel collègue) ---
+  getRoleEnseignant: () => read(KEYS.ROLE_ENSEIGNANT, null),
+  setRoleEnseignant: (role) => write(KEYS.ROLE_ENSEIGNANT, role),
+  getNomCollegue: () => read(KEYS.NOM_COLLEGUE, null),
+  setNomCollegue: (nom) => write(KEYS.NOM_COLLEGUE, nom),
+  // Code de synchro personnel de l'administrateur, mémorisé sur son appareil dès sa première
+  // connexion réussie, pour pouvoir y revenir après avoir consulté l'espace d'un collègue.
+  getCodeAdminPersonnel: () => read(KEYS.CODE_ADMIN_PERSONNEL, null),
+  setCodeAdminPersonnel: (code) => write(KEYS.CODE_ADMIN_PERSONNEL, code),
+  clearSessionEnseignant: () => {
+    localStorage.removeItem(KEYS.PIN_OK)
+    localStorage.removeItem(KEYS.ROLE_ENSEIGNANT)
+    localStorage.removeItem(KEYS.NOM_COLLEGUE)
+  },
 
   // Démarre l'écoute temps réel (si un code de synchro est actif) : à chaque mise à jour
   // distante, fusionne dans le stockage local puis appelle callback(type) pour que l'UI
@@ -483,5 +520,3 @@ export const storage = {
     cloud.cloudEcrireTestsVisibilite(all)
   }
 }
-
-export const PIN_ENSEIGNANT = '8484'
