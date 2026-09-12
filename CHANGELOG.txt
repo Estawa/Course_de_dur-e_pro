@@ -1,3 +1,9 @@
+v1.30.0 — Identification élève refondue en une seule page (modèle Muscu Pro / Escalade Pro)
+- L'écran de démarrage bascule désormais automatiquement vers l'identification élève après un bref affichage de l'icône, sans aucun clic à faire
+- Tout se passe sur UNE SEULE page : partage de l'appli (flashcode + lien), accès "Tu es professeur ? Connexion ici", puis classe, nom et code PIN qui s'enchaînent verticalement au fur et à mesure des choix, sans changement d'écran (fin des étapes séparées "Choisis ta classe" / "Trouve ton nom" / écran PIN dédié)
+- Écran "Connexion professeur" renommé et complété d'un lien de retour "← Je suis élève"
+- Repli "aucune classe importée" conservé (prénom/nom/classe en saisie libre) mais intégré à la même page unique
+
 v1.21.0 — Correction du bruit GPS à l'arrêt (VAM-EVAL)
 - La vitesse instantanée affichée pendant le test VAM-EVAL est désormais arrondie à 0 km/h tant qu'elle reste sous 0,5 km/h, pour éviter d'afficher une vitesse résiduelle liée au bruit naturel du GPS (dérive de position de quelques mètres) quand l'élève est réellement à l'arrêt
 
