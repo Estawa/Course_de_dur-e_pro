@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { Footprints, Lock, Copy, Check, Share2, ChevronRight } from 'lucide-react'
 import { storage } from '../utils/storage'
 
-function PartagerApp() {
+function PartagerApp({ code }) {
   const canvasRef = useRef(null)
   const [ouvert, setOuvert] = useState(false)
   const [lien, setLien] = useState('')
@@ -11,10 +11,10 @@ function PartagerApp() {
 
   useEffect(() => {
     if (!ouvert) return
-    // Lien de l'appli avec le code de synchro embarqué, pour que l'élève rejoigne
-    // automatiquement le même espace cloud que le prof (voir utils/cloud.js).
+    // Lien de l'appli avec le code de synchro du professeur sélectionné, pour que l'élève
+    // rejoigne automatiquement son espace (voir utils/cloud.js). Sans professeur choisi, le
+    // lien reste générique (l'élève choisira lui-même en l'ouvrant).
     const base = window.location.origin + window.location.pathname
-    const code = storage.cloudDisponible() ? storage.assurerCodeSync() : ''
     const url = code ? `${base}?c=${encodeURIComponent(code)}` : base
     setLien(url)
     if (canvasRef.current) {
@@ -24,7 +24,7 @@ function PartagerApp() {
         color: { dark: '#1c2b21', light: '#ffffff' }
       })
     }
-  }, [ouvert])
+  }, [ouvert, code])
 
   function copierLien() {
     navigator.clipboard.writeText(lien).then(() => {
@@ -65,7 +65,7 @@ function PartagerApp() {
           <button type="button" onClick={copierLien} className="w-full bg-piste-50 text-piste-700 text-xs font-medium rounded-lg py-2.5 flex items-center justify-center gap-1.5">
             {copie ? <><Check size={13} /> Lien copié</> : <><Copy size={13} /> Copier le lien</>}
           </button>
-          <p className="text-[10px] text-piste-400 text-center">Fais scanner ce code, ou transmets le lien pour que chaque élève ouvre l'appli connectée à la même classe.</p>
+          <p className="text-[10px] text-piste-400 text-center">Fais scanner ce code, ou transmets le lien pour que chaque élève ouvre l'appli connectée au même professeur.</p>
         </div>
       )}
     </div>
@@ -85,11 +85,39 @@ function LienEnseignant({ onAccesEnseignant }) {
   )
 }
 
-// Tout se passe sur UNE SEULE page (comme Muscu Pro / Escalade Pro) : classe, nom et code
-// PIN s'enchaînent verticalement au fur et à mesure des choix, sans changement d'écran.
-// Course de Durée Pro n'a qu'un seul professeur : pas de sélection de professeur ici.
-export default function EleveLogin({ onConnecte, onAccesEnseignant }) {
-  const [classes] = useState(() => storage.getClasses())
+// Tout se passe sur UNE SEULE page (comme Muscu Pro / Escalade Pro) : professeur, classe,
+// nom et code PIN s'enchaînent verticalement au fur et à mesure des choix, sans changement
+// d'écran. Le choix du professeur bascule silencieusement cet appareil vers son espace
+// (chaque professeur a ses propres classes, complètement isolées des autres).
+export default function EleveLogin({ accesConfig, onConnecte, onAccesEnseignant, onChoisirProfesseur, chargementEspace, refreshKey }) {
+  const professeurs = useMemo(() => {
+    const liste = [{ id: 'admin', nom: accesConfig?.nomAdmin || 'Mr Guilhem', code: accesConfig?.adminCode || '' }]
+    ;(accesConfig?.collegues || []).forEach((c) => liste.push({ id: c.id, nom: c.nom, code: c.code }))
+    return liste
+  }, [accesConfig])
+
+  // Présélectionne le professeur déjà associé au code actif de cet appareil (lien partagé
+  // ouvert précédemment, ou professeur unique déjà utilisé) ; sinon, si un seul professeur
+  // existe (cas courant : pas encore de collègue ajouté), le sélectionne directement.
+  const [profId, setProfId] = useState(() => {
+    const codeActif = storage.getCodeSync()
+    const trouve = professeurs.find((p) => p.code && p.code === codeActif)
+    if (trouve) return trouve.id
+    if (professeurs.length === 1 && professeurs[0].code) return professeurs[0].id
+    return ''
+  })
+
+  // Bascule l'espace dès qu'un professeur différent de l'espace actif est choisi (y compris
+  // au tout premier rendu, pour le cas de présélection ci-dessus).
+  useEffect(() => {
+    const prof = professeurs.find((p) => p.id === profId)
+    if (prof && prof.code && prof.code !== storage.getCodeSync()) {
+      onChoisirProfesseur(prof.code)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profId])
+
+  const classes = chargementEspace ? [] : storage.getClasses()
   const aDesClasses = classes.length > 0
 
   const [classe, setClasse] = useState('')
@@ -105,9 +133,16 @@ export default function EleveLogin({ onConnecte, onAccesEnseignant }) {
   const eleveSelectionne = eleveId ? storage.trouverEleve(classe, eleveId) : null
   const premierePinEnCours = !!eleveSelectionne && !eleveSelectionne.pin
 
-  const identitePrete = aDesClasses
+  const identitePrete = !chargementEspace && (aDesClasses
     ? !!eleveId
-    : (prenomManuel.trim() && nomManuel.trim() && classeManuelle.trim())
+    : (prenomManuel.trim() && nomManuel.trim() && classeManuelle.trim()))
+
+  function choisirProfesseur(id) {
+    setProfId(id)
+    setClasse('')
+    setEleveId('')
+    setErreur('')
+  }
 
   function choisirClasse(c) {
     setClasse(c)
@@ -165,7 +200,7 @@ export default function EleveLogin({ onConnecte, onAccesEnseignant }) {
 
   return (
     <div className="max-w-md mx-auto px-6 py-10">
-      <PartagerApp />
+      <PartagerApp code={professeurs.find((p) => p.id === profId)?.code || ''} />
       <LienEnseignant onAccesEnseignant={onAccesEnseignant} />
 
       <div className="flex flex-col items-center text-center mb-8">
@@ -179,7 +214,25 @@ export default function EleveLogin({ onConnecte, onAccesEnseignant }) {
       {erreur && <p className="text-alerte text-sm text-center mb-4">{erreur}</p>}
 
       <form onSubmit={valider} className="space-y-4">
-        {aDesClasses ? (
+        <div>
+          <label className="block text-sm font-medium text-piste-800 mb-1">Ton professeur d'EPS</label>
+          <select
+            value={profId}
+            onChange={(e) => choisirProfesseur(e.target.value)}
+            className="w-full bg-white border-2 border-piste-100 focus:border-piste-500 rounded-xl px-4 py-3.5 font-medium text-piste-900 transition focus:outline-none"
+          >
+            <option value="" disabled>Sélectionne ton professeur...</option>
+            {professeurs.map((p) => (
+              <option key={p.id} value={p.id}>{p.nom}</option>
+            ))}
+          </select>
+        </div>
+
+        {profId && chargementEspace && (
+          <p className="text-sm text-piste-500">Chargement des classes...</p>
+        )}
+
+        {profId && !chargementEspace && aDesClasses && (
           <>
             <div>
               <label className="block text-sm font-medium text-piste-800 mb-1">Ta classe</label>
@@ -214,7 +267,9 @@ export default function EleveLogin({ onConnecte, onAccesEnseignant }) {
               </div>
             )}
           </>
-        ) : (
+        )}
+
+        {profId && !chargementEspace && !aDesClasses && (
           <>
             <div>
               <label className="block text-sm font-medium text-piste-800 mb-1">Prénom</label>
