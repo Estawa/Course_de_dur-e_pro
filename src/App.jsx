@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Header from './components/Header'
+import Demarrage from './components/Demarrage'
 import EleveLogin from './components/EleveLogin'
 import AccueilTuiles from './components/AccueilTuiles'
 import BibliothequeEleve from './components/BibliothequeEleve'
@@ -24,7 +25,7 @@ export default function App() {
   const [pretSync, setPretSync] = useState(false)
   const [codeSyncActuel, setCodeSyncActuel] = useState(() => storage.getCodeSync())
 
-  const [ecran, setEcran] = useState(() => (storage.getEleveActif() ? 'tuiles' : 'accueil'))
+  const [ecran, setEcran] = useState(() => (storage.getEleveActif() ? 'tuiles' : 'demarrage'))
   const [seanceActive, setSeanceActive] = useState(null)
   const [niveauActif, setNiveauActif] = useState(null)
   const [dernierResultat, setDernierResultat] = useState(null)
@@ -142,6 +143,10 @@ export default function App() {
     setEcran('enseignant')
   }
 
+  function handleRetourEleve() {
+    setEcran('accueil')
+  }
+
   const mesRealisations = eleve
     ? realisations.filter((r) =>
         r.eleve.id
@@ -172,6 +177,7 @@ export default function App() {
   }
 
   const titres = {
+    demarrage: '',
     accueil: eleve ? 'Mes séances' : 'Identification',
     tuiles: 'Accueil',
     bibliotheque: 'Bibliothèque',
@@ -187,7 +193,8 @@ export default function App() {
     fartlek: 'Fartlek évaluatif'
   }
 
-  const peutRevenir = ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'course', 'bilan', 'enseignant', 'enseignantPin', 'partage', 'fartlek'].includes(ecran)
+  const peutRevenir = ['accueil', 'bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'course', 'bilan', 'enseignant', 'enseignantPin', 'partage', 'fartlek'].includes(ecran)
+  const afficherHeader = ecran !== 'demarrage' && ecran !== 'accueil'
 
   function handleRetour() {
     if (['bibliotheque', 'vierge', 'outils'].includes(ecran)) setEcran('tuiles')
@@ -196,24 +203,30 @@ export default function App() {
     else if (ecran === 'course') setEcran('tuiles')
     else if (ecran === 'bilan') setEcran('tuiles')
     else if (ecran === 'fartlek') setEcran('tuiles')
-    else if (ecran === 'enseignantPin' || ecran === 'enseignant') setEcran(eleve ? 'tuiles' : 'accueil')
-    else if (ecran === 'partage') setEcran(eleve ? 'tuiles' : 'accueil')
+    else if (ecran === 'accueil' || ecran === 'enseignantPin' || ecran === 'enseignant') setEcran(eleve ? 'tuiles' : 'demarrage')
+    else if (ecran === 'partage') setEcran(eleve ? 'tuiles' : 'demarrage')
   }
 
   return (
     <div className="min-h-screen bg-white font-body">
-      <Header
-        title={titres[ecran]}
-        onBack={peutRevenir ? handleRetour : null}
-        onEnseignant={handleAccesEnseignant}
-        showEnseignant={ecran !== 'course'}
-        onPartager={() => setEcran('partage')}
-        showPartage={ecran === 'accueil'}
-      />
+      {afficherHeader && (
+        <Header
+          title={titres[ecran]}
+          onBack={peutRevenir ? handleRetour : null}
+          onEnseignant={handleAccesEnseignant}
+          showEnseignant={ecran !== 'course'}
+          onPartager={() => setEcran('partage')}
+          showPartage={false}
+        />
+      )}
+
+      {ecran === 'demarrage' && (
+        <Demarrage onTermine={() => setEcran('accueil')} />
+      )}
 
       {!eleve && ecran === 'accueil' && (
         pretSync
-          ? <EleveLogin onConnecte={handleConnecte} />
+          ? <EleveLogin onConnecte={handleConnecte} onAccesEnseignant={handleAccesEnseignant} />
           : (
             <div className="max-w-md mx-auto px-6 py-24 text-center text-piste-500 text-sm">
               Chargement…
@@ -255,7 +268,7 @@ export default function App() {
         <Bilan resultat={dernierResultat} niveau={niveauActif} onRetourAccueil={() => setEcran('tuiles')} />
       )}
 
-      {ecran === 'enseignantPin' && <EnseignantPin onValide={handlePinValide} />}
+      {ecran === 'enseignantPin' && <EnseignantPin onValide={handlePinValide} onRetourEleve={handleRetourEleve} />}
 
       {ecran === 'enseignant' && (
         <EnseignantDashboard
