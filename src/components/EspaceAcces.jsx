@@ -6,13 +6,36 @@ import ChangerPin from './ChangerPin'
 // N'apparaît que côté administrateur, une fois : recopie classes/élèves/séances réalisées/VMA
 // de l'ancien espace vers l'espace actuel (fusion, sans écraser ni dupliquer — voir
 // storage.migrerAncienEspace).
-function MigrationAncienneVersion({ onMigrer, onMigrerTout }) {
+function MigrationAncienneVersion({ onMigrer, onMigrerTout, onMigrerListe }) {
   const [code, setCode] = useState('')
   const [enCours, setEnCours] = useState(false)
   const [resultat, setResultat] = useState(null)
   const [erreur, setErreur] = useState('')
 
-  const [enCoursTout, setEnCoursTout] = useState(false)
+  const [enCoursListe, setEnCoursListe] = useState(false)
+  const [resultatListe, setResultatListe] = useState(null)
+  const [erreurListe, setErreurListe] = useState('')
+  const [codesListe, setCodesListe] = useState(
+    ['10DO3Z', '2E3Q22', '65YRB9', '81QLL3', 'D1SUN6', 'FLAE25', 'G56C39', 'NHGP7S', 'NRQHJX', 'P7R9QQ', 'UG928P', 'UTEH53', 'V5LCS0', 'W2S3SH', 'WKXU5G', 'ZD0GXK'].join('\n')
+  )
+
+  async function validerListe() {
+    const codes = codesListe.split(/[\s,]+/).map((c) => c.trim().toUpperCase()).filter(Boolean)
+    if (codes.length === 0) return
+    if (!confirm(`Migrer ces ${codes.length} code(s) ?`)) return
+    setErreurListe('')
+    setResultatListe(null)
+    setEnCoursListe(true)
+    try {
+      const res = await onMigrerListe(codes)
+      setResultatListe(res)
+    } catch (e2) {
+      setErreurListe(e2.message || 'Échec de la migration.')
+    } finally {
+      setEnCoursListe(false)
+    }
+  }
+
   const [resultatTout, setResultatTout] = useState(null)
   const [erreurTout, setErreurTout] = useState('')
 
@@ -58,31 +81,66 @@ function MigrationAncienneVersion({ onMigrer, onMigrerTout }) {
         recopie ici (fusion, sans rien dupliquer si tu relances l'opération).
       </p>
 
-      <button
-        onClick={validerTout}
-        disabled={enCoursTout}
-        className="w-full flex items-center justify-center gap-1.5 bg-piste-800 hover:bg-piste-700 disabled:opacity-50 text-white text-sm font-medium px-3.5 py-2.5 rounded-lg transition mb-2"
-      >
-        <DownloadCloud size={15} /> {enCoursTout ? 'Migration en cours (peut prendre un moment)...' : 'Tout migrer d\'un coup'}
-      </button>
-      {erreurTout && <p className="text-alerte text-xs mb-2">{erreurTout}</p>}
-      {resultatTout && (
-        <div className="text-xs text-piste-700 mb-3 space-y-1.5">
-          <p>
-            {resultatTout.nbCodesTraites} ancien(s) espace(s) trouvé(s) et traité(s) : au total{' '}
-            {resultatTout.total.nbClasses} classe(s), {resultatTout.total.nbEleves} élève(s),{' '}
-            {resultatTout.total.nbRealisations} séance(s) réalisée(s) et {resultatTout.total.nbVma} fiche(s) VMA récupérées.
+      <div className="bg-white rounded-lg border border-piste-200 p-3 mb-3">
+        <p className="text-xs font-medium text-piste-700 mb-1.5">
+          Liste de codes à migrer (un par ligne — déjà pré-remplie avec ceux trouvés dans ta console Firebase)
+        </p>
+        <textarea
+          value={codesListe}
+          onChange={(e) => setCodesListe(e.target.value)}
+          rows={6}
+          className="w-full rounded-lg border border-piste-200 px-3 py-2 text-xs font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-piste-500"
+        />
+        <button
+          onClick={validerListe}
+          disabled={enCoursListe}
+          className="w-full mt-2 flex items-center justify-center gap-1.5 bg-piste-800 hover:bg-piste-700 disabled:opacity-50 text-white text-sm font-medium px-3.5 py-2.5 rounded-lg transition"
+        >
+          <DownloadCloud size={15} /> {enCoursListe ? 'Migration en cours (peut prendre un moment)...' : `Migrer ces ${codesListe.split(/[\s,]+/).filter(Boolean).length} code(s)`}
+        </button>
+        {erreurListe && <p className="text-alerte text-xs mt-2">{erreurListe}</p>}
+        {resultatListe && (
+          <div className="text-xs text-piste-700 mt-2 space-y-1.5">
+            <p>
+              {resultatListe.nbCodesTraites} code(s) traité(s) : au total{' '}
+              {resultatListe.total.nbClasses} classe(s), {resultatListe.total.nbEleves} élève(s),{' '}
+              {resultatListe.total.nbRealisations} séance(s) réalisée(s) et {resultatListe.total.nbVma} fiche(s) VMA récupérées.
+            </p>
+            {resultatListe.detail.some((d) => !d.ok) && (
+              <div className="bg-white rounded-lg p-2 border border-alerte/30">
+                <p className="text-alerte font-medium mb-1">Codes en échec :</p>
+                {resultatListe.detail.filter((d) => !d.ok).map((d) => (
+                  <p key={d.code} className="text-piste-600">{d.code} : {d.erreur}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <details className="text-xs mb-2">
+        <summary className="text-piste-600 cursor-pointer select-none">Essayer la détection automatique à la place</summary>
+        <div className="mt-3">
+          <p className="text-piste-500 mb-2">
+            Ne fonctionne que si les règles Firestore autorisent le listage de la collection "profs" — sinon utilise la liste de codes ci-dessus.
           </p>
-          {resultatTout.detail.some((d) => !d.ok) && (
-            <div className="bg-white rounded-lg p-2 border border-alerte/30">
-              <p className="text-alerte font-medium mb-1">Codes en échec (réessaie plus tard, ou vérifie-les manuellement ci-dessous) :</p>
-              {resultatTout.detail.filter((d) => !d.ok).map((d) => (
-                <p key={d.code} className="text-piste-600">{d.code} : {d.erreur}</p>
-              ))}
-            </div>
+          <button
+            onClick={validerTout}
+            disabled={enCoursTout}
+            className="w-full flex items-center justify-center gap-1.5 bg-white border border-piste-300 hover:bg-piste-100 disabled:opacity-50 text-piste-800 text-sm font-medium px-3.5 py-2 rounded-lg transition"
+          >
+            {enCoursTout ? 'Migration en cours...' : 'Tenter la détection automatique'}
+          </button>
+          {erreurTout && <p className="text-alerte text-xs mt-2">{erreurTout}</p>}
+          {resultatTout && (
+            <p className="text-xs text-piste-700 mt-2">
+              {resultatTout.nbCodesTraites} ancien(s) espace(s) trouvé(s) et traité(s) : au total{' '}
+              {resultatTout.total.nbClasses} classe(s), {resultatTout.total.nbEleves} élève(s),{' '}
+              {resultatTout.total.nbRealisations} séance(s) réalisée(s) et {resultatTout.total.nbVma} fiche(s) VMA récupérées.
+            </p>
           )}
         </div>
-      )}
+      </details>
 
       <details className="text-xs">
         <summary className="text-piste-600 cursor-pointer select-none">Migrer un code précis manuellement</summary>
@@ -214,7 +272,7 @@ function NomAdmin({ nomAdmin, onChanger }) {
 // accesConfig: { pinAdmin, nomAdmin, collegues: [{ id, nom, pin }] }
 // onChangerPinAdmin(nouveauPin), onChangerNomAdmin(nom), onAjouterCollegue(nom, pin),
 // onSupprimerCollegue(id), onReinitialiserPinCollegue(id, nouveauPin)
-export default function EspaceAcces({ accesConfig, onChangerPinAdmin, onChangerNomAdmin, onAjouterCollegue, onSupprimerCollegue, onReinitialiserPinCollegue, onMigrer, onMigrerTout }) {
+export default function EspaceAcces({ accesConfig, onChangerPinAdmin, onChangerNomAdmin, onAjouterCollegue, onSupprimerCollegue, onReinitialiserPinCollegue, onMigrer, onMigrerTout, onMigrerListe }) {
   const [nom, setNom] = useState('')
   const [pin, setPin] = useState('')
   const [erreur, setErreur] = useState('')
@@ -262,7 +320,7 @@ export default function EspaceAcces({ accesConfig, onChangerPinAdmin, onChangerN
         <ChangerPin pinActuel={accesConfig.pinAdmin} onChanger={onChangerPinAdmin} />
         {onMigrer && (
           <div className="mt-3 pt-3 border-t border-piste-100">
-            <MigrationAncienneVersion onMigrer={onMigrer} onMigrerTout={onMigrerTout} />
+            <MigrationAncienneVersion onMigrer={onMigrer} onMigrerTout={onMigrerTout} onMigrerListe={onMigrerListe} />
           </div>
         )}
       </div>
