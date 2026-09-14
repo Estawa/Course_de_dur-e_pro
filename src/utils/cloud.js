@@ -1,24 +1,22 @@
-// Synchronisation cloud (Firestore) entre les appareils des élèves et celui du prof.
+// Synchronisation cloud (Firestore), multi-professeurs.
 //
-// Contexte : chaque élève ouvre l'appli sur son PROPRE téléphone (via le flashcode/lien).
-// Sans backend partagé, ses données (PIN, séances réalisées, VMA) resteraient enfermées
-// sur son appareil et ne remonteraient jamais chez le prof. Ce module ajoute une couche
-// de synchronisation par-dessus le stockage local existant (voir storage.js) :
-//   - chaque écriture locale est aussi envoyée vers Firestore (best effort, non bloquant)
-//   - un "code de synchro" identifie l'espace partagé (équivalent d'une salle de classe
-//     virtuelle) ; le prof le génère une fois, et il est embarqué dans le lien/flashcode
-//     de partage pour que chaque élève rejoigne automatiquement le même espace
-//   - des écouteurs temps réel (onSnapshot) tiennent le stockage local à jour dès qu'un
-//     autre appareil écrit quelque chose (nouvel élève, PIN, séance, VMA...)
+// Chaque enseignant autorisé (l'administrateur = Christophe, ou un collègue ajouté depuis
+// l'espace "Accès") a son propre espace de données, isolé des autres, identifié par un
+// teacherId stable : 'admin' pour Christophe, ou l'id du collègue (généré une fois à sa
+// création et jamais réutilisé, même si son code PIN est réinitialisé ensuite). Un élève
+// choisit son professeur dans une liste au moment de se connecter ; ses données rejoignent
+// alors l'espace de ce professeur.
 //
-// Pas d'authentification Firebase : le "code" fait office de clé partagée, comme pour
-// la synchro d'EPS Pro. Voir les règles Firestore fournies séparément.
+// Contrairement à l'ancienne version (un seul professeur, code de synchro généré et embarqué
+// dans un lien/QR), il n'y a plus aucune valeur à mémoriser sur l'appareil pour choisir le bon
+// espace : la sélection se fait à chaque connexion, dans une liste toujours à jour. Ça élimine
+// la classe de bugs où un appareil restait bloqué sur un espace périmé.
+//
+// Pas d'authentification Firebase : les codes PIN (admin + collègues) font office de clé
+// partagée, comme pour la synchro des autres applis de Christophe.
 
 import { initializeApp } from 'firebase/app'
-import {
-  getFirestore,
-  doc, setDoc, deleteDoc, getDocs, collection, onSnapshot
-} from 'firebase/firestore'
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBkvREh1dwRmMZOriWka5rCK9WdER2oJOQ',
@@ -29,164 +27,189 @@ const firebaseConfig = {
   appId: '1:165570802992:web:5ea14d50283abdbca284f5'
 }
 
-// NB : pas de cache persistant (IndexedDB) pour l'instant — souvent restreint en
-// navigation privée sur mobile, ce qui peut faire échouer Firestore silencieusement.
-// On reviendra sur le mode hors-ligne une fois la synchro de base bien fiable.
 let db = null
 try {
   const app = initializeApp(firebaseConfig)
   db = getFirestore(app)
 } catch (e) {
-  // Pas bloquant : l'appli continue de fonctionner en local uniquement.
   console.warn('Firestore indisponible, mode local uniquement.', e)
   db = null
 }
 
 export const cloudDisponible = () => !!db
 
-const KEY_CODE = 'cdp_code_sync'
+// --- Accès (administrateur + collègues) : config unique, partagée par tous les appareils,
+// indépendante de tout teacherId puisqu'elle sert justement à définir la liste des teacherId
+// valides. ---
 
-export function getCodeSync() {
+export function accesParDefaut(pinAdminParDefaut) {
+  return { pinAdmin: pinAdminParDefaut || '8484', nomAdmin: 'Mr Guilhem', collegues: [] }
+}
+
+export async function loadAccesConfig(pinAdminParDefaut) {
+  if (!db) return accesParDefaut(pinAdminParDefaut)
   try {
-    return localStorage.getItem(KEY_CODE) || ''
-  } catch {
-    return ''
+    const snap = await getDoc(doc(db, 'cdp_acces', 'config'))
+    if (snap.exists()) {
+      const d = snap.data()
+      return {
+        pinAdmin: d.pinAdmin || pinAdminParDefaut || '8484',
+        nomAdmin: d.nomAdmin || 'Mr Guilhem',
+        collegues: Array.isArray(d.collegues) ? d.collegues : []
+      }
+    }
+  } catch (e) {
+    console.warn('Chargement accès impossible', e)
   }
+  return accesParDefaut(pinAdminParDefaut)
 }
 
-export function definirCodeSync(code) {
+export async function saveAccesConfig(config) {
+  if (!db) return
+  await setDoc(doc(db, 'cdp_acces', 'config'), config).catch(() => {})
+}
+
+// --- Roster (classes + élèves) d'un enseignant : un seul document par teacherId. ---
+
+export async function loadRosterTeacher(teacherId) {
+  if (!db) return {}
   try {
-    localStorage.setItem(KEY_CODE, code)
-  } catch {
-    /* ignore */
+    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'roster'))
+    return snap.exists() && snap.data().classes ? snap.data().classes : {}
+  } catch (e) {
+    console.warn('Chargement roster impossible', e)
+    return {}
   }
 }
 
-// Génère (une seule fois) un code de synchro pour ce prof, s'il n'en a pas déjà un.
-export function assurerCodeSync() {
-  let code = getCodeSync()
-  if (!code) {
-    code = Math.random().toString(36).slice(2, 8).toUpperCase()
-    definirCodeSync(code)
+export async function saveRosterTeacher(teacherId, roster) {
+  if (!db) return
+  await setDoc(doc(db, 'profs', teacherId, 'meta', 'roster'), { classes: roster }).catch(() => {})
+}
+
+// --- Réalisations (séances/tests réalisés) d'un enseignant : une collection, un document par
+// réalisation. ---
+
+function colRealisations(teacherId) {
+  return collection(db, 'profs', teacherId, 'realisations')
+}
+
+export async function loadRealisationsTeacher(teacherId) {
+  if (!db) return []
+  try {
+    const snap = await getDocs(colRealisations(teacherId))
+    return snap.docs.map((d) => d.data())
+  } catch (e) {
+    console.warn('Chargement réalisations impossible', e)
+    return []
   }
-  return code
 }
 
-// Appelé au démarrage côté élève si un code est présent dans le lien (?c=XXXXX).
-// Le lien/flashcode fait toujours foi : s'il porte un code différent de celui déjà
-// enregistré sur l'appareil (ancien test, ancien lien...), on bascule dessus, sinon
-// un appareil resterait bloqué indéfiniment sur un espace périmé même en rouvrant le
-// lien à jour. Retourne true si le code a changé (pour vider le roster local périmé).
-export function appliquerCodeDepuisLien(code) {
-  if (!code) return false
-  const actuel = getCodeSync()
-  if (code === actuel) return false
-  definirCodeSync(code)
-  return true
+export function cloudEcrireRealisation(teacherId, realisation) {
+  if (!db) return
+  setDoc(doc(colRealisations(teacherId), realisation.id), realisation).catch(() => {})
 }
 
-function actif() {
-  return !!(db && getCodeSync())
+export function cloudSupprimerRealisation(teacherId, id) {
+  if (!db) return
+  deleteDoc(doc(colRealisations(teacherId), id)).catch(() => {})
 }
 
-function colEleves() {
-  return collection(db, 'profs', getCodeSync(), 'eleves')
-}
-function colRealisations() {
-  return collection(db, 'profs', getCodeSync(), 'realisations')
-}
-function colVma() {
-  return collection(db, 'profs', getCodeSync(), 'vma')
-}
-function docSeances() {
-  return doc(db, 'profs', getCodeSync(), 'meta', 'seances')
-}
-function docTestsVisibilite() {
-  return doc(db, 'profs', getCodeSync(), 'meta', 'testsVisibilite')
+// --- VMA (par élève) d'un enseignant : une collection, un document par élève (clé = cleEleve). ---
+
+function colVma(teacherId) {
+  return collection(db, 'profs', teacherId, 'vma')
 }
 
-// --- Écritures (best effort : jamais bloquantes, jamais d'exception remontée à l'appelant) ---
-
-export function cloudEcrireEleve(classe, eleve) {
-  if (!actif()) return
-  setDoc(doc(colEleves(), eleve.id), { ...eleve, classe }).catch(() => {})
-}
-
-export function cloudSupprimerEleve(eleveId) {
-  if (!actif()) return
-  deleteDoc(doc(colEleves(), eleveId)).catch(() => {})
-}
-
-export function cloudEcrireRealisation(realisation) {
-  if (!actif()) return
-  setDoc(doc(colRealisations(), realisation.id), realisation).catch(() => {})
-}
-
-export function cloudSupprimerRealisation(id) {
-  if (!actif()) return
-  deleteDoc(doc(colRealisations(), id)).catch(() => {})
-}
-
-export function cloudEcrireVma(cle, detail) {
-  if (!actif()) return
-  setDoc(doc(colVma(), cle), detail).catch(() => {})
-}
-
-export function cloudEcrireSeances(seances) {
-  if (!actif()) return
-  setDoc(docSeances(), { liste: seances }).catch(() => {})
-}
-
-export function cloudEcrireTestsVisibilite(visibilite) {
-  if (!actif()) return
-  setDoc(docTestsVisibilite(), { data: visibilite }).catch(() => {})
-}
-
-// --- Lecture initiale (une fois, au démarrage) + écoute temps réel ---
-// callback(type, data) est appelé à chaque mise à jour, avec type ∈ 'eleves' | 'realisations' | 'vma' | 'seances'
-
-export function demarrerSynchro(callback) {
-  if (!actif()) return () => {}
-  const arrets = []
-
-  arrets.push(onSnapshot(colEleves(), (snap) => {
-    callback('eleves', snap.docs.map((d) => d.data()))
-  }, (err) => console.warn('Synchro élèves indisponible', err)))
-
-  arrets.push(onSnapshot(colRealisations(), (snap) => {
-    callback('realisations', snap.docs.map((d) => d.data()))
-  }, (err) => console.warn('Synchro séances indisponible', err)))
-
-  arrets.push(onSnapshot(colVma(), (snap) => {
+export async function loadVmaTeacher(teacherId) {
+  if (!db) return {}
+  try {
+    const snap = await getDocs(colVma(teacherId))
     const all = {}
     snap.docs.forEach((d) => { all[d.id] = d.data() })
-    callback('vma', all)
-  }, (err) => console.warn('Synchro VMA indisponible', err)))
-
-  arrets.push(onSnapshot(docSeances(), (snap) => {
-    callback('seances', snap.exists() ? snap.data().liste || [] : [])
-  }, (err) => console.warn('Synchro bibliothèque indisponible', err)))
-
-  arrets.push(onSnapshot(docTestsVisibilite(), (snap) => {
-    callback('testsVisibilite', snap.exists() ? snap.data().data || {} : {})
-  }, (err) => console.warn('Synchro tests indisponible', err)))
-
-  return () => arrets.forEach((arret) => arret())
+    return all
+  } catch (e) {
+    console.warn('Chargement VMA impossible', e)
+    return {}
+  }
 }
 
-// Récupération ponctuelle (sans écoute), utile pour un import initial explicite si besoin.
-export async function recupererTout() {
-  if (!actif()) return null
-  const [eleves, realisations, vma] = await Promise.all([
-    getDocs(colEleves()),
-    getDocs(colRealisations()),
-    getDocs(colVma())
+export function cloudEcrireVma(teacherId, cle, detail) {
+  if (!db) return
+  setDoc(doc(colVma(teacherId), cle), detail).catch(() => {})
+}
+
+// --- Bibliothèque de séances d'un enseignant : un seul document. ---
+
+export async function loadSeancesTeacher(teacherId) {
+  if (!db) return []
+  try {
+    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'seances'))
+    return snap.exists() ? snap.data().liste || [] : []
+  } catch (e) {
+    console.warn('Chargement séances impossible', e)
+    return []
+  }
+}
+
+export function cloudEcrireSeances(teacherId, seances) {
+  if (!db) return
+  setDoc(doc(db, 'profs', teacherId, 'meta', 'seances'), { liste: seances }).catch(() => {})
+}
+
+// --- Visibilité des tests VMA/Fartlek d'un enseignant : un seul document. ---
+
+export async function loadTestsVisibiliteTeacher(teacherId) {
+  if (!db) return {}
+  try {
+    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'testsVisibilite'))
+    return snap.exists() ? snap.data().data || {} : {}
+  } catch (e) {
+    console.warn('Chargement visibilité tests impossible', e)
+    return {}
+  }
+}
+
+export function cloudEcrireTestsVisibilite(teacherId, visibilite) {
+  if (!db) return
+  setDoc(doc(db, 'profs', teacherId, 'meta', 'testsVisibilite'), { data: visibilite }).catch(() => {})
+}
+
+// --- Migration depuis l'ancienne version (un seul professeur, "code de synchro" au lieu d'un
+// teacherId) : lit l'espace tel qu'il existait sous profs/{ancienCode}/... et le renvoie dans
+// le même format que loadRosterTeacher/loadRealisationsTeacher/etc., pour qu'il puisse être
+// réécrit tel quel sous le nouveau teacherId (voir storage.migrerAncienEspace). Purement une
+// lecture : ne touche à rien sous l'ancien code. ---
+export async function chargerAncienEspace(ancienCode) {
+  if (!db || !ancienCode) return null
+  const [elevesSnap, realisationsSnap, vmaSnap, seancesSnap, testsSnap] = await Promise.all([
+    getDocs(collection(db, 'profs', ancienCode, 'eleves')),
+    getDocs(collection(db, 'profs', ancienCode, 'realisations')),
+    getDocs(collection(db, 'profs', ancienCode, 'vma')),
+    getDoc(doc(db, 'profs', ancienCode, 'meta', 'seances')),
+    getDoc(doc(db, 'profs', ancienCode, 'meta', 'testsVisibilite'))
   ])
-  const vmaMap = {}
-  vma.docs.forEach((d) => { vmaMap[d.id] = d.data() })
+
+  // Les anciens documents élève portaient leur classe en propriété ("classe") ; le nouveau
+  // roster les regroupe par classe (comme storage.getElevesClasse le lit déjà).
+  const roster = {}
+  elevesSnap.docs.forEach((d) => {
+    const { classe, ...eleve } = d.data()
+    if (!classe) return
+    if (!roster[classe]) roster[classe] = []
+    roster[classe].push(eleve)
+  })
+
+  const vma = {}
+  vmaSnap.docs.forEach((d) => { vma[d.id] = d.data() })
+
   return {
-    eleves: eleves.docs.map((d) => d.data()),
-    realisations: realisations.docs.map((d) => d.data()),
-    vma: vmaMap
+    roster,
+    realisations: realisationsSnap.docs.map((d) => d.data()),
+    vma,
+    seances: seancesSnap.exists() ? seancesSnap.data().liste || [] : [],
+    testsVisibilite: testsSnap.exists() ? testsSnap.data().data || {} : {},
+    nbEleves: elevesSnap.docs.length,
+    nbClasses: Object.keys(roster).length
   }
 }
