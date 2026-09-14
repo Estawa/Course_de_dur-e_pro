@@ -17,7 +17,7 @@
 import { initializeApp } from 'firebase/app'
 import {
   getFirestore,
-  doc, setDoc, getDoc, deleteDoc, getDocs, collection, onSnapshot
+  doc, setDoc, deleteDoc, getDocs, collection, onSnapshot
 } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -66,14 +66,10 @@ export function definirCodeSync(code) {
 export function assurerCodeSync() {
   let code = getCodeSync()
   if (!code) {
-    code = genererCode()
+    code = Math.random().toString(36).slice(2, 8).toUpperCase()
     definirCodeSync(code)
   }
   return code
-}
-
-export function genererCode() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase()
 }
 
 // Appelé au démarrage côté élève si un code est présent dans le lien (?c=XXXXX).
@@ -172,48 +168,7 @@ export function demarrerSynchro(callback) {
   return () => arrets.forEach((arret) => arret())
 }
 
-// --- Accès enseignant (admin + collègues) ---
-// Document séparé, non scopé par code de synchro : contient le PIN et le nom de
-// l'administrateur, ainsi que la liste des collègues (chacun avec son propre code de
-// synchro, qui pointe vers SON espace isolé sous profs/{code}/... — même mécanisme que
-// pour l'administrateur, juste un code différent par collègue).
-const ACCES_COLLECTION = 'cdp_acces'
-const ACCES_DOC_ID = 'config'
-
-function docAcces() {
-  return doc(db, ACCES_COLLECTION, ACCES_DOC_ID)
-}
-
-// Ne crée jamais le document tout seul (une lecture passive par n'importe quel appareil,
-// y compris celui d'un élève, ne doit jamais écrire de valeurs par défaut potentiellement
-// fausses) : si le document n'existe pas encore, on renvoie simplement des valeurs par
-// défaut en mémoire. Seule une sauvegarde explicite (saveAccesConfig) persiste quoi que ce
-// soit, ce qui n'arrive qu'après une authentification réussie côté enseignant.
-export async function loadAccesConfig(codeAdminParDefaut) {
-  if (!db) {
-    return { pinAdmin: '8484', nomAdmin: 'Mr Guilhem', adminCode: codeAdminParDefaut || '', collegues: [] }
-  }
-  try {
-    const snap = await getDoc(docAcces())
-    if (snap.exists()) {
-      const d = snap.data()
-      return {
-        pinAdmin: d.pinAdmin || '8484',
-        nomAdmin: d.nomAdmin || 'Mr Guilhem',
-        adminCode: d.adminCode || codeAdminParDefaut || '',
-        collegues: Array.isArray(d.collegues) ? d.collegues : []
-      }
-    }
-  } catch (e) {
-    console.warn('Config Accès indisponible, valeurs par défaut utilisées.', e)
-  }
-  return { pinAdmin: '8484', nomAdmin: 'Mr Guilhem', adminCode: codeAdminParDefaut || '', collegues: [] }
-}
-
-export async function saveAccesConfig(config) {
-  if (!db) return
-  await setDoc(docAcces(), config).catch(() => {})
-}
+// Récupération ponctuelle (sans écoute), utile pour un import initial explicite si besoin.
 export async function recupererTout() {
   if (!actif()) return null
   const [eleves, realisations, vma] = await Promise.all([

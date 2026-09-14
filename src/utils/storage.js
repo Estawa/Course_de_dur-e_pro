@@ -9,9 +9,7 @@ const KEYS = {
   PIN_OK: 'cdp_pin_ok',
   VMA: 'cdp_vma_eleves',
   TESTS_VISIBILITE: 'cdp_tests_visibilite',
-  ROLE_ENSEIGNANT: 'cdp_role_enseignant',
-  NOM_COLLEGUE: 'cdp_nom_collegue',
-  CODE_ADMIN_PERSONNEL: 'cdp_code_admin_personnel'
+  SESSION_COURS: 'cdp_session_cours'
 }
 
 function read(key, fallback) {
@@ -148,40 +146,6 @@ export const storage = {
   getCodeSync: () => cloud.getCodeSync(),
   assurerCodeSync: () => cloud.assurerCodeSync(),
   appliquerCodeDepuisLien: (code) => cloud.appliquerCodeDepuisLien(code),
-  // Bascule explicitement ce device vers un autre espace (code de synchro) — utilisé quand
-  // un élève choisit son professeur, ou quand l'administrateur consulte l'espace d'un
-  // collègue (Vue globale). Toujours appelé après storage.viderCacheLocal().
-  definirCodeSync: (code) => cloud.definirCodeSync(code),
-  // Vide le cache local (roster, séances, réalisations, VMA, tests) avant de basculer vers
-  // un autre espace, pour ne jamais mélanger les données de deux professeurs différents sur
-  // le même appareil le temps que la synchro cloud du nouvel espace arrive.
-  viderCacheLocal: () => {
-    write(KEYS.ROSTER, {})
-    write(KEYS.SEANCES, [])
-    write(KEYS.REALISATIONS, [])
-    write(KEYS.VMA, {})
-    write(KEYS.TESTS_VISIBILITE, {})
-  },
-
-  // --- Accès enseignant (admin + collègues) ---
-  loadAccesConfig: () => cloud.loadAccesConfig(cloud.getCodeSync()),
-  saveAccesConfig: (config) => cloud.saveAccesConfig(config),
-  genererCode: () => cloud.genererCode(),
-
-  // --- Session enseignant (qui est connecté : admin ou tel collègue) ---
-  getRoleEnseignant: () => read(KEYS.ROLE_ENSEIGNANT, null),
-  setRoleEnseignant: (role) => write(KEYS.ROLE_ENSEIGNANT, role),
-  getNomCollegue: () => read(KEYS.NOM_COLLEGUE, null),
-  setNomCollegue: (nom) => write(KEYS.NOM_COLLEGUE, nom),
-  // Code de synchro personnel de l'administrateur, mémorisé sur son appareil dès sa première
-  // connexion réussie, pour pouvoir y revenir après avoir consulté l'espace d'un collègue.
-  getCodeAdminPersonnel: () => read(KEYS.CODE_ADMIN_PERSONNEL, null),
-  setCodeAdminPersonnel: (code) => write(KEYS.CODE_ADMIN_PERSONNEL, code),
-  clearSessionEnseignant: () => {
-    localStorage.removeItem(KEYS.PIN_OK)
-    localStorage.removeItem(KEYS.ROLE_ENSEIGNANT)
-    localStorage.removeItem(KEYS.NOM_COLLEGUE)
-  },
 
   // Démarre l'écoute temps réel (si un code de synchro est actif) : à chaque mise à jour
   // distante, fusionne dans le stockage local puis appelle callback(type) pour que l'UI
@@ -518,5 +482,26 @@ export const storage = {
     all[testId] = { classesVisibles }
     write(KEYS.TESTS_VISIBILITE, all)
     cloud.cloudEcrireTestsVisibilite(all)
+  },
+
+  // --- Reprise de séance : sauvegarde locale (pas de synchro cloud, purement pour l'appareil
+  // de l'élève) de la progression d'une séance en cours, afin de pouvoir la reprendre là où elle
+  // en était si l'appli est fermée/tuée par le téléphone (mise en veille prolongée, manque de
+  // mémoire...) pendant son déroulement. Effacée dès que la séance est terminée ou abandonnée.
+  sauvegarderSessionCours: (eleve, data) => {
+    const all = read(KEYS.SESSION_COURS, {})
+    all[storage.cleEleve(eleve)] = { ...data, savedAt: Date.now() }
+    write(KEYS.SESSION_COURS, all)
+  },
+  getSessionCours: (eleve) => {
+    const all = read(KEYS.SESSION_COURS, {})
+    return all[storage.cleEleve(eleve)] || null
+  },
+  effacerSessionCours: (eleve) => {
+    const all = read(KEYS.SESSION_COURS, {})
+    delete all[storage.cleEleve(eleve)]
+    write(KEYS.SESSION_COURS, all)
   }
 }
+
+export const PIN_ENSEIGNANT = '8484'
