@@ -119,6 +119,7 @@ export default function EleveLogin({ onConnecte }) {
   }
 
   if (etape === 'classe') {
+    const diagCode = storage.getCodeSync()
     return (
       <div className="max-w-md mx-auto px-6 py-14">
         <div className="flex flex-col items-center text-center mb-8">
@@ -139,6 +140,9 @@ export default function EleveLogin({ onConnecte }) {
             </button>
           ))}
         </div>
+        <p className="text-[10px] text-piste-300 text-center mt-6">
+          Synchro — code : {diagCode || 'aucun'}
+        </p>
       </div>
     )
   }
@@ -168,6 +172,9 @@ export default function EleveLogin({ onConnecte }) {
             ))}
           </div>
         )}
+        <p className="text-[10px] text-piste-300 text-center mt-6">
+          Synchro — code : {storage.getCodeSync() || 'aucun'} · {eleves.length} élève(s) chargé(s)
+        </p>
       </div>
     )
   }
