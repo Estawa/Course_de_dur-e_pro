@@ -35,10 +35,18 @@ export function expanserStructure(structure, vmaRef) {
     })
     const skipDerniereRecup = tour < nbTours - 1 && structure.recupSerie?.active
     instances.forEach((type, i) => {
+      // serieIndex/serieTotal situent la phase dans le tour (série) en cours ; repIndex/repTotal
+      // situent la répétition au sein de ce tour. Ces champs permettent à l'écran de course de
+      // faire apparaître "Série X/N · Répétition Y/Z" et un décompte propre à chaque niveau,
+      // plutôt qu'un seul décompte portant sur tout le bloc.
       phases.push({
         phase: 'travail',
         typeLettre: type.lettre,
         tourIndex: tour,
+        serieIndex: tour,
+        serieTotal: nbTours,
+        repIndex: i + 1,
+        repTotal: instances.length,
         duree_s: type.duree_travail_s,
         vitesse_kmh: Math.round((type.pct_vma_travail / 100) * vma * 100) / 100
       })
@@ -49,6 +57,10 @@ export function expanserStructure(structure, vmaRef) {
           recupType: 'repetition',
           typeLettre: type.lettre,
           tourIndex: tour,
+          serieIndex: tour,
+          serieTotal: nbTours,
+          repIndex: i + 1,
+          repTotal: instances.length,
           duree_s: type.duree_recup_s,
           vitesse_kmh: Math.round((type.pct_vma_recup / 100) * vma * 100) / 100
         })
@@ -59,6 +71,10 @@ export function expanserStructure(structure, vmaRef) {
         phase: 'recup',
         recupType: 'serie',
         tourIndex: tour,
+        serieIndex: tour,
+        serieTotal: nbTours,
+        repIndex: null,
+        repTotal: null,
         duree_s: structure.recupSerie.duree_s,
         vitesse_kmh: Math.round((structure.recupSerie.pct_vma / 100) * vma * 100) / 100
       })
@@ -69,6 +85,10 @@ export function expanserStructure(structure, vmaRef) {
       phase: 'recup',
       recupType: 'fin',
       tourIndex: nbTours - 1,
+      serieIndex: nbTours - 1,
+      serieTotal: nbTours,
+      repIndex: null,
+      repTotal: null,
       duree_s: structure.recupFinale.duree_s,
       vitesse_kmh: Math.round((structure.recupFinale.pct_vma / 100) * vma * 100) / 100
     })
