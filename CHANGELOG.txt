@@ -128,6 +128,15 @@ v1.2.0 — Bibliothèque, Séance vierge, Outils, Full Power
 - Outils : VMA personnelle (saisie/màj), tests de VMA (Demi-Cooper 6min, 4×3min avec détection d'anomalie, Gacon 45/15 avec demi-palier), chronomètre avec distance/vitesse, échelle de Borg de référence, performances estimées par distance à partir de la VMA (et %VMA inverse à partir d'une perf réalisée)
 - Guidage GPS/minuteur géré phase par phase (travail/récupération) avec gong à chaque transition
 
+v1.33.0 — Flèche retour désactivée pendant les tests et le Fartlek
+- La flèche retour de l'en-tête est désormais aussi désactivée pendant un test VMA (effort ET récupération pour les tests à répétitions/paliers) et pendant la course du Fartlek évaluatif, comme c'était déjà le cas pour la séance de travail — seul le bouton d'arrêt dédié (avec sa confirmation) permet de sortir pendant que le test est en cours
+- La flèche retour redevient disponible normalement dès que le test est terminé (saisie finale, résultat) ou avant son lancement (écran d'attente)
+
+v1.32.0 — Fiabilité étendue aux tests VMA et au Fartlek évaluatif
+- Écran qui ne s'éteint plus, confirmation avant d'arrêter et reprise après fermeture de l'appli : les trois protections ajoutées en v1.31.0 pour la séance de travail s'appliquent désormais aussi aux 4 tests VMA (Demi-Cooper, 4×3 min, Gacon, VAM-EVAL) et au Fartlek évaluatif
+- Fartlek évaluatif : une reprise après coupure relance toujours en pause "zone repos" (quel que soit l'état au moment de la coupure), pour que la durée de la coupure ne soit jamais comptée comme temps de course effectif ni comme arrêt hors zone pénalisé
+- Limite connue commune à tous ces écrans : en cas de reprise après une vraie fermeture de l'appli (pas une simple extinction d'écran), la distance déjà parcourue sur le palier/répétition interrompu n'est pas restaurée en mode GPS (seuls le chronométrage et les répétitions/paliers déjà validés le sont)
+
 v1.31.0 — Fiabilité pendant la séance (écran/reprise/anti-appui accidentel)
 - L'écran ne s'éteint plus pendant toute la durée d'une séance (échauffement, blocs de course, bilans, Borg, observation) grâce au Wake Lock du navigateur ; se relâche automatiquement à la fin ou à l'abandon
 - "Terminer le bloc" et "Abandonner sans enregistrer" demandent désormais une confirmation explicite (comme sur le test VAM-EVAL) avant d'agir, pour éviter d'arrêter la séance sur un appui accidentel pendant la course
