@@ -40,6 +40,34 @@ function persisterRoster(next) {
   cloud.saveRosterTeacher(cache.teacherId, next)
 }
 
+// Fusionne deux fiches VMA d'un même élève (par ex. une déjà connue + une retrouvée sous un
+// ancien code lors d'une migration) sans jamais perdre d'historique : les deux historiques de
+// tests sont concaténés, la VMA "auto" recalculée comme la meilleure valeur sur l'ensemble, la
+// VMA manuelle (imposée par le prof) de l'une des deux conservée si l'autre n'en a pas. `a` peut
+// être null (rien à fusionner, on renvoie `b` tel quel).
+function fusionnerDetailVma(a, b) {
+  if (!a) return b
+  if (!b) return a
+  const historique = [...(a.historique || []), ...(b.historique || [])]
+  const meilleurTest = historique
+    .filter((h) => h.source === 'test')
+    .reduce((max, h) => (max == null || h.valeur > max.valeur ? h : max), null)
+  const manuelle = a.manuelle ?? b.manuelle
+  const manuelleDate = a.manuelle != null ? a.manuelleDate : b.manuelleDate
+  const derniereCourse =
+    (b.derniereCourse?.date || 0) > (a.derniereCourse?.date || 0) ? b.derniereCourse : a.derniereCourse
+  return {
+    manuelle,
+    manuelleDate,
+    auto: meilleurTest ? meilleurTest.valeur : a.auto ?? b.auto,
+    autoDate: meilleurTest ? meilleurTest.date : a.autoDate ?? b.autoDate,
+    autoTest: meilleurTest ? meilleurTest.test : a.autoTest ?? b.autoTest,
+    derniereCourse: derniereCourse || null,
+    historique,
+    fartlek: [...(a.fartlek || []), ...(b.fartlek || [])]
+  }
+}
+
 export const storage = {
   cloudDisponible: () => cloud.cloudDisponible(),
 
@@ -110,13 +138,19 @@ export const storage = {
   verifierPin: (classe, eleveId, pin) => rosterOps.verifierPin(cache.roster, classe, eleveId, pin),
 
   // --- Migration depuis l'ancienne version (un seul professeur, "code de synchro") : recopie
-  // l'espace lu sous l'ancien code dans l'espace actuellement actif (fusion avec ce qui y existe
-  // déjà — les classes/élèves de même nom+prénom sont mis à jour plutôt que dupliqués, les
-  // réalisations et VMA s'ajoutent par id sans écraser ce qui ne vient pas de l'ancien espace).
+  // l'espace lu sous l'ancien code dans l'espace actuellement actif. Un même élève réel a pu
+  // exister sous PLUSIEURS anciens codes avec un identifiant différent à chaque fois (typiquement
+  // : une fois via saisie libre sur son propre espace isolé, une fois via l'import de classe du
+  // prof) — la fusion du roster garde un seul identifiant final par élève (nom+prénom), et
+  // retient la correspondance ancien id → id final pour rapatrier SOUS LE BON ÉLÈVE la VMA et les
+  // réalisations qui, sinon, resteraient associées à un identifiant abandonné et invisibles nulle
+  // part. La VMA est FUSIONNÉE (jamais simplement ignorée si une entrée existe déjà pour cet
+  // élève) : tout l'historique de tous les anciens codes est conservé, la meilleure valeur
+  // recalculée dessus.
   // IMPORTANT : chaque écriture est attendue avant de continuer — l'appelant recharge l'espace
   // juste après (pour rafraîchir l'écran), et un rechargement lancé avant la fin réelle des
   // écritures verrait une donnée encore absente sur le serveur, l'effaçant du cache local.
-  // Retourne un résumé { nbClasses, nbEleves, nbRealisations, nbVma } pour confirmation à l'écran.
+  // Retourne un résumé { nbClasses, nbEleves, nbRealisations, nbVma, ... } pour l'écran.
   migrerAncienEspace: async (ancienCode) => {
     const ancien = await cloud.chargerAncienEspace(ancienCode)
     if (!ancien) throw new Error('Connexion à la sauvegarde impossible.')
@@ -130,15 +164,31 @@ export const storage = {
       throw new Error("Aucune donnée trouvée sous ce code. Vérifie qu'il est correct.")
     }
 
-    // Roster : fusionne classe par classe (même logique que l'import CSV en mode "ajouter"),
-    // pour ne pas dupliquer un élève déjà recréé manuellement dans l'espace cible entretemps.
-    const listeAncienneAPlat = []
+    // Roster : fusionne classe par classe par nom+prénom, en gardant trace de l'identifiant final
+    // retenu pour chaque ancien identifiant rencontré (mappingIds), pour pouvoir rapatrier sa VMA
+    // et ses réalisations sous le bon élève même si son id a changé d'un ancien code à l'autre.
+    const mappingIds = new Map()
+    const nextRoster = { ...cache.roster }
     Object.entries(ancien.roster).forEach(([classe, eleves]) => {
-      eleves.forEach((e) => listeAncienneAPlat.push({ ...e, classe }))
+      nextRoster[classe] = nextRoster[classe] ? nextRoster[classe].slice() : []
+      eleves.forEach((e) => {
+        const idx = nextRoster[classe].findIndex(
+          (x) => x.nom.toLowerCase() === e.nom.toLowerCase() && x.prenom.toLowerCase() === e.prenom.toLowerCase()
+        )
+        if (idx !== -1) {
+          mappingIds.set(e.id, nextRoster[classe][idx].id)
+          let maj = nextRoster[classe][idx]
+          if (e.sexe && !maj.sexe) maj = { ...maj, sexe: e.sexe }
+          if (e.classeOrigine && !maj.classeOrigine) maj = { ...maj, classeOrigine: e.classeOrigine }
+          nextRoster[classe][idx] = maj
+        } else {
+          nextRoster[classe].push(e)
+          mappingIds.set(e.id, e.id)
+        }
+      })
     })
-    const rosterFusionne = rosterOps.appliquerImportRoster(cache.roster, listeAncienneAPlat, 'ajouter')
-    cache.roster = rosterFusionne
-    await cloud.saveRosterTeacher(cache.teacherId, rosterFusionne)
+    cache.roster = nextRoster
+    await cloud.saveRosterTeacher(cache.teacherId, nextRoster)
 
     // Séances de bibliothèque et visibilité des tests : n'écrase que si l'espace cible est vide,
     // pour ne pas effacer des séances déjà (re)créées après le passage à la nouvelle version.
@@ -151,25 +201,33 @@ export const storage = {
       await cloud.cloudEcrireTestsVisibilite(cache.teacherId, ancien.testsVisibilite)
     }
 
-    // Réalisations et VMA : ajoutées par id (jamais de perte, jamais de doublon si la migration
-    // est relancée).
+    // Réalisations : l'élève de chaque réalisation est remappé vers l'id final, puis ajoutées par
+    // id de réalisation (jamais de perte, jamais de doublon si la migration est relancée).
     const idsRealisationsExistantes = new Set(cache.realisations.map((r) => r.id))
-    const realisationsAAjouter = ancien.realisations.filter((r) => !idsRealisationsExistantes.has(r.id))
+    const realisationsRemappees = ancien.realisations.map((r) => {
+      const idFinal = mappingIds.get(r.eleve.id) || r.eleve.id
+      return idFinal === r.eleve.id ? r : { ...r, eleve: { ...r.eleve, id: idFinal } }
+    })
+    const realisationsAAjouter = realisationsRemappees.filter((r) => !idsRealisationsExistantes.has(r.id))
     cache.realisations = [...cache.realisations, ...realisationsAAjouter]
     await Promise.all(realisationsAAjouter.map((r) => cloud.cloudEcrireRealisation(cache.teacherId, r)))
 
-    const clesVmaExistantes = new Set(Object.keys(cache.vma))
-    const clesVmaAAjouter = Object.keys(ancien.vma).filter((cle) => !clesVmaExistantes.has(cle))
-    cache.vma = { ...ancien.vma, ...cache.vma }
-    await Promise.all(clesVmaAAjouter.map((cle) => cloud.cloudEcrireVma(cache.teacherId, cle, ancien.vma[cle])))
+    // VMA : remappée vers l'id final puis FUSIONNÉE avec ce qui existe déjà pour cet élève
+    // (jamais simplement ignorée) — voir fusionnerDetailVma.
+    const vmaSuivant = { ...cache.vma }
+    Object.entries(ancien.vma).forEach(([cleAncienne, detail]) => {
+      const cleFinale = mappingIds.get(cleAncienne) || cleAncienne
+      vmaSuivant[cleFinale] = fusionnerDetailVma(vmaSuivant[cleFinale] || null, detail)
+    })
+    cache.vma = vmaSuivant
+    const clesFinalesTouchees = Array.from(new Set(Object.keys(ancien.vma).map((c) => mappingIds.get(c) || c)))
+    await Promise.all(clesFinalesTouchees.map((cle) => cloud.cloudEcrireVma(cache.teacherId, cle, vmaSuivant[cle])))
 
     return {
       nbClasses: ancien.nbClasses,
       nbEleves: ancien.nbEleves,
       nbRealisations: realisationsAAjouter.length,
-      nbVma: clesVmaAAjouter.length,
-      // Diagnostic : ce qui a été lu sous l'ancien code AVANT tout filtrage doublon, pour
-      // distinguer "rien trouvé sous ce code" de "trouvé mais déjà présent ici".
+      nbVma: clesFinalesTouchees.length,
       nbRealisationsTrouvees: ancien.realisations.length,
       nbVmaTrouvees: Object.keys(ancien.vma).length
     }
