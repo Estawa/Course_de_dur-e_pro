@@ -484,23 +484,30 @@ export const storage = {
     cloud.cloudEcrireTestsVisibilite(all)
   },
 
-  // --- Reprise de séance : sauvegarde locale (pas de synchro cloud, purement pour l'appareil
-  // de l'élève) de la progression d'une séance en cours, afin de pouvoir la reprendre là où elle
-  // en était si l'appli est fermée/tuée par le téléphone (mise en veille prolongée, manque de
-  // mémoire...) pendant son déroulement. Effacée dès que la séance est terminée ou abandonnée.
-  sauvegarderSessionCours: (eleve, data) => {
+  // --- Reprise d'activité en cours : sauvegarde locale (pas de synchro cloud, purement pour
+  // l'appareil de l'élève) de la progression d'une séance ou d'un test/Fartlek en cours, afin de
+  // pouvoir la reprendre là où elle en était si l'appli est fermée/tuée par le téléphone (mise en
+  // veille prolongée, manque de mémoire...) pendant son déroulement. Effacée dès que l'activité
+  // est terminée ou abandonnée. `type` distingue les activités entre elles ('course', 'test-4x3',
+  // 'test-gacon', 'test-cooper', 'test-vameval', 'fartlek') pour qu'une reprise de séance ne se
+  // mélange jamais avec une reprise de test.
+  sauvegarderSessionCours: (eleve, type, data) => {
     const all = read(KEYS.SESSION_COURS, {})
-    all[storage.cleEleve(eleve)] = { ...data, savedAt: Date.now() }
+    const cle = storage.cleEleve(eleve)
+    all[cle] = { ...(all[cle] || {}), [type]: { ...data, savedAt: Date.now() } }
     write(KEYS.SESSION_COURS, all)
   },
-  getSessionCours: (eleve) => {
+  getSessionCours: (eleve, type) => {
     const all = read(KEYS.SESSION_COURS, {})
-    return all[storage.cleEleve(eleve)] || null
+    return all[storage.cleEleve(eleve)]?.[type] || null
   },
-  effacerSessionCours: (eleve) => {
+  effacerSessionCours: (eleve, type) => {
     const all = read(KEYS.SESSION_COURS, {})
-    delete all[storage.cleEleve(eleve)]
-    write(KEYS.SESSION_COURS, all)
+    const cle = storage.cleEleve(eleve)
+    if (all[cle]) {
+      delete all[cle][type]
+      write(KEYS.SESSION_COURS, all)
+    }
   }
 }
 
