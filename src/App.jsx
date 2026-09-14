@@ -17,17 +17,27 @@ import { storage } from './utils/storage'
 import { calculerNoteReelle } from './utils/calc'
 
 export default function App() {
-  const [eleve, setEleve] = useState(() => storage.getEleveActif())
-  const [seances, setSeancesState] = useState(() => storage.getSeances())
-  const [realisations, setRealisations] = useState(() => storage.getRealisations())
-  const [cloudTick, setCloudTick] = useState(0)
-  const [pretSync, setPretSync] = useState(false)
-  const [codeSyncActuel, setCodeSyncActuel] = useState(() => storage.getCodeSync())
+  // --- Accès (admin + collègues) : chargé une fois au démarrage, indépendant de tout élève
+  // ou espace enseignant particulier. Sert à peupler les listes "Ton professeur" / "Ton nom".
+  const [accesConfig, setAccesConfig] = useState(null)
+  const [chargementAcces, setChargementAcces] = useState(true)
 
-  const [ecran, setEcran] = useState(() => (storage.getEleveActif() ? 'tuiles' : 'accueil'))
+  const [eleve, setEleve] = useState(null)
+  const [chargementEleve, setChargementEleve] = useState(true)
+  const [seances, setSeancesState] = useState([])
+  const [realisations, setRealisations] = useState([])
+
+  const [ecran, setEcran] = useState('accueil')
   const [seanceActive, setSeanceActive] = useState(null)
   const [niveauActif, setNiveauActif] = useState(null)
   const [dernierResultat, setDernierResultat] = useState(null)
+
+  // Session enseignant : locale à l'appareil (rôle + identité), les données elles-mêmes sont
+  // rechargées à chaque fois via storage.chargerEspace(teacherId).
+  const [role, setRole] = useState(() => storage.getRoleEnseignant())
+  const [nomCollegue, setNomCollegue] = useState(() => storage.getNomCollegue())
+  const [teacherIdEnseignant, setTeacherIdEnseignant] = useState(() => storage.getTeacherIdEnseignant())
+  const [chargementEnseignant, setChargementEnseignant] = useState(false)
 
   // Vrai tant qu'un test VMA ou le Fartlek évaluatif a un chrono actif (effort/palier/course en
   // cours), pour désactiver la flèche retour de l'en-tête et éviter d'en sortir par un appui
@@ -38,11 +48,43 @@ export default function App() {
   const [sessionAReprendre, setSessionAReprendre] = useState(null) // snapshot proposé, en attente de choix
   const [repriseActive, setRepriseActive] = useState(null) // snapshot accepté, transmis à SeanceRunner
 
+  // --- Chargement de la config d'accès (admin + collègues) ---
   useEffect(() => {
-    const e = storage.getEleveActif()
-    if (!e) return
-    const session = storage.getSessionCours(e, 'course')
-    if (session) setSessionAReprendre(session)
+    storage.chargerAcces('8484').then((ac) => {
+      setAccesConfig(ac)
+      setChargementAcces(false)
+    })
+  }, [])
+
+  // --- Restauration de la session élève de cet appareil (pointeur { teacherId, id } local) :
+  // recharge l'espace de son professeur pour retrouver sa fiche à jour (nom/prénom/PIN). Si son
+  // professeur a été retiré ou sa fiche supprimée entre-temps, la session est effacée. ---
+  useEffect(() => {
+    const pointeur = storage.getEleveActifPointeur()
+    if (!pointeur) {
+      setChargementEleve(false)
+      return
+    }
+    storage.chargerEspace(pointeur.teacherId)
+      .then(() => {
+        const trouve = storage.trouverEleveParId(pointeur.id)
+        if (trouve) {
+          setEleve({ id: trouve.id, nom: trouve.nom, prenom: trouve.prenom, classe: trouve.classe, teacherId: pointeur.teacherId })
+          setSeancesState(storage.getSeances())
+          setRealisations(storage.getRealisations())
+          setEcran('tuiles')
+          const session = storage.getSessionCours({ id: trouve.id, nom: trouve.nom, prenom: trouve.prenom, classe: trouve.classe }, 'course')
+          if (session) setSessionAReprendre(session)
+        } else {
+          storage.clearEleveActif()
+          setEcran('accueil')
+        }
+      })
+      .catch(() => {
+        storage.clearEleveActif()
+        setEcran('accueil')
+      })
+      .finally(() => setChargementEleve(false))
   }, [])
 
   function handleReprendreSession() {
@@ -62,51 +104,17 @@ export default function App() {
     storage.sauvegarderSessionCours(eleve, 'course', { seanceActive, niveauActif, ...snapshot })
   }
 
-  // Applique un éventuel code de synchro reçu par lien (?c=XXXXX, cas d'un élève qui
-  // ouvre le flashcode/lien partagé par le prof) une seule fois au démarrage.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get('c')
-    if (code) {
-      storage.appliquerCodeDepuisLien(code)
-      params.delete('c')
-      const reste = params.toString()
-      window.history.replaceState({}, '', window.location.pathname + (reste ? `?${reste}` : ''))
-      setCodeSyncActuel(storage.getCodeSync())
-    }
-  }, [])
-
-  // (Re)démarre l'écoute cloud temps réel dès qu'un code de synchro est disponible —
-  // au démarrage s'il existait déjà, ou dès qu'il vient d'être généré/reçu.
-  useEffect(() => {
-    if (!codeSyncActuel) {
-      setPretSync(true)
-      return
-    }
-
-    let recuEleves = false
-    const arreter = storage.demarrerSynchroCloud((type) => {
-      setSeancesState(storage.getSeances())
-      setRealisations(storage.getRealisations())
-      setCloudTick((t) => t + 1)
-      if (type === 'eleves') {
-        recuEleves = true
-        setPretSync(true)
-      }
-    })
-    // Filet de sécurité si le cloud est injoignable ou trop lent (connexion faible, tout
-    // premier chargement sans cache local) : on ne bloque pas l'appli indéfiniment.
-    const delai = setTimeout(() => { if (!recuEleves) setPretSync(true) }, 6000)
-    return () => { arreter(); clearTimeout(delai) }
-  }, [codeSyncActuel])
-
   function setSeances(nouvelles) {
     setSeancesState(nouvelles)
     storage.setSeances(nouvelles)
   }
 
   function handleConnecte(e) {
+    // L'espace de son professeur est déjà chargé (fait par EleveLogin avant d'appeler
+    // onConnecte) : ces données sont donc déjà dans le cache actif de storage.js.
     setEleve(e)
+    setSeancesState(storage.getSeances())
+    setRealisations(storage.getRealisations())
     setEcran('tuiles')
   }
 
@@ -114,6 +122,80 @@ export default function App() {
     storage.clearEleveActif()
     setEleve(null)
     setEcran('accueil')
+  }
+
+  // Recharge l'espace (roster + séances + réalisations + VMA + tests) d'un teacherId donné et
+  // met à jour les états dérivés qu'App.jsx expose au tableau de bord enseignant.
+  async function chargerEspaceDashboard(teacherId) {
+    await storage.chargerEspace(teacherId)
+    setSeancesState(storage.getSeances())
+    setRealisations(storage.getRealisations())
+  }
+
+  function ouvrirEspaceEnseignant(teacherId) {
+    setChargementEnseignant(true)
+    chargerEspaceDashboard(teacherId).then(() => {
+      setChargementEnseignant(false)
+      setEcran('enseignant')
+    })
+  }
+
+  function handleAccesEnseignant() {
+    const dejaConnecte = storage.getPinOk() && storage.getRoleEnseignant() && storage.getTeacherIdEnseignant()
+    if (dejaConnecte) {
+      ouvrirEspaceEnseignant(storage.getTeacherIdEnseignant())
+    } else {
+      setEcran('enseignantPin')
+    }
+  }
+
+  function handlePinValide({ role: roleValide, nomCollegue: nom, teacherId }) {
+    storage.setPinOk(true)
+    storage.setRoleEnseignant(roleValide)
+    storage.setNomCollegue(roleValide === 'collegue' ? nom : null)
+    storage.setTeacherIdEnseignant(teacherId)
+    setRole(roleValide)
+    setNomCollegue(roleValide === 'collegue' ? nom : null)
+    setTeacherIdEnseignant(teacherId)
+    ouvrirEspaceEnseignant(teacherId)
+  }
+
+  function handleDeconnexionEnseignant() {
+    storage.clearSessionEnseignant()
+    setRole(null)
+    setNomCollegue(null)
+    setTeacherIdEnseignant(null)
+    if (eleve) {
+      setChargementEnseignant(true)
+      chargerEspaceDashboard(eleve.teacherId).then(() => {
+        setChargementEnseignant(false)
+        setEcran('tuiles')
+      })
+    } else {
+      setEcran('accueil')
+    }
+  }
+
+  // --- Accès (admin + collègues) : édition depuis l'onglet "Accès" du tableau de bord ---
+  function persisterAcces(next) {
+    setAccesConfig(next)
+    storage.sauvegarderAcces(next)
+  }
+  function changerPinAdmin(nouveauPin) {
+    persisterAcces({ ...accesConfig, pinAdmin: nouveauPin })
+  }
+  function changerNomAdmin(nom) {
+    persisterAcces({ ...accesConfig, nomAdmin: nom })
+  }
+  function ajouterCollegue(nom, pin) {
+    const id = crypto.randomUUID ? crypto.randomUUID() : `c_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    persisterAcces({ ...accesConfig, collegues: [...(accesConfig.collegues || []), { id, nom, pin }] })
+  }
+  function supprimerCollegue(id) {
+    persisterAcces({ ...accesConfig, collegues: (accesConfig.collegues || []).filter((c) => c.id !== id) })
+  }
+  function reinitialiserPinCollegue(id, nouveauPin) {
+    persisterAcces({ ...accesConfig, collegues: (accesConfig.collegues || []).map((c) => (c.id === id ? { ...c, pin: nouveauPin } : c)) })
   }
 
   function handleChoisirTuile(id) {
@@ -168,19 +250,6 @@ export default function App() {
     storage.effacerSessionCours(eleve, 'course')
     setRepriseActive(null)
     setEcran('tuiles')
-  }
-
-  function handleAccesEnseignant() {
-    if (storage.cloudDisponible() && !storage.getCodeSync()) {
-      storage.assurerCodeSync()
-      setCodeSyncActuel(storage.getCodeSync())
-    }
-    setEcran(storage.getPinOk() ? 'enseignant' : 'enseignantPin')
-  }
-
-  function handlePinValide() {
-    storage.setPinOk(true)
-    setEcran('enseignant')
   }
 
   const mesRealisations = eleve
@@ -246,6 +315,8 @@ export default function App() {
     else if (ecran === 'partage') setEcran(eleve ? 'tuiles' : 'accueil')
   }
 
+  const pret = !chargementAcces && !chargementEleve
+
   return (
     <div className="min-h-screen bg-white font-body">
       <Header
@@ -258,8 +329,8 @@ export default function App() {
       />
 
       {!eleve && ecran === 'accueil' && (
-        pretSync
-          ? <EleveLogin onConnecte={handleConnecte} />
+        pret
+          ? <EleveLogin accesConfig={accesConfig} onConnecte={handleConnecte} />
           : (
             <div className="max-w-md mx-auto px-6 py-24 text-center text-piste-500 text-sm">
               Chargement…
@@ -308,19 +379,32 @@ export default function App() {
         <Bilan resultat={dernierResultat} niveau={niveauActif} onRetourAccueil={() => setEcran('tuiles')} />
       )}
 
-      {ecran === 'enseignantPin' && <EnseignantPin onValide={handlePinValide} />}
+      {ecran === 'enseignantPin' && <EnseignantPin accesConfig={accesConfig} onValide={handlePinValide} />}
 
       {ecran === 'enseignant' && (
-        <EnseignantDashboard
-          seances={seances}
-          setSeances={setSeances}
-          realisations={realisations}
-          onModifierRealisation={handleModifierRealisation}
-          onSupprimerRealisation={handleSupprimerRealisation}
-          onSupprimerRealisationsEleve={handleSupprimerRealisationsEleve}
-          onSupprimerRealisationsClasse={handleSupprimerRealisationsClasse}
-          cloudTick={cloudTick}
-        />
+        chargementEnseignant ? (
+          <div className="max-w-md mx-auto px-6 py-24 text-center text-piste-500 text-sm">Chargement…</div>
+        ) : (
+          <EnseignantDashboard
+            role={role}
+            nomCollegue={nomCollegue}
+            teacherIdEnseignant={teacherIdEnseignant}
+            accesConfig={accesConfig}
+            onChangerEspace={chargerEspaceDashboard}
+            onChangerPinAdmin={changerPinAdmin}
+            onChangerNomAdmin={changerNomAdmin}
+            onAjouterCollegue={ajouterCollegue}
+            onSupprimerCollegue={supprimerCollegue}
+            onReinitialiserPinCollegue={reinitialiserPinCollegue}
+            seances={seances}
+            setSeances={setSeances}
+            realisations={realisations}
+            onModifierRealisation={handleModifierRealisation}
+            onSupprimerRealisation={handleSupprimerRealisation}
+            onSupprimerRealisationsEleve={handleSupprimerRealisationsEleve}
+            onSupprimerRealisationsClasse={handleSupprimerRealisationsClasse}
+          />
+        )
       )}
 
       {sessionAReprendre && (
