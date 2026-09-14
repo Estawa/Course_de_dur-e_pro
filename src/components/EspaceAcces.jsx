@@ -107,6 +107,39 @@ function MigrationAncienneVersion({ onMigrer, onMigrerTout, onMigrerListe }) {
               {resultatListe.total.nbClasses} classe(s), {resultatListe.total.nbEleves} élève(s),{' '}
               {resultatListe.total.nbRealisations} séance(s) réalisée(s) et {resultatListe.total.nbVma} fiche(s) VMA récupérées.
             </p>
+            <details>
+              <summary className="text-piste-600 cursor-pointer select-none">Voir le détail par code (diagnostic)</summary>
+              <div className="mt-2 bg-white rounded-lg border border-piste-100 overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="border-b border-piste-100 text-piste-500">
+                      <th className="text-left px-2 py-1.5">Code</th>
+                      <th className="text-right px-2 py-1.5">Élèves</th>
+                      <th className="text-right px-2 py-1.5">VMA trouvées</th>
+                      <th className="text-right px-2 py-1.5">VMA ajoutées</th>
+                      <th className="text-right px-2 py-1.5">Séances trouvées</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resultatListe.detail.map((d) => (
+                      <tr key={d.code} className="border-b border-piste-50 last:border-0">
+                        <td className="px-2 py-1 font-mono">{d.code}</td>
+                        {d.ok ? (
+                          <>
+                            <td className="text-right px-2 py-1">{d.nbEleves}</td>
+                            <td className="text-right px-2 py-1">{d.nbVmaTrouvees}</td>
+                            <td className="text-right px-2 py-1">{d.nbVma}</td>
+                            <td className="text-right px-2 py-1">{d.nbRealisationsTrouvees}</td>
+                          </>
+                        ) : (
+                          <td colSpan={4} className="text-alerte px-2 py-1">{d.erreur}</td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
             {resultatListe.detail.some((d) => !d.ok) && (
               <div className="bg-white rounded-lg p-2 border border-alerte/30">
                 <p className="text-alerte font-medium mb-1">Codes en échec :</p>
