@@ -120,7 +120,13 @@ export const storage = {
   migrerAncienEspace: async (ancienCode) => {
     const ancien = await cloud.chargerAncienEspace(ancienCode)
     if (!ancien) throw new Error('Connexion à la sauvegarde impossible.')
-    if (ancien.nbEleves === 0 && ancien.realisations.length === 0 && ancien.seances.length === 0) {
+    if (
+      ancien.nbEleves === 0 &&
+      ancien.realisations.length === 0 &&
+      ancien.seances.length === 0 &&
+      Object.keys(ancien.vma).length === 0 &&
+      Object.keys(ancien.testsVisibilite).length === 0
+    ) {
       throw new Error("Aucune donnée trouvée sous ce code. Vérifie qu'il est correct.")
     }
 
@@ -163,6 +169,40 @@ export const storage = {
       nbRealisations: realisationsAAjouter.length,
       nbVma: clesVmaAAjouter.length
     }
+  },
+
+  // --- Migration en masse : liste tous les documents sous "profs" et migre automatiquement
+  // ceux qui ne sont pas un teacherId actuel (admin ou l'un des collègues) — c'est-à-dire les
+  // anciens codes de synchro périmés, un par appareil qui a fini par générer le sien (typiquement
+  // un élève ayant ouvert l'appli sans passer par le flashcode/lien à jour). teacherIdsActuels
+  // doit inclure 'admin' et l'id de chaque collègue (accesConfig.collegues). Retourne un résumé
+  // global ainsi que le détail par code, pour pouvoir signaler ceux qui ont échoué.
+  migrerTousAnciensCodes: async (teacherIdsActuels) => {
+    const tousLesCodes = await cloud.listerDocumentsProfs()
+    const actuels = new Set(teacherIdsActuels)
+    const anciensCodes = tousLesCodes.filter((id) => !actuels.has(id))
+
+    const detail = []
+    for (const code of anciensCodes) {
+      try {
+        const res = await storage.migrerAncienEspace(code)
+        detail.push({ code, ok: true, ...res })
+      } catch (e) {
+        detail.push({ code, ok: false, erreur: e.message })
+      }
+    }
+
+    const total = detail.reduce(
+      (acc, d) => (d.ok ? {
+        nbClasses: acc.nbClasses + d.nbClasses,
+        nbEleves: acc.nbEleves + d.nbEleves,
+        nbRealisations: acc.nbRealisations + d.nbRealisations,
+        nbVma: acc.nbVma + d.nbVma
+      } : acc),
+      { nbClasses: 0, nbEleves: 0, nbRealisations: 0, nbVma: 0 }
+    )
+
+    return { total, detail, nbCodesTraites: anciensCodes.length }
   },
 
   // --- Session élève active (pointeur local : quel prof + quel id, le reste est rechargé

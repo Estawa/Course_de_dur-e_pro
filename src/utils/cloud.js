@@ -213,3 +213,19 @@ export async function chargerAncienEspace(ancienCode) {
     nbClasses: Object.keys(roster).length
   }
 }
+
+// Liste tous les identifiants de documents présents sous la collection racine "profs" — mélange
+// des teacherId actuels (admin, collègues) et d'éventuels anciens codes de synchro périmés
+// (appareils qui ont générés leur propre espace isolé avant la migration). Sert uniquement à
+// l'outil "Tout migrer d'un coup" : le tri (lequel est un ancien code, lequel est un teacherId
+// actuel) est fait côté storage.js à partir de la config d'accès.
+export async function listerDocumentsProfs() {
+  if (!db) return []
+  try {
+    const snap = await getDocs(collection(db, 'profs'))
+    return snap.docs.map((d) => d.id)
+  } catch (e) {
+    console.warn('Listage des espaces profs impossible', e)
+    return []
+  }
+}
