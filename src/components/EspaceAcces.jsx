@@ -69,9 +69,9 @@ function MigrationAncienneVersion({ onMigrer }) {
       {erreur && <p className="text-alerte text-xs mt-2">{erreur}</p>}
       {resultat && (
         <p className="text-xs text-piste-700 mt-2">
-          Terminé : {resultat.nbClasses} classe(s), {resultat.nbEleves} élève(s) et {resultat.nbRealisations} séance(s)
-          réalisée(s) récupérées (les résultats de tests VMA et la bibliothèque de séances ont
-          aussi été recopiés s'ils n'existaient pas déjà ici).
+          Terminé : {resultat.nbClasses} classe(s), {resultat.nbEleves} élève(s), {resultat.nbRealisations} séance(s)
+          réalisée(s) et {resultat.nbVma} fiche(s) VMA récupérées (bibliothèque de séances aussi
+          recopiée si elle n'existait pas déjà ici).
         </p>
       )}
     </div>
