@@ -167,7 +167,11 @@ export const storage = {
       nbClasses: ancien.nbClasses,
       nbEleves: ancien.nbEleves,
       nbRealisations: realisationsAAjouter.length,
-      nbVma: clesVmaAAjouter.length
+      nbVma: clesVmaAAjouter.length,
+      // Diagnostic : ce qui a été lu sous l'ancien code AVANT tout filtrage doublon, pour
+      // distinguer "rien trouvé sous ce code" de "trouvé mais déjà présent ici".
+      nbRealisationsTrouvees: ancien.realisations.length,
+      nbVmaTrouvees: Object.keys(ancien.vma).length
     }
   },
 
