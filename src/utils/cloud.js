@@ -73,10 +73,16 @@ export function assurerCodeSync() {
 }
 
 // Appelé au démarrage côté élève si un code est présent dans le lien (?c=XXXXX).
-// N'écrase jamais un code déjà enregistré sur l'appareil (pour ne pas déconnecter
-// un élève déjà synchronisé sur un autre espace par erreur de lien).
+// Le lien/flashcode fait toujours foi : s'il porte un code différent de celui déjà
+// enregistré sur l'appareil (ancien test, ancien lien...), on bascule dessus, sinon
+// un appareil resterait bloqué indéfiniment sur un espace périmé même en rouvrant le
+// lien à jour. Retourne true si le code a changé (pour vider le roster local périmé).
 export function appliquerCodeDepuisLien(code) {
-  if (code && !getCodeSync()) definirCodeSync(code)
+  if (!code) return false
+  const actuel = getCodeSync()
+  if (code === actuel) return false
+  definirCodeSync(code)
+  return true
 }
 
 function actif() {
