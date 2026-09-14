@@ -171,6 +171,36 @@ export const storage = {
     }
   },
 
+  // --- Migration en masse à partir d'une liste explicite de codes (donnée par l'utilisateur,
+  // par exemple copiée depuis la console Firebase) — utilisée quand la détection automatique
+  // (migrerTousAnciensCodes) ne peut pas lister la collection "profs" elle-même, ce qui arrive si
+  // les règles Firestore n'autorisent que la lecture À L'INTÉRIEUR de chaque code, pas le listage
+  // de la collection racine. Ignore silencieusement les codes qui sont en fait des teacherId
+  // actuels (admin ou un collègue), au cas où ils auraient été collés par erreur.
+  migrerPlusieursCodes: async (codes, teacherIdsActuels) => {
+    const actuels = new Set(teacherIdsActuels)
+    const detail = []
+    for (const code of codes) {
+      if (actuels.has(code)) continue
+      try {
+        const res = await storage.migrerAncienEspace(code)
+        detail.push({ code, ok: true, ...res })
+      } catch (e) {
+        detail.push({ code, ok: false, erreur: e.message })
+      }
+    }
+    const total = detail.reduce(
+      (acc, d) => (d.ok ? {
+        nbClasses: acc.nbClasses + d.nbClasses,
+        nbEleves: acc.nbEleves + d.nbEleves,
+        nbRealisations: acc.nbRealisations + d.nbRealisations,
+        nbVma: acc.nbVma + d.nbVma
+      } : acc),
+      { nbClasses: 0, nbEleves: 0, nbRealisations: 0, nbVma: 0 }
+    )
+    return { total, detail, nbCodesTraites: detail.length }
+  },
+
   // --- Migration en masse : liste tous les documents sous "profs" et migre automatiquement
   // ceux qui ne sont pas un teacherId actuel (admin ou l'un des collègues) — c'est-à-dire les
   // anciens codes de synchro périmés, un par appareil qui a fini par générer le sien (typiquement
