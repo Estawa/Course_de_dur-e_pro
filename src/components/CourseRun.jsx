@@ -37,6 +37,26 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
   const phaseElapsed = Math.max(0, elapsed - debutPhase)
   const vitesseCible = phaseCourante?.vitesse_kmh || 0
 
+  // Regroupe les phases consécutives partageant la même série (tour) ou la même répétition,
+  // pour permettre à l'élève de se situer à plusieurs niveaux : dans le bloc entier, dans la
+  // série en cours, et dans la répétition en cours — plutôt qu'un seul décompte global.
+  const serieIndex = phaseCourante?.serieIndex ?? null
+  const serieTotal = phaseCourante?.serieTotal ?? null
+  const repIndex = phaseCourante?.repIndex ?? null
+  const repTotal = phaseCourante?.repTotal ?? null
+
+  function finDuGroupe(cle) {
+    const valeur = phaseCourante?.[cle]
+    if (valeur === undefined || valeur === null) return indexPhase
+    let j = indexPhase
+    while (j + 1 < phases.length && phases[j + 1][cle] === valeur) j++
+    return j
+  }
+  const finIndexSerie = finDuGroupe('serieIndex')
+  const finIndexRep = finDuGroupe('repIndex')
+  const serieRestante = Math.max(0, (cumul[finIndexSerie] ?? dureeTotalePhases) - elapsed)
+  const repetitionRestante = Math.max(0, (cumul[finIndexRep] ?? dureeTotalePhases) - elapsed)
+
   useEffect(() => {
     if (etat !== 'latence') return
     if (compteALatence <= 0) {
@@ -192,11 +212,21 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
       <p className="text-xs uppercase tracking-wide text-piste-500 mb-1">
         {labelBloc} {phases.length > 1 && `· Phase ${indexPhase + 1}/${phases.length}`}
       </p>
+      {serieTotal > 1 && (
+        <p className="text-xs font-semibold text-piste-700 mb-1">
+          Série {serieIndex + 1}/{serieTotal}
+          {repTotal ? ` · Répétition ${repIndex}/${repTotal}` : ''}
+        </p>
+      )}
       <p className="text-[11px] uppercase tracking-wide font-medium text-piste-600 mb-3">
         {phaseCourante?.phase === 'recup' ? 'Récupération' : 'Travail'}{phaseCourante?.typeLettre ? ` · Type ${phaseCourante.typeLettre}` : ''}
       </p>
       <div className="font-display text-6xl text-piste-900 mb-2 tabular-nums">{formatDuree(phaseElapsed)}</div>
-      <p className="text-sm text-piste-500 mb-8">Objectif phase {formatDuree(phaseCourante?.duree_s || 0)} · {vitesseVersAllure(vitesseCible)}</p>
+      <p className="text-sm text-piste-500 mb-1">Objectif phase {formatDuree(phaseCourante?.duree_s || 0)} · {vitesseVersAllure(vitesseCible)}</p>
+      {repTotal > 0 && finIndexRep > indexPhase && (
+        <p className="text-xs text-piste-400 mb-8">Reste {formatDuree(repetitionRestante)} pour finir cette répétition (travail + récup)</p>
+      )}
+      {!(repTotal > 0 && finIndexRep > indexPhase) && <div className="mb-8" />}
 
       {guidage === 'gps' ? (
         <div className={`rounded-2xl border-2 p-6 mb-8 transition-colors ${dansLaZone ? 'border-piste-400 bg-piste-50' : 'border-alerte/50 bg-[#fbeeea]'}`}>
@@ -207,11 +237,25 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
             <span className="font-display text-3xl text-piste-900 tabular-nums">{vitesseInstant.toFixed(1)} km/h</span>
           </div>
           <p className="text-xs text-piste-600">{Math.round(distance)} m parcourus</p>
+          {serieTotal > 1 && (
+            <p className="text-[11px] text-piste-400 mt-2 pt-2 border-t border-piste-200">
+              Série {serieIndex + 1}/{serieTotal} · reste {formatDuree(serieRestante)}
+            </p>
+          )}
         </div>
       ) : (
         <div className="rounded-2xl border-2 border-piste-300 bg-piste-50 p-6 mb-8">
-          <p className="font-display text-3xl text-piste-900 mb-1">{formatDuree(dureeTotalePhases - elapsed)}</p>
-          <p className="text-xs text-piste-600">temps restant sur ce bloc</p>
+          <p className="font-display text-3xl text-piste-900 mb-1">
+            {formatDuree(serieTotal > 1 ? serieRestante : dureeTotalePhases - elapsed)}
+          </p>
+          <p className="text-xs text-piste-600">
+            {serieTotal > 1 ? `temps restant sur la série ${serieIndex + 1}/${serieTotal}` : 'temps restant sur ce bloc'}
+          </p>
+          {serieTotal > 1 && (
+            <p className="text-[11px] text-piste-400 mt-1">
+              dont {formatDuree(dureeTotalePhases - elapsed)} sur l'ensemble du bloc
+            </p>
+          )}
         </div>
       )}
 
