@@ -95,7 +95,9 @@ export const storage = {
   getElevesClasse: (classe) => rosterOps.getElevesClasse(cache.roster, classe),
 
   appliquerImportRoster: (listeEleves, mode = 'ajouter') => {
-    persisterRoster(rosterOps.appliquerImportRoster(cache.roster, listeEleves, mode))
+    const { roster: next, conflits } = rosterOps.appliquerImportRoster(cache.roster, listeEleves, mode)
+    persisterRoster(next)
+    return conflits
   },
 
   ajouterEleveManuel: (classe, nom, prenom, sexe = null) => {
@@ -127,7 +129,12 @@ export const storage = {
     persisterRoster(rosterOps.reinitialiserPin(cache.roster, classe, eleveId))
   },
 
+  deplacerEleve: (classeActuelle, eleveId, nouvelleClasse) => {
+    persisterRoster(rosterOps.deplacerEleve(cache.roster, classeActuelle, eleveId, nouvelleClasse))
+  },
+
   trouverEleve: (classe, eleveId) => rosterOps.trouverEleve(cache.roster, classe, eleveId),
+  trouverEleveParNom: (nom, prenom) => rosterOps.trouverEleveParNomPartout(cache.roster, nom, prenom),
   trouverEleveParId: (eleveId) => rosterOps.trouverEleveParId(cache.roster, eleveId),
 
   definirPin: (classe, eleveId, pin) => {
@@ -164,24 +171,29 @@ export const storage = {
       throw new Error("Aucune donnée trouvée sous ce code. Vérifie qu'il est correct.")
     }
 
-    // Roster : fusionne classe par classe par nom+prénom, en gardant trace de l'identifiant final
-    // retenu pour chaque ancien identifiant rencontré (mappingIds), pour pouvoir rapatrier sa VMA
-    // et ses réalisations sous le bon élève même si son id a changé d'un ancien code à l'autre.
+    // Roster : fusionne par nom+prénom recherché dans TOUTES les classes déjà connues (pas
+    // seulement celle indiquée par l'ancien code), pour ne jamais dupliquer un élève déjà placé
+    // dans un groupe classe alors que cet ancien code le connaît sous sa classe d'origine. En cas
+    // de classe différente, l'élève reste dans sa classe actuelle (jamais déplacé
+    // automatiquement) — le conflit est remonté pour vérification.
     const mappingIds = new Map()
+    const conflitsClasse = []
     const nextRoster = { ...cache.roster }
     Object.entries(ancien.roster).forEach(([classe, eleves]) => {
-      nextRoster[classe] = nextRoster[classe] ? nextRoster[classe].slice() : []
       eleves.forEach((e) => {
-        const idx = nextRoster[classe].findIndex(
-          (x) => x.nom.toLowerCase() === e.nom.toLowerCase() && x.prenom.toLowerCase() === e.prenom.toLowerCase()
-        )
-        if (idx !== -1) {
-          mappingIds.set(e.id, nextRoster[classe][idx].id)
-          let maj = nextRoster[classe][idx]
+        const trouve = rosterOps.trouverEleveParNomPartout(nextRoster, e.nom, e.prenom)
+        if (trouve) {
+          mappingIds.set(e.id, trouve.eleve.id)
+          let maj = trouve.eleve
           if (e.sexe && !maj.sexe) maj = { ...maj, sexe: e.sexe }
           if (e.classeOrigine && !maj.classeOrigine) maj = { ...maj, classeOrigine: e.classeOrigine }
-          nextRoster[classe][idx] = maj
+          nextRoster[trouve.classe] = nextRoster[trouve.classe].slice()
+          nextRoster[trouve.classe][trouve.index] = maj
+          if (trouve.classe !== classe) {
+            conflitsClasse.push({ nom: e.nom, prenom: e.prenom, classeExistante: trouve.classe, classeAncienCode: classe })
+          }
         } else {
+          nextRoster[classe] = nextRoster[classe] ? nextRoster[classe].slice() : []
           nextRoster[classe].push(e)
           mappingIds.set(e.id, e.id)
         }
@@ -229,7 +241,8 @@ export const storage = {
       nbRealisations: realisationsAAjouter.length,
       nbVma: clesFinalesTouchees.length,
       nbRealisationsTrouvees: ancien.realisations.length,
-      nbVmaTrouvees: Object.keys(ancien.vma).length
+      nbVmaTrouvees: Object.keys(ancien.vma).length,
+      conflitsClasse
     }
   },
 
@@ -260,7 +273,8 @@ export const storage = {
       } : acc),
       { nbClasses: 0, nbEleves: 0, nbRealisations: 0, nbVma: 0 }
     )
-    return { total, detail, nbCodesTraites: detail.length }
+    const conflits = detail.filter((d) => d.ok).flatMap((d) => d.conflitsClasse || [])
+    return { total, detail, nbCodesTraites: detail.length, conflits }
   },
 
   // --- Migration en masse : liste tous les documents sous "profs" et migre automatiquement
@@ -293,8 +307,9 @@ export const storage = {
       } : acc),
       { nbClasses: 0, nbEleves: 0, nbRealisations: 0, nbVma: 0 }
     )
+    const conflits = detail.filter((d) => d.ok).flatMap((d) => d.conflitsClasse || [])
 
-    return { total, detail, nbCodesTraites: anciensCodes.length }
+    return { total, detail, nbCodesTraites: anciensCodes.length, conflits }
   },
 
   // --- Session élève active (pointeur local : quel prof + quel id, le reste est rechargé

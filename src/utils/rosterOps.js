@@ -12,13 +12,19 @@ export const rosterOps = {
   getElevesClasse: (roster, classe) => ((roster || {})[classe] || []).slice().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')),
 
   // Applique une liste plate d'élèves importés {nom, prenom, classe, sexe?, classeOrigine?} au
-  // roster. mode "ajouter" : met à jour les élèves déjà présents (par nom/prénom) et ajoute les
-  // nouveaux, sans rien supprimer. mode "remplacer" : pour chaque classe présente dans l'import,
-  // la liste de la classe est remplacée par le contenu du fichier (les élèves reconnus gardent
-  // leur id/pin, ceux absents du fichier sont retirés).
+  // roster. mode "ajouter" : met à jour les élèves déjà présents (recherchés par nom/prénom dans
+  // TOUTES les classes, pas seulement celle du fichier — pour ne jamais dupliquer un élève déjà
+  // placé dans un groupe classe alors que le fichier le indique sous sa classe d'origine) et
+  // ajoute les nouveaux, sans rien supprimer. mode "remplacer" : pour chaque classe présente dans
+  // l'import, la liste de la classe est remplacée par le contenu du fichier (les élèves reconnus
+  // gardent leur id/pin, ceux absents du fichier sont retirés).
+  // Renvoie { roster, conflits } : conflits liste les élèves retrouvés sous une classe différente
+  // de celle du fichier (ils restent dans leur classe actuelle, jamais déplacés automatiquement —
+  // seulement sexe/classeOrigine complétés si absents), à corriger manuellement si besoin.
   appliquerImportRoster: (roster, listeEleves, mode = 'ajouter') => {
     const next = { ...(roster || {}) }
     const listeValide = listeEleves.filter((e) => e.classe)
+    const conflits = []
 
     if (mode === 'remplacer') {
       const classesConcernees = Array.from(new Set(listeValide.map((e) => e.classe)))
@@ -41,24 +47,24 @@ export const rosterOps = {
       })
     } else {
       listeValide.forEach(({ nom, prenom, classe, sexe, classeOrigine }) => {
-        if (!next[classe]) next[classe] = []
-        else next[classe] = next[classe].slice()
-        const idx = next[classe].findIndex(
-          (e) => e.nom.toLowerCase() === nom.toLowerCase() && e.prenom.toLowerCase() === prenom.toLowerCase()
-        )
-        if (idx !== -1) {
-          const existant = next[classe][idx]
-          next[classe][idx] = {
-            ...existant,
-            sexe: sexe || existant.sexe || null,
-            classeOrigine: classeOrigine || existant.classeOrigine || null
+        const trouve = rosterOps.trouverEleveParNomPartout(next, nom, prenom)
+        if (trouve) {
+          let maj = trouve.eleve
+          if (sexe && !maj.sexe) maj = { ...maj, sexe }
+          if (classeOrigine && !maj.classeOrigine) maj = { ...maj, classeOrigine }
+          next[trouve.classe] = next[trouve.classe].slice()
+          next[trouve.classe][trouve.index] = maj
+          if (trouve.classe !== classe) {
+            conflits.push({ nom, prenom, classeExistante: trouve.classe, classeFichier: classe })
           }
         } else {
+          if (!next[classe]) next[classe] = []
+          else next[classe] = next[classe].slice()
           next[classe].push({ id: idEleve(), nom, prenom, pin: null, sexe: sexe || null, classeOrigine: classeOrigine || null })
         }
       })
     }
-    return next
+    return { roster: next, conflits }
   },
 
   ajouterEleveManuel: (roster, classe, nom, prenom, sexe = null) => {
@@ -104,7 +110,36 @@ export const rosterOps = {
     return next
   },
 
+  // Déplace un élève d'une classe vers une autre en conservant son identifiant (donc son PIN,
+  // sa VMA et ses séances réalisées, qui sont indexées par id, pas par classe) — c'est le seul
+  // moyen sûr de corriger un élève placé au mauvais endroit ; le supprimer puis le recréer
+  // casserait le lien avec son historique.
+  deplacerEleve: (roster, classeActuelle, eleveId, nouvelleClasse) => {
+    const next = { ...(roster || {}) }
+    const eleve = (next[classeActuelle] || []).find((e) => e.id === eleveId)
+    if (!eleve) return next
+    next[classeActuelle] = next[classeActuelle].filter((e) => e.id !== eleveId)
+    if (next[classeActuelle].length === 0) delete next[classeActuelle]
+    const nom = nouvelleClasse.trim().toUpperCase()
+    next[nom] = [...(next[nom] || []), eleve]
+    return next
+  },
+
   trouverEleve: (roster, classe, eleveId) => ((roster || {})[classe] || []).find((e) => e.id === eleveId) || null,
+
+  // Cherche un élève par nom+prénom dans TOUTES les classes du roster (pas seulement une classe
+  // précise) — sert à ne jamais créer de doublon quand le même élève est repéré sous un nom de
+  // classe différent d'un import/ancien code à l'autre (ex. classe d'origine vs groupe classe).
+  // Renvoie { classe, index, eleve } ou null.
+  trouverEleveParNomPartout: (roster, nom, prenom) => {
+    const n = nom.trim().toLowerCase()
+    const p = prenom.trim().toLowerCase()
+    for (const classe of Object.keys(roster || {})) {
+      const index = (roster[classe] || []).findIndex((e) => e.nom.toLowerCase() === n && e.prenom.toLowerCase() === p)
+      if (index !== -1) return { classe, index, eleve: roster[classe][index] }
+    }
+    return null
+  },
 
   // Cherche un élève par son id dans tout le roster (toutes classes), sans connaître sa classe
   // à l'avance — utilisé pour retrouver la fiche d'un élève déjà connecté sur l'appareil.
