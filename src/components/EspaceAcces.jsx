@@ -116,7 +116,7 @@ function MigrationAncienneVersion({ onMigrer, onMigrerTout, onMigrerListe }) {
                       <th className="text-left px-2 py-1.5">Code</th>
                       <th className="text-right px-2 py-1.5">Élèves</th>
                       <th className="text-right px-2 py-1.5">VMA trouvées</th>
-                      <th className="text-right px-2 py-1.5">VMA ajoutées</th>
+                      <th className="text-right px-2 py-1.5">VMA fusionnées</th>
                       <th className="text-right px-2 py-1.5">Séances trouvées</th>
                     </tr>
                   </thead>
