@@ -106,13 +106,13 @@ export async function loadRealisationsTeacher(teacherId) {
 }
 
 export function cloudEcrireRealisation(teacherId, realisation) {
-  if (!db) return
-  setDoc(doc(colRealisations(teacherId), realisation.id), realisation).catch(() => {})
+  if (!db) return Promise.resolve()
+  return setDoc(doc(colRealisations(teacherId), realisation.id), realisation).catch(() => {})
 }
 
 export function cloudSupprimerRealisation(teacherId, id) {
-  if (!db) return
-  deleteDoc(doc(colRealisations(teacherId), id)).catch(() => {})
+  if (!db) return Promise.resolve()
+  return deleteDoc(doc(colRealisations(teacherId), id)).catch(() => {})
 }
 
 // --- VMA (par élève) d'un enseignant : une collection, un document par élève (clé = cleEleve). ---
@@ -135,8 +135,8 @@ export async function loadVmaTeacher(teacherId) {
 }
 
 export function cloudEcrireVma(teacherId, cle, detail) {
-  if (!db) return
-  setDoc(doc(colVma(teacherId), cle), detail).catch(() => {})
+  if (!db) return Promise.resolve()
+  return setDoc(doc(colVma(teacherId), cle), detail).catch(() => {})
 }
 
 // --- Bibliothèque de séances d'un enseignant : un seul document. ---
@@ -153,8 +153,8 @@ export async function loadSeancesTeacher(teacherId) {
 }
 
 export function cloudEcrireSeances(teacherId, seances) {
-  if (!db) return
-  setDoc(doc(db, 'profs', teacherId, 'meta', 'seances'), { liste: seances }).catch(() => {})
+  if (!db) return Promise.resolve()
+  return setDoc(doc(db, 'profs', teacherId, 'meta', 'seances'), { liste: seances }).catch(() => {})
 }
 
 // --- Visibilité des tests VMA/Fartlek d'un enseignant : un seul document. ---
@@ -171,8 +171,8 @@ export async function loadTestsVisibiliteTeacher(teacherId) {
 }
 
 export function cloudEcrireTestsVisibilite(teacherId, visibilite) {
-  if (!db) return
-  setDoc(doc(db, 'profs', teacherId, 'meta', 'testsVisibilite'), { data: visibilite }).catch(() => {})
+  if (!db) return Promise.resolve()
+  return setDoc(doc(db, 'profs', teacherId, 'meta', 'testsVisibilite'), { data: visibilite }).catch(() => {})
 }
 
 // --- Migration depuis l'ancienne version (un seul professeur, "code de synchro" au lieu d'un

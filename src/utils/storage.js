@@ -113,7 +113,10 @@ export const storage = {
   // l'espace lu sous l'ancien code dans l'espace actuellement actif (fusion avec ce qui y existe
   // déjà — les classes/élèves de même nom+prénom sont mis à jour plutôt que dupliqués, les
   // réalisations et VMA s'ajoutent par id sans écraser ce qui ne vient pas de l'ancien espace).
-  // Retourne un résumé { nbClasses, nbEleves, nbRealisations } pour confirmation à l'écran.
+  // IMPORTANT : chaque écriture est attendue avant de continuer — l'appelant recharge l'espace
+  // juste après (pour rafraîchir l'écran), et un rechargement lancé avant la fin réelle des
+  // écritures verrait une donnée encore absente sur le serveur, l'effaçant du cache local.
+  // Retourne un résumé { nbClasses, nbEleves, nbRealisations, nbVma } pour confirmation à l'écran.
   migrerAncienEspace: async (ancienCode) => {
     const ancien = await cloud.chargerAncienEspace(ancienCode)
     if (!ancien) throw new Error('Connexion à la sauvegarde impossible.')
@@ -128,17 +131,18 @@ export const storage = {
       eleves.forEach((e) => listeAncienneAPlat.push({ ...e, classe }))
     })
     const rosterFusionne = rosterOps.appliquerImportRoster(cache.roster, listeAncienneAPlat, 'ajouter')
-    persisterRoster(rosterFusionne)
+    cache.roster = rosterFusionne
+    await cloud.saveRosterTeacher(cache.teacherId, rosterFusionne)
 
     // Séances de bibliothèque et visibilité des tests : n'écrase que si l'espace cible est vide,
     // pour ne pas effacer des séances déjà (re)créées après le passage à la nouvelle version.
     if (cache.seances.length === 0 && ancien.seances.length > 0) {
       cache.seances = ancien.seances
-      cloud.cloudEcrireSeances(cache.teacherId, ancien.seances)
+      await cloud.cloudEcrireSeances(cache.teacherId, ancien.seances)
     }
     if (Object.keys(cache.testsVisibilite).length === 0 && Object.keys(ancien.testsVisibilite).length > 0) {
       cache.testsVisibilite = ancien.testsVisibilite
-      cloud.cloudEcrireTestsVisibilite(cache.teacherId, ancien.testsVisibilite)
+      await cloud.cloudEcrireTestsVisibilite(cache.teacherId, ancien.testsVisibilite)
     }
 
     // Réalisations et VMA : ajoutées par id (jamais de perte, jamais de doublon si la migration
@@ -146,15 +150,19 @@ export const storage = {
     const idsRealisationsExistantes = new Set(cache.realisations.map((r) => r.id))
     const realisationsAAjouter = ancien.realisations.filter((r) => !idsRealisationsExistantes.has(r.id))
     cache.realisations = [...cache.realisations, ...realisationsAAjouter]
-    realisationsAAjouter.forEach((r) => cloud.cloudEcrireRealisation(cache.teacherId, r))
+    await Promise.all(realisationsAAjouter.map((r) => cloud.cloudEcrireRealisation(cache.teacherId, r)))
 
     const clesVmaExistantes = new Set(Object.keys(cache.vma))
+    const clesVmaAAjouter = Object.keys(ancien.vma).filter((cle) => !clesVmaExistantes.has(cle))
     cache.vma = { ...ancien.vma, ...cache.vma }
-    Object.keys(ancien.vma).forEach((cle) => {
-      if (!clesVmaExistantes.has(cle)) cloud.cloudEcrireVma(cache.teacherId, cle, ancien.vma[cle])
-    })
+    await Promise.all(clesVmaAAjouter.map((cle) => cloud.cloudEcrireVma(cache.teacherId, cle, ancien.vma[cle])))
 
-    return { nbClasses: ancien.nbClasses, nbEleves: ancien.nbEleves, nbRealisations: ancien.realisations.length }
+    return {
+      nbClasses: ancien.nbClasses,
+      nbEleves: ancien.nbEleves,
+      nbRealisations: realisationsAAjouter.length,
+      nbVma: clesVmaAAjouter.length
+    }
   },
 
   // --- Session élève active (pointeur local : quel prof + quel id, le reste est rechargé
