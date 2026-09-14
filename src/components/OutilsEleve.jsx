@@ -13,7 +13,7 @@ function formatDate(ts) {
   return new Date(ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 }
 
-export default function OutilsEleve({ eleve, onComposerSeance, onLancerFartlek }) {
+export default function OutilsEleve({ eleve, onComposerSeance, onLancerFartlek, onActiviteEnCours }) {
   const [ecran, setEcran] = useState('menu')
   const detail = storage.getVmaDetail(eleve)
   const retenue = storage.getVmaRetenue(eleve)
@@ -25,7 +25,7 @@ export default function OutilsEleve({ eleve, onComposerSeance, onLancerFartlek }
       ? `Issue de ton test ${LABEL_TEST[detail.autoTest] || ''} du ${formatDate(detail.autoDate)}`
       : null
 
-  if (ecran === 'tests') return <VmaTests eleve={eleve} />
+  if (ecran === 'tests') return <VmaTests eleve={eleve} onActiviteEnCours={onActiviteEnCours} />
   if (ecran === 'chrono') return <Chronometre />
   if (ecran === 'borg') return <BorgReference />
   if (ecran === 'perfs') return <PerformancesEstimees />

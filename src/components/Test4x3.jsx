@@ -4,11 +4,14 @@ import { beepDepart, beepFin, beep } from '../utils/audio'
 import { formatDuree } from '../utils/calc'
 import { storage } from '../utils/storage'
 import { useGpsSuivi } from '../utils/gps'
+import { useWakeLock } from '../utils/wakeLock'
 import IndicateurGps from './IndicateurGps'
+import ReprisePrompt from './ReprisePrompt'
 
 const DUREE_EFFORT = 3 * 60
 const DUREE_RECUP = 4 * 60 + 30
 const ESPACEMENT_PLOT = 50 // 1 plot tous les 50 m autour de la piste
+const TYPE_SESSION = 'test-4x3'
 
 // Pour un effort de 3 minutes pile, la vitesse (km/h) = distance(m) / 50.
 // Avec un plot tous les 50 m, le nombre de plots parcourus est donc numériquement
@@ -50,7 +53,9 @@ function RecapDistances({ distances, viaGPS }) {
   )
 }
 
-export default function Test4x3({ eleve, onRetour }) {
+export default function Test4x3({ eleve, onRetour, onActiviteEnCours }) {
+  useWakeLock(true)
+  const [repriseProposee, setRepriseProposee] = useState(() => storage.getSessionCours(eleve, TYPE_SESSION))
   const [rep, setRep] = useState(0) // 0..3, répétition en cours ou juste terminée
   const [phase, setPhase] = useState('attente') // attente | effort | recup | saisie | resultat
   const [elapsed, setElapsed] = useState(0)
@@ -61,6 +66,9 @@ export default function Test4x3({ eleve, onRetour }) {
   const [saisieM, setSaisieM] = useState('')
   const [vmaFinale, setVmaFinale] = useState(null)
   const [enregistre, setEnregistre] = useState(false)
+  // Confirmation avant d'arrêter l'effort par un appui accidentel (téléphone tenu en main).
+  const [confirmationArret, setConfirmationArret] = useState(false)
+  const confirmationTimeoutRef = useRef(null)
   const startRef = useRef(null)
   const intervalRef = useRef(null)
 
@@ -71,6 +79,45 @@ export default function Test4x3({ eleve, onRetour }) {
   const gpsOkRef = useRef(gpsOk)
   useEffect(() => { gpsOkRef.current = gpsOk }, [gpsOk])
   const departRepRef = useRef(0)
+
+  // Sauvegarde/efface la progression pour permettre une reprise si l'appli est fermée pendant le
+  // test. Ne touche pas au stockage tant que la proposition de reprise initiale n'a pas été
+  // tranchée par l'élève. Note : en cas de reprise, la distance déjà parcourue sur la répétition
+  // interrompue n'est pas récupérable (le suivi GPS continu repart de zéro) ; seules les
+  // répétitions déjà terminées et le chronométrage sont restaurés.
+  useEffect(() => {
+    if (repriseProposee) return
+    if (phase === 'effort' || phase === 'recup') {
+      storage.sauvegarderSessionCours(eleve, TYPE_SESSION, { rep, phase, distances, validees, viaGPS, startTs: startRef.current })
+    } else {
+      storage.effacerSessionCours(eleve, TYPE_SESSION)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, rep, distances, validees, viaGPS, repriseProposee])
+
+  useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
+
+  // Signale au parent qu'un chrono est actif, pour désactiver la flèche retour de l'en-tête.
+  useEffect(() => {
+    onActiviteEnCours?.(phase === 'effort' || phase === 'recup')
+    return () => onActiviteEnCours?.(false)
+  }, [phase])
+
+  function handleReprendre() {
+    setRep(repriseProposee.rep)
+    setPhase(repriseProposee.phase)
+    setDistances(repriseProposee.distances)
+    setValidees(repriseProposee.validees)
+    setViaGPS(repriseProposee.viaGPS)
+    startRef.current = repriseProposee.startTs
+    departRepRef.current = checkpoint()
+    setRepriseProposee(null)
+  }
+
+  function handleIgnorerReprise() {
+    storage.effacerSessionCours(eleve, TYPE_SESSION)
+    setRepriseProposee(null)
+  }
 
   const dureePhase = phase === 'effort' ? DUREE_EFFORT : DUREE_RECUP
   const distanceSaisie = (Number(saisieKm) || 0) * 1000 + (Number(saisieM) || 0)
@@ -165,6 +212,25 @@ export default function Test4x3({ eleve, onRetour }) {
     finirEffort()
   }
 
+  // Un premier appui affiche une confirmation (disparaît d'elle-même après 3s si non validée),
+  // pour éviter d'arrêter l'effort par un appui accidentel pendant la course.
+  function demanderArret() {
+    setConfirmationArret(true)
+    clearTimeout(confirmationTimeoutRef.current)
+    confirmationTimeoutRef.current = setTimeout(() => setConfirmationArret(false), 3000)
+  }
+
+  function annulerConfirmationArret() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationArret(false)
+  }
+
+  function confirmerArret() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationArret(false)
+    arreterManuel()
+  }
+
   function finaliser(distanceDerniereRep, gpsDerniereRep) {
     const toutesDistances = distances.map((d, i) => (i === rep ? distanceDerniereRep : d ?? 0))
     const toutesViaGPS = viaGPS.map((v, i) => (i === rep ? gpsDerniereRep : v))
@@ -179,6 +245,10 @@ export default function Test4x3({ eleve, onRetour }) {
 
   function validerDistanceFinale() {
     finaliser(distanceSaisie, false)
+  }
+
+  if (repriseProposee) {
+    return <ReprisePrompt titre="Ton test 4×3 minutes" onReprendre={handleReprendre} onIgnorer={handleIgnorerReprise} />
   }
 
   if (phase === 'attente') {
@@ -214,9 +284,21 @@ export default function Test4x3({ eleve, onRetour }) {
         {gpsOk === false && (
           <p className="text-xs text-alerte mb-6">GPS indisponible : tu devras saisir ta distance à la fin de la répétition.</p>
         )}
-        <button onClick={arreterManuel} className="flex items-center gap-2 mx-auto bg-alerte text-white px-5 py-3 rounded-xl">
-          <Square size={16} fill="white" /> Arrêter l'effort
-        </button>
+        {!confirmationArret ? (
+          <button onClick={demanderArret} className="flex items-center gap-2 mx-auto bg-alerte text-white px-5 py-3 rounded-xl">
+            <Square size={16} fill="white" /> Arrêter l'effort
+          </button>
+        ) : (
+          <div className="rounded-xl border-2 border-alerte/40 bg-[#fbeeea] p-4 inline-block">
+            <p className="text-xs text-piste-700 mb-3">Confirme pour arrêter cette répétition</p>
+            <div className="flex items-center justify-center gap-3">
+              <button onClick={confirmerArret} className="flex items-center gap-2 bg-alerte text-white px-5 py-3 rounded-xl font-medium">
+                <Square size={16} fill="white" /> Confirmer l'arrêt
+              </button>
+              <button onClick={annulerConfirmationArret} className="text-xs text-piste-500 underline px-2">Annuler</button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

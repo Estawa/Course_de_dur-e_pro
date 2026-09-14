@@ -2,12 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { Play, Square, TrendingDown, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { beepDepart, beepFin, beep, planifierBipRegulation } from '../utils/audio'
 import { storage } from '../utils/storage'
+import { useWakeLock } from '../utils/wakeLock'
+import ReprisePrompt from './ReprisePrompt'
 
 const DUREE_PALIER = 60
 const VITESSE_DEPART = 7
 const INCREMENT = 0.5
 // Tolérance sous la vitesse cible avant qu'un palier soit considéré comme non tenu (bruit GPS inclus).
 const TOLERANCE_GPS = 0.08
+const TYPE_SESSION = 'test-vameval'
 
 function vitessePalier(p) {
   return Math.round((VITESSE_DEPART + (p - 1) * INCREMENT) * 100) / 100
@@ -27,7 +30,9 @@ function haversine(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
-export default function TestVamEval({ eleve, onRetour }) {
+export default function TestVamEval({ eleve, onRetour, onActiviteEnCours }) {
+  useWakeLock(true)
+  const [repriseProposee, setRepriseProposee] = useState(() => storage.getSessionCours(eleve, TYPE_SESSION))
   const [phase, setPhase] = useState('attente') // attente | effort | resultat
   const [palier, setPalier] = useState(1)
   const [elapsed, setElapsed] = useState(0)
@@ -52,6 +57,39 @@ export default function TestVamEval({ eleve, onRetour }) {
   useEffect(() => {
     distancePalierRef.current = distancePalier
   }, [distancePalier])
+
+  // Sauvegarde/efface la progression pour permettre une reprise si l'appli est fermée pendant le
+  // test. Ne touche pas au stockage tant que la proposition de reprise initiale n'a pas été
+  // tranchée. Note : la distance déjà parcourue sur le palier interrompu n'est pas récupérable ;
+  // le palier et le chronométrage sont restaurés.
+  useEffect(() => {
+    if (repriseProposee) return
+    if (phase === 'effort') {
+      storage.sauvegarderSessionCours(eleve, TYPE_SESSION, {
+        palier,
+        startTs: startRef.current,
+        dernierPalierValide: dernierPalierValideRef.current
+      })
+    } else {
+      storage.effacerSessionCours(eleve, TYPE_SESSION)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, palier, repriseProposee])
+
+  function handleReprendre() {
+    setPalier(repriseProposee.palier)
+    dernierPalierValideRef.current = repriseProposee.dernierPalierValide || 0
+    startRef.current = repriseProposee.startTs
+    lastPosRef.current = null
+    setDistancePalier(0)
+    setPhase('effort')
+    setRepriseProposee(null)
+  }
+
+  function handleIgnorerReprise() {
+    storage.effacerSessionCours(eleve, TYPE_SESSION)
+    setRepriseProposee(null)
+  }
 
   // Chronomètre général
   useEffect(() => {
@@ -171,6 +209,12 @@ export default function TestVamEval({ eleve, onRetour }) {
 
   useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
 
+  // Signale au parent qu'un chrono est actif, pour désactiver la flèche retour de l'en-tête.
+  useEffect(() => {
+    onActiviteEnCours?.(phase === 'effort')
+    return () => onActiviteEnCours?.(false)
+  }, [phase])
+
   function terminer(distanceFaite, requise) {
     if (arreteRef.current) return
     arreteRef.current = true
@@ -202,6 +246,10 @@ export default function TestVamEval({ eleve, onRetour }) {
     setResultat({ vma, viaGPS })
     storage.enregistrerResultatTest(eleve, vma, 'vameval', detail)
     setEnregistre(true)
+  }
+
+  if (repriseProposee) {
+    return <ReprisePrompt titre="Ton test VAM-EVAL" onReprendre={handleReprendre} onIgnorer={handleIgnorerReprise} />
   }
 
   if (phase === 'attente') {

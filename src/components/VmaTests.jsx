@@ -12,13 +12,13 @@ const TESTS = [
   { id: 'vameval', titre: 'VAM-EVAL', description: 'Paliers continus de 1 min vérifiés par GPS, départ 7 km/h, +0,5 km/h' }
 ]
 
-export default function VmaTests({ eleve }) {
+export default function VmaTests({ eleve, onActiviteEnCours }) {
   const [testActif, setTestActif] = useState(null)
 
-  if (testActif === 'cooper') return <TestDemiCooper eleve={eleve} onRetour={() => setTestActif(null)} />
-  if (testActif === '4x3') return <Test4x3 eleve={eleve} onRetour={() => setTestActif(null)} />
-  if (testActif === 'gacon') return <TestGacon eleve={eleve} onRetour={() => setTestActif(null)} />
-  if (testActif === 'vameval') return <TestVamEval eleve={eleve} onRetour={() => setTestActif(null)} />
+  if (testActif === 'cooper') return <TestDemiCooper eleve={eleve} onRetour={() => setTestActif(null)} onActiviteEnCours={onActiviteEnCours} />
+  if (testActif === '4x3') return <Test4x3 eleve={eleve} onRetour={() => setTestActif(null)} onActiviteEnCours={onActiviteEnCours} />
+  if (testActif === 'gacon') return <TestGacon eleve={eleve} onRetour={() => setTestActif(null)} onActiviteEnCours={onActiviteEnCours} />
+  if (testActif === 'vameval') return <TestVamEval eleve={eleve} onRetour={() => setTestActif(null)} onActiviteEnCours={onActiviteEnCours} />
 
   return (
     <div className="max-w-md mx-auto px-6 py-8">

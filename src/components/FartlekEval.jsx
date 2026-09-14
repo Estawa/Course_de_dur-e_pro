@@ -7,6 +7,10 @@ import { beep, beepDepart, beepFin, annoncerVocal } from '../utils/audio'
 import BorgScale from './BorgScale'
 import ObservationFinale from './ObservationFinale'
 import { storage } from '../utils/storage'
+import { useWakeLock } from '../utils/wakeLock'
+import ReprisePrompt from './ReprisePrompt'
+
+const TYPE_SESSION = 'fartlek'
 
 function ChoixNiveauFartlek({ onChoisir }) {
   return (
@@ -62,28 +66,47 @@ function ApercuFartlek({ niveauNom, onDemarrer }) {
   )
 }
 
-function CourseFartlek({ niveauNom, vmaRef, onTermine }) {
+// reprise : snapshot sauvegardé si la course avait été interrompue (fermeture/mise en veille de
+// l'appli). En cas de reprise, on relance toujours en pause zone repos (quel que soit l'état au
+// moment de la coupure) : la durée de la coupure est ainsi comptée comme du temps de pause dès
+// que l'élève tape "Reprendre la course", sans jamais être comptabilisée comme temps de course
+// effectif ni continuer à accumuler un malus d'arrêt hors zone pendant que le téléphone était éteint.
+function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
   const cfg = NIVEAUX_FARTLEK[niveauNom]
   const { gpsOk, distanceTotale, vitesseInstant } = useGpsSuivi()
 
   // 'normal' | 'pauseRepos' | 'arretHorsZone'
-  const [etat, setEtat] = useState('normal')
+  const [etat, setEtat] = useState(reprise ? 'pauseRepos' : 'normal')
   const [, forceRender] = useState(0)
-  const startRef = useRef(Date.now())
-  const pauseDebutRef = useRef(null)
-  const totalPauseReposMsRef = useRef(0)
+  const [confirmationTerminer, setConfirmationTerminer] = useState(false)
+  const confirmationTimeoutRef = useRef(null)
+  const startRef = useRef(reprise ? reprise.startTs : Date.now())
+  const pauseDebutRef = useRef(reprise ? Date.now() : null)
+  const totalPauseReposMsRef = useRef(reprise ? reprise.totalPauseReposMs : 0)
   const arretDebutRef = useRef(null)
   const trancheCompteeRef = useRef(0)
-  const malusRef = useRef(0)
-  const nbArretsReposRef = useRef(0)
-  const nbArretsHorsZoneRef = useRef(0)
+  const malusRef = useRef(reprise ? reprise.malus : 0)
+  const nbArretsReposRef = useRef(reprise ? reprise.nbArretsRepos : 0)
+  const nbArretsHorsZoneRef = useRef(reprise ? reprise.nbArretsHorsZone : 0)
   // Ref toujours à jour de l'état, utilisable dans la closure figée de l'interval ci-dessous.
   const etatRef = useRef(etat)
   etatRef.current = etat
 
+  function snapshot(etatActuel) {
+    return {
+      startTs: startRef.current,
+      totalPauseReposMs: totalPauseReposMsRef.current,
+      malus: malusRef.current,
+      nbArretsRepos: nbArretsReposRef.current,
+      nbArretsHorsZone: nbArretsHorsZoneRef.current,
+      etat: etatActuel
+    }
+  }
+
   useEffect(() => {
-    beepDepart()
-    annoncerVocal('Départ Fartlek !')
+    if (!reprise) beepDepart()
+    annoncerVocal(reprise ? 'Reprise Fartlek' : 'Départ Fartlek !')
+    onProgress?.(snapshot(etat))
     const id = setInterval(() => {
       if (etatRef.current === 'arretHorsZone' && arretDebutRef.current) {
         const elapsed = (Date.now() - arretDebutRef.current) / 1000
@@ -100,6 +123,8 @@ function CourseFartlek({ niveauNom, vmaRef, onTermine }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
+
   function effectifMsMaintenant() {
     const now = Date.now()
     const pauseEnCours = etat === 'pauseRepos' && pauseDebutRef.current ? now - pauseDebutRef.current : 0
@@ -112,6 +137,7 @@ function CourseFartlek({ niveauNom, vmaRef, onTermine }) {
     nbArretsReposRef.current += 1
     setEtat('pauseRepos')
     beep({ freq: 500, duration: 0.12 })
+    onProgress?.(snapshot('pauseRepos'))
   }
 
   function debuterArretHorsZone() {
@@ -122,6 +148,7 @@ function CourseFartlek({ niveauNom, vmaRef, onTermine }) {
     nbArretsHorsZoneRef.current += 1
     setEtat('arretHorsZone')
     beep({ freq: 250, duration: 0.15, volume: 0.3 })
+    onProgress?.(snapshot('arretHorsZone'))
   }
 
   function reprendre() {
@@ -134,13 +161,27 @@ function CourseFartlek({ niveauNom, vmaRef, onTermine }) {
     }
     setEtat('normal')
     beep({ freq: 700, duration: 0.1 })
+    onProgress?.(snapshot('normal'))
   }
 
   const effectifS = effectifMsMaintenant() / 1000
   const dureeAtteinte = effectifS >= cfg.dureeMinS
   const peutTerminer = dureeAtteinte && etat === 'normal'
 
+  function demanderTerminer() {
+    setConfirmationTerminer(true)
+    clearTimeout(confirmationTimeoutRef.current)
+    confirmationTimeoutRef.current = setTimeout(() => setConfirmationTerminer(false), 3000)
+  }
+
+  function annulerConfirmationTerminer() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationTerminer(false)
+  }
+
   function terminer() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationTerminer(false)
     beepFin()
     const distReelle = Math.round(distanceTotale)
     const distAttendue = Math.round(distanceAttendueM(niveauNom, vmaRef, effectifS))
@@ -216,24 +257,59 @@ function CourseFartlek({ niveauNom, vmaRef, onTermine }) {
         </button>
       )}
 
-      <button
-        onClick={terminer}
-        disabled={!peutTerminer}
-        className="w-full flex items-center justify-center gap-1.5 border-2 border-piste-800 disabled:opacity-30 text-piste-800 text-sm font-medium py-3 rounded-xl"
-      >
-        <Square size={15} /> Terminer {!dureeAtteinte && `(encore ${formatDuree(cfg.dureeMinS - effectifS)})`}
-      </button>
+      {!confirmationTerminer ? (
+        <button
+          onClick={demanderTerminer}
+          disabled={!peutTerminer}
+          className="w-full flex items-center justify-center gap-1.5 border-2 border-piste-800 disabled:opacity-30 text-piste-800 text-sm font-medium py-3 rounded-xl"
+        >
+          <Square size={15} /> Terminer {!dureeAtteinte && `(encore ${formatDuree(cfg.dureeMinS - effectifS)})`}
+        </button>
+      ) : (
+        <div className="rounded-xl border-2 border-piste-300 bg-piste-50 p-4">
+          <p className="text-xs text-piste-700 mb-3">Confirme pour terminer le Fartlek maintenant</p>
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={terminer} className="flex items-center gap-2 bg-piste-800 text-white px-5 py-3 rounded-xl font-medium">
+              <Square size={16} fill="white" /> Confirmer
+            </button>
+            <button onClick={annulerConfirmationTerminer} className="text-xs text-piste-500 underline px-2">Annuler</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-export default function FartlekEval({ eleve, vmaRef, onTermine }) {
+export default function FartlekEval({ eleve, vmaRef, onTermine, onActiviteEnCours }) {
+  useWakeLock(true)
+  const [repriseProposee, setRepriseProposee] = useState(() => storage.getSessionCours(eleve, TYPE_SESSION))
   const [phase, setPhase] = useState('niveau')
   const [niveauNom, setNiveauNom] = useState(null)
   const [donneesCourse, setDonneesCourse] = useState(null)
   const [borg, setBorg] = useState(null)
 
+  // Signale au parent qu'un chrono est actif, pour désactiver la flèche retour de l'en-tête.
+  useEffect(() => {
+    onActiviteEnCours?.(phase === 'course')
+    return () => onActiviteEnCours?.(false)
+  }, [phase])
+
+  function handleReprendre() {
+    setNiveauNom(repriseProposee.niveauNom)
+    setPhase('course')
+  }
+
+  function handleIgnorerReprise() {
+    storage.effacerSessionCours(eleve, TYPE_SESSION)
+    setRepriseProposee(null)
+  }
+
+  function handleProgressCourse(snapshot) {
+    storage.sauvegarderSessionCours(eleve, TYPE_SESSION, { niveauNom, ...snapshot })
+  }
+
   function handleFinCourse(donnees) {
+    storage.effacerSessionCours(eleve, TYPE_SESSION)
     setDonneesCourse(donnees)
     setPhase('borg')
   }
@@ -254,6 +330,10 @@ export default function FartlekEval({ eleve, vmaRef, onTermine }) {
     setPhase('recap')
   }
 
+  if (repriseProposee && phase === 'niveau') {
+    return <ReprisePrompt titre="Ton Fartlek évaluatif" onReprendre={handleReprendre} onIgnorer={handleIgnorerReprise} />
+  }
+
   if (phase === 'niveau') {
     return <ChoixNiveauFartlek onChoisir={(n) => { setNiveauNom(n); setPhase('apercu') }} />
   }
@@ -261,7 +341,15 @@ export default function FartlekEval({ eleve, vmaRef, onTermine }) {
     return <ApercuFartlek niveauNom={niveauNom} onDemarrer={() => setPhase('course')} />
   }
   if (phase === 'course') {
-    return <CourseFartlek niveauNom={niveauNom} vmaRef={vmaRef} onTermine={handleFinCourse} />
+    return (
+      <CourseFartlek
+        niveauNom={niveauNom}
+        vmaRef={vmaRef}
+        reprise={repriseProposee}
+        onProgress={handleProgressCourse}
+        onTermine={handleFinCourse}
+      />
+    )
   }
   if (phase === 'borg') {
     return <BorgScale onValide={handleValideBorg} />

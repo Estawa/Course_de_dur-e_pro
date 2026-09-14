@@ -4,11 +4,16 @@ import { beep, beepDepart, beepFin } from '../utils/audio'
 import { formatDuree } from '../utils/calc'
 import { storage } from '../utils/storage'
 import { useGpsSuivi } from '../utils/gps'
+import { useWakeLock } from '../utils/wakeLock'
 import IndicateurGps from './IndicateurGps'
+import ReprisePrompt from './ReprisePrompt'
 
 const DUREE = 6 * 60
+const TYPE_SESSION = 'test-cooper'
 
-export default function TestDemiCooper({ eleve, onRetour }) {
+export default function TestDemiCooper({ eleve, onRetour, onActiviteEnCours }) {
+  useWakeLock(true)
+  const [repriseProposee, setRepriseProposee] = useState(() => storage.getSessionCours(eleve, TYPE_SESSION))
   const [etat, setEtat] = useState('attente') // attente | course | saisie | resultat
   const [elapsed, setElapsed] = useState(0)
   const [km, setKm] = useState('')
@@ -17,6 +22,9 @@ export default function TestDemiCooper({ eleve, onRetour }) {
   const [vmaCalculee, setVmaCalculee] = useState(null)
   const [viaGPS, setViaGPS] = useState(false)
   const [enregistre, setEnregistre] = useState(false)
+  // Confirmation avant d'arrêter le chrono par un appui accidentel (téléphone tenu en main).
+  const [confirmationArret, setConfirmationArret] = useState(false)
+  const confirmationTimeoutRef = useRef(null)
   const startRef = useRef(null)
   const intervalRef = useRef(null)
 
@@ -26,6 +34,36 @@ export default function TestDemiCooper({ eleve, onRetour }) {
   const gpsOkRef = useRef(gpsOk)
   useEffect(() => { gpsOkRef.current = gpsOk }, [gpsOk])
   const departRef = useRef(0)
+
+  // Sauvegarde/efface la progression pour permettre une reprise si l'appli est fermée pendant le
+  // test. Ne touche pas au stockage tant que la proposition de reprise initiale n'a pas été
+  // tranchée par l'élève, pour ne pas écraser la session sauvegardée avant qu'il ait choisi.
+  useEffect(() => {
+    if (repriseProposee) return
+    if (etat === 'course') storage.sauvegarderSessionCours(eleve, TYPE_SESSION, { startTs: startRef.current })
+    else storage.effacerSessionCours(eleve, TYPE_SESSION)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etat, repriseProposee])
+
+  useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
+
+  // Signale au parent qu'un chrono est actif, pour désactiver la flèche retour de l'en-tête
+  // (évite de sortir du test par un appui accidentel dessus).
+  useEffect(() => {
+    onActiviteEnCours?.(etat === 'course')
+    return () => onActiviteEnCours?.(false)
+  }, [etat])
+
+  function handleReprendre() {
+    startRef.current = repriseProposee.startTs
+    setEtat('course')
+    setRepriseProposee(null)
+  }
+
+  function handleIgnorerReprise() {
+    storage.effacerSessionCours(eleve, TYPE_SESSION)
+    setRepriseProposee(null)
+  }
 
   useEffect(() => {
     if (etat !== 'course') return
@@ -64,6 +102,27 @@ export default function TestDemiCooper({ eleve, onRetour }) {
     }
   }
 
+  // Un premier appui affiche une confirmation (disparaît d'elle-même après 3s si non validée),
+  // pour éviter d'arrêter le test par un appui accidentel pendant l'effort.
+  function demanderArret() {
+    setConfirmationArret(true)
+    clearTimeout(confirmationTimeoutRef.current)
+    confirmationTimeoutRef.current = setTimeout(() => setConfirmationArret(false), 3000)
+  }
+
+  function annulerConfirmationArret() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationArret(false)
+  }
+
+  function confirmerArret() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationArret(false)
+    beep({ freq: 400 })
+    clearInterval(intervalRef.current)
+    terminerCourse()
+  }
+
   function calculerDepuis(distanceM, gps) {
     const vma = Math.round((distanceM / 100) * 10) / 10
     setVmaCalculee(vma)
@@ -82,6 +141,10 @@ export default function TestDemiCooper({ eleve, onRetour }) {
 
   // Affichage live de la distance parcourue pendant la course (relevé courant - relevé au départ).
   const distanceEnCours = Math.max(0, distanceTotale - departRef.current)
+
+  if (repriseProposee) {
+    return <ReprisePrompt titre="Ton test Demi-Cooper" onReprendre={handleReprendre} onIgnorer={handleIgnorerReprise} />
+  }
 
   if (etat === 'attente') {
     return (
@@ -117,12 +180,24 @@ export default function TestDemiCooper({ eleve, onRetour }) {
         {gpsOk === false && (
           <p className="text-xs text-alerte mb-6">GPS indisponible : tu devras saisir ta distance à la fin.</p>
         )}
-        <button
-          onClick={() => { beep({ freq: 400 }); clearInterval(intervalRef.current); terminerCourse() }}
-          className="flex items-center gap-2 mx-auto bg-alerte text-white px-5 py-3 rounded-xl"
-        >
-          <Square size={16} fill="white" /> Arrêter
-        </button>
+        {!confirmationArret ? (
+          <button
+            onClick={demanderArret}
+            className="flex items-center gap-2 mx-auto bg-alerte text-white px-5 py-3 rounded-xl"
+          >
+            <Square size={16} fill="white" /> Arrêter
+          </button>
+        ) : (
+          <div className="rounded-xl border-2 border-alerte/40 bg-[#fbeeea] p-4 inline-block">
+            <p className="text-xs text-piste-700 mb-3">Confirme pour arrêter le test</p>
+            <div className="flex items-center justify-center gap-3">
+              <button onClick={confirmerArret} className="flex items-center gap-2 bg-alerte text-white px-5 py-3 rounded-xl font-medium">
+                <Square size={16} fill="white" /> Confirmer l'arrêt
+              </button>
+              <button onClick={annulerConfirmationArret} className="text-xs text-piste-500 underline px-2">Annuler</button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

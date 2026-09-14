@@ -3,11 +3,14 @@ import { Play, Square } from 'lucide-react'
 import { beepDepart, beepFin, beep } from '../utils/audio'
 import { storage } from '../utils/storage'
 import { useGpsSuivi } from '../utils/gps'
+import { useWakeLock } from '../utils/wakeLock'
 import IndicateurGps from './IndicateurGps'
+import ReprisePrompt from './ReprisePrompt'
 
 const DUREE_EFFORT = 45
 const DUREE_RECUP = 15
 const INCREMENT = 0.5
+const TYPE_SESSION = 'test-gacon'
 
 function vitessePalier(p) {
   return 8 + (p - 1) * INCREMENT
@@ -17,12 +20,17 @@ function distancePalier(p) {
   return (vitessePalier(p) * DUREE_EFFORT * 1000) / 3600
 }
 
-export default function TestGacon({ eleve, onRetour }) {
+export default function TestGacon({ eleve, onRetour, onActiviteEnCours }) {
+  useWakeLock(true)
+  const [repriseProposee, setRepriseProposee] = useState(() => storage.getSessionCours(eleve, TYPE_SESSION))
   const [palier, setPalier] = useState(1)
   const [phase, setPhase] = useState('attente') // attente | effort | recup | resultat
   const [elapsed, setElapsed] = useState(0)
   const [resultat, setResultat] = useState(null)
   const [enregistre, setEnregistre] = useState(false)
+  // Confirmation avant d'arrêter le test par un appui accidentel (téléphone tenu en main).
+  const [confirmationArret, setConfirmationArret] = useState(false)
+  const confirmationTimeoutRef = useRef(null)
   const startRef = useRef(null)
   const intervalRef = useRef(null)
 
@@ -38,6 +46,41 @@ export default function TestGacon({ eleve, onRetour }) {
   useEffect(() => { palierRef.current = palier }, [palier])
   useEffect(() => { elapsedRef.current = elapsed }, [elapsed])
   const departEffortRef = useRef(0)
+
+  // Sauvegarde/efface la progression pour permettre une reprise si l'appli est fermée pendant le
+  // test. Ne touche pas au stockage tant que la proposition de reprise initiale n'a pas été
+  // tranchée. Note : la distance déjà parcourue sur le palier interrompu n'est pas récupérable
+  // (le suivi GPS continu repart de zéro) ; le palier et le chronométrage sont restaurés.
+  useEffect(() => {
+    if (repriseProposee) return
+    if (phase === 'effort' || phase === 'recup') {
+      storage.sauvegarderSessionCours(eleve, TYPE_SESSION, { palier, phase, startTs: startRef.current })
+    } else {
+      storage.effacerSessionCours(eleve, TYPE_SESSION)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, palier, repriseProposee])
+
+  useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
+
+  // Signale au parent qu'un chrono est actif, pour désactiver la flèche retour de l'en-tête.
+  useEffect(() => {
+    onActiviteEnCours?.(phase === 'effort' || phase === 'recup')
+    return () => onActiviteEnCours?.(false)
+  }, [phase])
+
+  function handleReprendre() {
+    setPalier(repriseProposee.palier)
+    setPhase(repriseProposee.phase)
+    startRef.current = repriseProposee.startTs
+    departEffortRef.current = checkpoint()
+    setRepriseProposee(null)
+  }
+
+  function handleIgnorerReprise() {
+    storage.effacerSessionCours(eleve, TYPE_SESSION)
+    setRepriseProposee(null)
+  }
 
   const dureePhase = phase === 'effort' ? DUREE_EFFORT : DUREE_RECUP
   // Affichage live de la distance courue depuis le début du palier d'effort en cours.
@@ -114,6 +157,29 @@ export default function TestGacon({ eleve, onRetour }) {
     setEnregistre(true)
   }
 
+  // Un premier appui affiche une confirmation (disparaît d'elle-même après 3s si non validée),
+  // pour éviter d'arrêter le test par un appui accidentel pendant l'effort.
+  function demanderArret() {
+    setConfirmationArret(true)
+    clearTimeout(confirmationTimeoutRef.current)
+    confirmationTimeoutRef.current = setTimeout(() => setConfirmationArret(false), 3000)
+  }
+
+  function annulerConfirmationArret() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationArret(false)
+  }
+
+  function confirmerArret() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationArret(false)
+    arreter()
+  }
+
+  if (repriseProposee) {
+    return <ReprisePrompt titre="Ton test Gacon" onReprendre={handleReprendre} onIgnorer={handleIgnorerReprise} />
+  }
+
   if (phase === 'attente') {
     return (
       <div className="max-w-md mx-auto px-6 py-16 text-center">
@@ -151,9 +217,21 @@ export default function TestGacon({ eleve, onRetour }) {
         {phase === 'effort' && gpsOk === false && (
           <p className="text-xs text-alerte mb-6">GPS indisponible : la VMA sera estimée sur le temps tenu dans le palier.</p>
         )}
-        <button onClick={arreter} className="flex items-center gap-2 mx-auto bg-alerte text-white px-5 py-3 rounded-xl">
-          <Square size={16} fill="white" /> Je n'en peux plus
-        </button>
+        {!confirmationArret ? (
+          <button onClick={demanderArret} className="flex items-center gap-2 mx-auto bg-alerte text-white px-5 py-3 rounded-xl">
+            <Square size={16} fill="white" /> Je n'en peux plus
+          </button>
+        ) : (
+          <div className="rounded-xl border-2 border-alerte/40 bg-[#fbeeea] p-4 inline-block">
+            <p className="text-xs text-piste-700 mb-3">Confirme pour arrêter le test</p>
+            <div className="flex items-center justify-center gap-3">
+              <button onClick={confirmerArret} className="flex items-center gap-2 bg-alerte text-white px-5 py-3 rounded-xl font-medium">
+                <Square size={16} fill="white" /> Confirmer l'arrêt
+              </button>
+              <button onClick={annulerConfirmationArret} className="text-xs text-piste-500 underline px-2">Annuler</button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
