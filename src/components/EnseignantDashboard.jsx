@@ -691,6 +691,7 @@ export default function EnseignantDashboard({
                 eleve={{ ...eleveFiche, classe: classeActive }}
                 realisations={eleveFiche.realisations}
                 listeEleves={lignesEleves}
+                classesDisponibles={classes}
                 onNaviguer={(cle) => setEleveFicheOuverte(cle)}
                 onFermer={() => setEleveFicheOuverte(null)}
                 onChange={() => setRosterVersion((v) => v + 1)}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, KeyRound, UserX, Trash2, Check } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, KeyRound, UserX, Trash2, Check, X, ArrowRightLeft } from 'lucide-react'
 import VmaEleveLigne from './VmaEleveLigne'
 import ComportementAjustement from './ComportementAjustement'
 import { storage } from '../utils/storage'
@@ -14,6 +14,7 @@ export default function FicheSuiviEleve({
   eleve,
   realisations,
   listeEleves,
+  classesDisponibles,
   onNaviguer,
   onFermer,
   onChange,
@@ -26,6 +27,8 @@ export default function FicheSuiviEleve({
   const [editNom, setEditNom] = useState(eleve.nom)
   const [editPrenom, setEditPrenom] = useState(eleve.prenom)
   const [editSexe, setEditSexe] = useState(eleve.sexe || '')
+  const [deplacementOuvert, setDeplacementOuvert] = useState(false)
+  const [classeCible, setClasseCible] = useState('')
   const toucheDepart = useRef(null)
 
   const cleDe = (e) => e.id || `${e.nom}__${e.prenom}`
@@ -84,6 +87,16 @@ export default function FicheSuiviEleve({
     if (!eleve.id) return
     storage.reinitialiserPin(eleve.classe, eleve.id)
     onChange()
+  }
+
+  function deplacerVersClasse(e) {
+    e.preventDefault()
+    if (!eleve.id || !classeCible.trim()) return
+    storage.deplacerEleve(eleve.classe, eleve.id, classeCible)
+    setDeplacementOuvert(false)
+    setClasseCible('')
+    onChange()
+    onFermer()
   }
 
   function supprimerUneRealisation(r) {
@@ -147,6 +160,12 @@ export default function FicheSuiviEleve({
                 <Pencil size={12} /> Modifier nom/prénom
               </button>
               <button
+                onClick={() => setDeplacementOuvert((v) => !v)}
+                className="flex items-center gap-1 text-[11px] font-medium text-piste-700 border border-piste-200 rounded-full px-2.5 py-1 hover:bg-piste-50"
+              >
+                <ArrowRightLeft size={12} /> Déplacer vers une autre classe
+              </button>
+              <button
                 onClick={reinitialiserPin}
                 className="flex items-center gap-1 text-[11px] font-medium text-piste-700 border border-piste-200 rounded-full px-2.5 py-1 hover:bg-piste-50"
               >
@@ -194,6 +213,46 @@ export default function FicheSuiviEleve({
               <button type="submit" className="p-1.5 rounded-full bg-piste-800 text-white hover:bg-piste-700 self-start sm:self-auto">
                 <Check size={14} />
               </button>
+            </form>
+          )}
+
+          {deplacementOuvert && eleve.id && (
+            <form onSubmit={deplacerVersClasse} className="bg-piste-50 rounded-xl p-3 space-y-2">
+              <p className="text-xs text-piste-600">
+                Actuellement dans <span className="font-medium">{eleve.classe}</span>. Son PIN, sa VMA et ses
+                séances réalisées le suivent, où qu'il aille.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  list="classes-disponibles"
+                  value={classeCible}
+                  onChange={(e) => setClasseCible(e.target.value)}
+                  placeholder="Classe de destination"
+                  autoFocus
+                  className="flex-1 rounded-lg border border-piste-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-piste-500"
+                />
+                {classesDisponibles && (
+                  <datalist id="classes-disponibles">
+                    {classesDisponibles.filter((c) => c !== eleve.classe).map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                )}
+                <button
+                  type="submit"
+                  disabled={!classeCible.trim()}
+                  className="flex items-center justify-center gap-1.5 bg-piste-800 hover:bg-piste-700 disabled:opacity-50 text-white text-sm font-medium px-3.5 py-1.5 rounded-lg transition"
+                >
+                  <Check size={14} /> Déplacer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setDeplacementOuvert(false); setClasseCible('') }}
+                  className="p-1.5 rounded-full border border-piste-200 text-piste-600 hover:bg-white self-start sm:self-auto"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </form>
           )}
 
