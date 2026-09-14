@@ -38,6 +38,7 @@ function MigrationAncienneVersion({ onMigrer, onMigrerTout, onMigrerListe }) {
 
   const [resultatTout, setResultatTout] = useState(null)
   const [erreurTout, setErreurTout] = useState('')
+  const [enCoursTout, setEnCoursTout] = useState(false)
 
   async function valider(e) {
     e.preventDefault()
