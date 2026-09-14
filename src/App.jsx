@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import Header from './components/Header'
-import Demarrage from './components/Demarrage'
 import EleveLogin from './components/EleveLogin'
 import AccueilTuiles from './components/AccueilTuiles'
 import BibliothequeEleve from './components/BibliothequeEleve'
@@ -11,7 +10,7 @@ import ApercuSeance from './components/ApercuSeance'
 import SeanceRunner from './components/SeanceRunner'
 import Bilan from './components/Bilan'
 import EnseignantPin from './components/EnseignantPin'
-import EnseignantShell from './components/EnseignantShell'
+import EnseignantDashboard from './components/EnseignantDashboard'
 import PartageApp from './components/PartageApp'
 import FartlekEval from './components/FartlekEval'
 import { storage } from './utils/storage'
@@ -25,19 +24,38 @@ export default function App() {
   const [pretSync, setPretSync] = useState(false)
   const [codeSyncActuel, setCodeSyncActuel] = useState(() => storage.getCodeSync())
 
-  const [ecran, setEcran] = useState(() => (storage.getEleveActif() ? 'tuiles' : 'demarrage'))
+  const [ecran, setEcran] = useState(() => (storage.getEleveActif() ? 'tuiles' : 'accueil'))
   const [seanceActive, setSeanceActive] = useState(null)
   const [niveauActif, setNiveauActif] = useState(null)
   const [dernierResultat, setDernierResultat] = useState(null)
 
-  // --- Accès enseignant (admin + collègues) ---
-  const [accesConfig, setAccesConfig] = useState({ pinAdmin: '8484', nomAdmin: 'Mr Guilhem', adminCode: '', collegues: [] })
-  const [role, setRole] = useState(() => storage.getRoleEnseignant())
-  const [codeAdminPersonnel, setCodeAdminPersonnel] = useState(() => storage.getCodeAdminPersonnel())
+  // Reprise de séance après fermeture/mise en veille prolongée de l'appli pendant son déroulement.
+  const [sessionAReprendre, setSessionAReprendre] = useState(null) // snapshot proposé, en attente de choix
+  const [repriseActive, setRepriseActive] = useState(null) // snapshot accepté, transmis à SeanceRunner
 
   useEffect(() => {
-    storage.loadAccesConfig().then(setAccesConfig)
+    const e = storage.getEleveActif()
+    if (!e) return
+    const session = storage.getSessionCours(e)
+    if (session) setSessionAReprendre(session)
   }, [])
+
+  function handleReprendreSession() {
+    setSeanceActive(sessionAReprendre.seanceActive)
+    setNiveauActif(sessionAReprendre.niveauActif)
+    setRepriseActive(sessionAReprendre)
+    setEcran('course')
+    setSessionAReprendre(null)
+  }
+
+  function handleIgnorerSession() {
+    storage.effacerSessionCours(eleve)
+    setSessionAReprendre(null)
+  }
+
+  function handleProgressSeance(snapshot) {
+    storage.sauvegarderSessionCours(eleve, { seanceActive, niveauActif, ...snapshot })
+  }
 
   // Applique un éventuel code de synchro reçu par lien (?c=XXXXX, cas d'un élève qui
   // ouvre le flashcode/lien partagé par le prof) une seule fois au démarrage.
@@ -136,55 +154,28 @@ export default function App() {
     storage.ajouterRealisation(realisation)
     setRealisations([...realisations, realisation])
     setDernierResultat(realisation)
+    storage.effacerSessionCours(eleve)
+    setRepriseActive(null)
     setEcran('bilan')
   }
 
-  // Bascule cet appareil vers un autre espace (code de synchro) : utilisé quand un élève
-  // choisit son professeur, ou quand l'administrateur consulte l'espace d'un collègue
-  // (Vue globale). Ne fait rien si c'est déjà l'espace actif.
-  function handleChangerEspace(code) {
-    if (!code || code === storage.getCodeSync()) return
-    storage.viderCacheLocal()
-    storage.definirCodeSync(code)
-    setPretSync(false)
-    setCodeSyncActuel(code)
+  function handleAbandonSeance() {
+    storage.effacerSessionCours(eleve)
+    setRepriseActive(null)
+    setEcran('tuiles')
   }
 
   function handleAccesEnseignant() {
-    // getRoleEnseignant() est requis en plus de getPinOk() pour forcer une nouvelle saisie
-    // du code après cette mise à jour (anciennes sessions sans rôle enregistré).
-    const dejaConnecte = storage.getPinOk() && storage.getRoleEnseignant()
-    setEcran(dejaConnecte ? 'enseignant' : 'enseignantPin')
-  }
-
-  function handlePinValide({ role: roleValide, nom, code }) {
-    storage.setPinOk(true)
-    storage.setRoleEnseignant(roleValide)
-    storage.setNomCollegue(roleValide === 'collegue' ? nom : null)
-    setRole(roleValide)
-
-    if (roleValide === 'admin') {
-      storage.setCodeAdminPersonnel(code)
-      setCodeAdminPersonnel(code)
-      if (accesConfig.adminCode !== code) {
-        const next = { ...accesConfig, adminCode: code }
-        setAccesConfig(next)
-        storage.saveAccesConfig(next)
-      }
+    if (storage.cloudDisponible() && !storage.getCodeSync()) {
+      storage.assurerCodeSync()
+      setCodeSyncActuel(storage.getCodeSync())
     }
+    setEcran(storage.getPinOk() ? 'enseignant' : 'enseignantPin')
+  }
 
-    handleChangerEspace(code)
+  function handlePinValide() {
+    storage.setPinOk(true)
     setEcran('enseignant')
-  }
-
-  function handleDeconnexionEnseignant() {
-    storage.clearSessionEnseignant()
-    setRole(null)
-    setEcran(eleve ? 'tuiles' : 'demarrage')
-  }
-
-  function handleRetourEleve() {
-    setEcran('accueil')
   }
 
   const mesRealisations = eleve
@@ -217,7 +208,6 @@ export default function App() {
   }
 
   const titres = {
-    demarrage: '',
     accueil: eleve ? 'Mes séances' : 'Identification',
     tuiles: 'Accueil',
     bibliotheque: 'Bibliothèque',
@@ -233,46 +223,40 @@ export default function App() {
     fartlek: 'Fartlek évaluatif'
   }
 
-  const peutRevenir = ['accueil', 'bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'course', 'bilan', 'enseignant', 'enseignantPin', 'partage', 'fartlek'].includes(ecran)
-  const afficherHeader = ecran !== 'demarrage' && ecran !== 'accueil'
+  // 'course' est volontairement exclu : pendant le déroulement du chrono, la sortie ne doit être
+  // possible que via le bouton "Abandonner sans enregistrer" (avec sa confirmation), jamais par un
+  // simple appui sur la flèche retour de l'en-tête.
+  const peutRevenir = ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'bilan', 'enseignant', 'enseignantPin', 'partage', 'fartlek'].includes(ecran)
 
   function handleRetour() {
     if (['bibliotheque', 'vierge', 'outils'].includes(ecran)) setEcran('tuiles')
     else if (ecran === 'choixNiveau') setEcran('bibliotheque')
     else if (ecran === 'apercu') setEcran('choixNiveau')
-    else if (ecran === 'course') setEcran('tuiles')
     else if (ecran === 'bilan') setEcran('tuiles')
     else if (ecran === 'fartlek') setEcran('tuiles')
-    else if (ecran === 'accueil' || ecran === 'enseignantPin' || ecran === 'enseignant') setEcran(eleve ? 'tuiles' : 'demarrage')
-    else if (ecran === 'partage') setEcran(eleve ? 'tuiles' : 'demarrage')
+    else if (ecran === 'enseignantPin' || ecran === 'enseignant') setEcran(eleve ? 'tuiles' : 'accueil')
+    else if (ecran === 'partage') setEcran(eleve ? 'tuiles' : 'accueil')
   }
 
   return (
     <div className="min-h-screen bg-white font-body">
-      {afficherHeader && (
-        <Header
-          title={titres[ecran]}
-          onBack={peutRevenir ? handleRetour : null}
-          onEnseignant={handleAccesEnseignant}
-          showEnseignant={ecran !== 'course'}
-          onPartager={() => setEcran('partage')}
-          showPartage={false}
-        />
-      )}
-
-      {ecran === 'demarrage' && (
-        <Demarrage onTermine={() => setEcran('accueil')} />
-      )}
+      <Header
+        title={titres[ecran]}
+        onBack={peutRevenir ? handleRetour : null}
+        onEnseignant={handleAccesEnseignant}
+        showEnseignant={ecran !== 'course'}
+        onPartager={() => setEcran('partage')}
+        showPartage={ecran === 'accueil'}
+      />
 
       {!eleve && ecran === 'accueil' && (
-        <EleveLogin
-          accesConfig={accesConfig}
-          onConnecte={handleConnecte}
-          onAccesEnseignant={handleAccesEnseignant}
-          onChoisirProfesseur={handleChangerEspace}
-          chargementEspace={!pretSync}
-          refreshKey={cloudTick}
-        />
+        pretSync
+          ? <EleveLogin onConnecte={handleConnecte} />
+          : (
+            <div className="max-w-md mx-auto px-6 py-24 text-center text-piste-500 text-sm">
+              Chargement…
+            </div>
+          )
       )}
 
       {ecran === 'partage' && <PartageApp />}
@@ -302,26 +286,24 @@ export default function App() {
       )}
 
       {ecran === 'course' && niveauActif && (
-        <SeanceRunner niveau={niveauActif} vmaRef={vmaRef} onFinSeance={handleFinSeance} onAbandon={() => setEcran('tuiles')} />
+        <SeanceRunner
+          niveau={niveauActif}
+          vmaRef={vmaRef}
+          reprise={repriseActive}
+          onProgress={handleProgressSeance}
+          onFinSeance={handleFinSeance}
+          onAbandon={handleAbandonSeance}
+        />
       )}
 
       {ecran === 'bilan' && dernierResultat && (
         <Bilan resultat={dernierResultat} niveau={niveauActif} onRetourAccueil={() => setEcran('tuiles')} />
       )}
 
-      {ecran === 'enseignantPin' && (
-        <EnseignantPin accesConfig={accesConfig} onValide={handlePinValide} onRetourEleve={handleRetourEleve} />
-      )}
+      {ecran === 'enseignantPin' && <EnseignantPin onValide={handlePinValide} />}
 
       {ecran === 'enseignant' && (
-        <EnseignantShell
-          role={role}
-          accesConfig={accesConfig}
-          onSauverAcces={(next) => { setAccesConfig(next); storage.saveAccesConfig(next) }}
-          espaceActif={codeSyncActuel}
-          codeAdminPersonnel={codeAdminPersonnel}
-          onChangerEspace={handleChangerEspace}
-          onDeconnexionEnseignant={handleDeconnexionEnseignant}
+        <EnseignantDashboard
           seances={seances}
           setSeances={setSeances}
           realisations={realisations}
@@ -331,6 +313,26 @@ export default function App() {
           onSupprimerRealisationsClasse={handleSupprimerRealisationsClasse}
           cloudTick={cloudTick}
         />
+      )}
+
+      {sessionAReprendre && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-lg">
+            <p className="font-display text-lg text-piste-900 mb-2">Séance interrompue</p>
+            <p className="text-sm text-piste-600 mb-6">
+              Une séance ({sessionAReprendre.seanceActive?.titre || 'séance libre'}) était en cours et s'est arrêtée avant la fin. Veux-tu reprendre là où tu en étais ?
+            </p>
+            <button
+              onClick={handleReprendreSession}
+              className="w-full bg-piste-800 hover:bg-piste-700 text-white font-medium py-3 rounded-xl transition active:scale-[0.98] mb-2"
+            >
+              Reprendre la séance
+            </button>
+            <button onClick={handleIgnorerSession} className="text-xs text-piste-400 underline">
+              Non, ne pas reprendre
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
