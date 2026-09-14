@@ -1,18 +1,9 @@
-v1.31.0 — Onglet "Accès" : collègues, bases séparées, Mes classes / Vue globale
-- Nouveau système multi-professeurs : un onglet "Accès" (visible pour toi uniquement) permet d'ajouter/retirer des collègues avec un nom (civilité Mr/Mme + nom) et un code PIN personnel, et de réinitialiser le PIN d'un collègue existant sans perdre ses données
-- Chaque collègue dispose de sa propre base totalement isolée : classes, élèves, PIN, réalisations, VMA et bibliothèque de séances — rien n'est partagé avec les autres collègues ni avec toi
-- Toi seul peux consulter l'espace d'un collègue, depuis un nouvel onglet "Vue globale" (sélection du collègue dans un menu déroulant), sans que cela affecte tes propres classes ; l'onglet "Mes classes" reste toujours ton espace personnel
-- Écran "Connexion professeur" : sélection du nom (toi ou un collègue) en menu déroulant + code d'accès personnel, au lieu du code unique précédent
-- Écran d'identification élève : ajout d'un menu déroulant "Ton professeur d'EPS" en tête de page (toi ou un collègue) — l'appareil de l'élève bascule automatiquement vers les classes du professeur choisi
-- Bouton "Partager mon lien" ajouté dans l'espace enseignant (partage le lien propre à l'espace actuellement affiché)
-- Bouton "Se déconnecter" ajouté dans l'espace enseignant
-- Aucune donnée existante déplacée ni supprimée : tes classes, élèves, réalisations, VMA et bibliothèque actuels restent intacts sous ton propre espace ("Mes classes")
-
-v1.30.0 — Identification élève refondue en une seule page (modèle Muscu Pro / Escalade Pro)
-- L'écran de démarrage bascule désormais automatiquement vers l'identification élève après un bref affichage de l'icône, sans aucun clic à faire
-- Tout se passe sur UNE SEULE page : partage de l'appli (flashcode + lien), accès "Tu es professeur ? Connexion ici", puis classe, nom et code PIN qui s'enchaînent verticalement au fur et à mesure des choix, sans changement d'écran (fin des étapes séparées "Choisis ta classe" / "Trouve ton nom" / écran PIN dédié)
-- Écran "Connexion professeur" renommé et complété d'un lien de retour "← Je suis élève"
-- Repli "aucune classe importée" conservé (prénom/nom/classe en saisie libre) mais intégré à la même page unique
+v1.30.0 — Repères Série / Répétition pendant la course
+- Pendant un bloc structuré en Full Power (plusieurs séries/répétitions), l'écran de course affiche désormais "Série X/N · Répétition Y/Z" en plus de la phase en cours
+- En mode minuteur, le gros décompte affiche le temps restant sur la série en cours (et non plus sur tout le bloc), avec le temps restant sur l'ensemble du bloc rappelé en plus petit en dessous
+- En mode GPS, un rappel "Série X/N · reste ..." est ajouté sous la vitesse/distance
+- Un repère supplémentaire indique le temps restant pour finir la répétition en cours (travail + récupération associée) quand elle n'est pas terminée
+- Sans notion de série (bloc simple ou Full Power à 1 seul tour), l'affichage reste inchangé (décompte global du bloc)
 
 v1.21.0 — Correction du bruit GPS à l'arrêt (VAM-EVAL)
 - La vitesse instantanée affichée pendant le test VAM-EVAL est désormais arrondie à 0 km/h tant qu'elle reste sous 0,5 km/h, pour éviter d'afficher une vitesse résiduelle liée au bruit naturel du GPS (dérive de position de quelques mètres) quand l'élève est réellement à l'arrêt
