@@ -303,6 +303,14 @@ export default function EnseignantDashboard({
     return resultat
   }
 
+  async function migrerTousAnciensCodes() {
+    const teacherIdsActuels = ['admin', ...((accesConfig?.collegues || []).map((c) => c.id))]
+    const resultat = await storage.migrerTousAnciensCodes(teacherIdsActuels)
+    await onChangerEspace(espaceActifId)
+    setRosterVersion((v) => v + 1)
+    return resultat
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-1">
@@ -388,6 +396,7 @@ export default function EnseignantDashboard({
           onSupprimerCollegue={onSupprimerCollegue}
           onReinitialiserPinCollegue={onReinitialiserPinCollegue}
           onMigrer={migrerAncienneVersion}
+          onMigrerTout={migrerTousAnciensCodes}
         />
       )}
 

@@ -6,12 +6,15 @@ import ChangerPin from './ChangerPin'
 // N'apparaît que côté administrateur, une fois : recopie classes/élèves/séances réalisées/VMA
 // de l'ancien espace vers l'espace actuel (fusion, sans écraser ni dupliquer — voir
 // storage.migrerAncienEspace).
-function MigrationAncienneVersion({ onMigrer }) {
-  const [ouvert, setOuvert] = useState(false)
+function MigrationAncienneVersion({ onMigrer, onMigrerTout }) {
   const [code, setCode] = useState('')
   const [enCours, setEnCours] = useState(false)
   const [resultat, setResultat] = useState(null)
   const [erreur, setErreur] = useState('')
+
+  const [enCoursTout, setEnCoursTout] = useState(false)
+  const [resultatTout, setResultatTout] = useState(null)
+  const [erreurTout, setErreurTout] = useState('')
 
   async function valider(e) {
     e.preventDefault()
@@ -29,15 +32,19 @@ function MigrationAncienneVersion({ onMigrer }) {
     }
   }
 
-  if (!ouvert) {
-    return (
-      <button
-        onClick={() => setOuvert(true)}
-        className="flex items-center gap-1.5 text-xs font-medium text-piste-600 hover:text-piste-900"
-      >
-        <DownloadCloud size={13} /> Récupérer mes données de l'ancienne version
-      </button>
-    )
+  async function validerTout() {
+    if (!confirm("Rechercher et migrer automatiquement tous les anciens codes trouvés dans la sauvegarde ? Cette opération peut prendre une minute ou deux si plusieurs codes sont détectés.")) return
+    setErreurTout('')
+    setResultatTout(null)
+    setEnCoursTout(true)
+    try {
+      const res = await onMigrerTout()
+      setResultatTout(res)
+    } catch (e2) {
+      setErreurTout(e2.message || 'Échec de la migration.')
+    } finally {
+      setEnCoursTout(false)
+    }
   }
 
   return (
@@ -46,34 +53,68 @@ function MigrationAncienneVersion({ onMigrer }) {
         Migration depuis l'ancienne version
       </p>
       <p className="text-xs text-piste-500 mb-3">
-        Entre le code de synchro affiché par l'ancienne version de l'appli (visible sur l'ancien
-        écran "Espace enseignant" : <em>Synchronisation active — code « ... »</em>). Tes classes,
-        élèves, séances réalisées, résultats de tests VMA et séances de bibliothèque seront
-        recopiés dans ton espace actuel, sans rien dupliquer si tu relances l'opération.
+        Chaque appareil qui a ouvert l'ancienne appli sans passer par ton flashcode/lien à jour a
+        pu créer son propre espace isolé. "Tout migrer" les détecte tous automatiquement et les
+        recopie ici (fusion, sans rien dupliquer si tu relances l'opération).
       </p>
-      <form onSubmit={valider} className="flex flex-col sm:flex-row gap-2">
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="Ancien code (ex : A1B2C3)"
-          className="flex-1 rounded-lg border border-piste-200 px-3 py-2 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-piste-500"
-        />
-        <button
-          type="submit"
-          disabled={enCours || !code.trim()}
-          className="flex items-center justify-center gap-1.5 bg-piste-800 hover:bg-piste-700 disabled:opacity-50 text-white text-sm font-medium px-3.5 py-2 rounded-lg transition"
-        >
-          {enCours ? 'Migration en cours...' : 'Migrer'}
-        </button>
-      </form>
-      {erreur && <p className="text-alerte text-xs mt-2">{erreur}</p>}
-      {resultat && (
-        <p className="text-xs text-piste-700 mt-2">
-          Terminé : {resultat.nbClasses} classe(s), {resultat.nbEleves} élève(s), {resultat.nbRealisations} séance(s)
-          réalisée(s) et {resultat.nbVma} fiche(s) VMA récupérées (bibliothèque de séances aussi
-          recopiée si elle n'existait pas déjà ici).
-        </p>
+
+      <button
+        onClick={validerTout}
+        disabled={enCoursTout}
+        className="w-full flex items-center justify-center gap-1.5 bg-piste-800 hover:bg-piste-700 disabled:opacity-50 text-white text-sm font-medium px-3.5 py-2.5 rounded-lg transition mb-2"
+      >
+        <DownloadCloud size={15} /> {enCoursTout ? 'Migration en cours (peut prendre un moment)...' : 'Tout migrer d\'un coup'}
+      </button>
+      {erreurTout && <p className="text-alerte text-xs mb-2">{erreurTout}</p>}
+      {resultatTout && (
+        <div className="text-xs text-piste-700 mb-3 space-y-1.5">
+          <p>
+            {resultatTout.nbCodesTraites} ancien(s) espace(s) trouvé(s) et traité(s) : au total{' '}
+            {resultatTout.total.nbClasses} classe(s), {resultatTout.total.nbEleves} élève(s),{' '}
+            {resultatTout.total.nbRealisations} séance(s) réalisée(s) et {resultatTout.total.nbVma} fiche(s) VMA récupérées.
+          </p>
+          {resultatTout.detail.some((d) => !d.ok) && (
+            <div className="bg-white rounded-lg p-2 border border-alerte/30">
+              <p className="text-alerte font-medium mb-1">Codes en échec (réessaie plus tard, ou vérifie-les manuellement ci-dessous) :</p>
+              {resultatTout.detail.filter((d) => !d.ok).map((d) => (
+                <p key={d.code} className="text-piste-600">{d.code} : {d.erreur}</p>
+              ))}
+            </div>
+          )}
+        </div>
       )}
+
+      <details className="text-xs">
+        <summary className="text-piste-600 cursor-pointer select-none">Migrer un code précis manuellement</summary>
+        <div className="mt-3">
+          <p className="text-piste-500 mb-2">
+            Entre le code de synchro affiché par l'ancienne version de l'appli (visible sur l'ancien
+            écran "Espace enseignant" : <em>Synchronisation active — code « ... »</em>).
+          </p>
+          <form onSubmit={valider} className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="Ancien code (ex : A1B2C3)"
+              className="flex-1 rounded-lg border border-piste-200 px-3 py-2 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-piste-500"
+            />
+            <button
+              type="submit"
+              disabled={enCours || !code.trim()}
+              className="flex items-center justify-center gap-1.5 bg-white border border-piste-300 hover:bg-piste-100 disabled:opacity-50 text-piste-800 text-sm font-medium px-3.5 py-2 rounded-lg transition"
+            >
+              {enCours ? 'Migration...' : 'Migrer ce code'}
+            </button>
+          </form>
+          {erreur && <p className="text-alerte text-xs mt-2">{erreur}</p>}
+          {resultat && (
+            <p className="text-xs text-piste-700 mt-2">
+              Terminé : {resultat.nbClasses} classe(s), {resultat.nbEleves} élève(s), {resultat.nbRealisations} séance(s)
+              réalisée(s) et {resultat.nbVma} fiche(s) VMA récupérées.
+            </p>
+          )}
+        </div>
+      </details>
     </div>
   )
 }
@@ -173,7 +214,7 @@ function NomAdmin({ nomAdmin, onChanger }) {
 // accesConfig: { pinAdmin, nomAdmin, collegues: [{ id, nom, pin }] }
 // onChangerPinAdmin(nouveauPin), onChangerNomAdmin(nom), onAjouterCollegue(nom, pin),
 // onSupprimerCollegue(id), onReinitialiserPinCollegue(id, nouveauPin)
-export default function EspaceAcces({ accesConfig, onChangerPinAdmin, onChangerNomAdmin, onAjouterCollegue, onSupprimerCollegue, onReinitialiserPinCollegue, onMigrer }) {
+export default function EspaceAcces({ accesConfig, onChangerPinAdmin, onChangerNomAdmin, onAjouterCollegue, onSupprimerCollegue, onReinitialiserPinCollegue, onMigrer, onMigrerTout }) {
   const [nom, setNom] = useState('')
   const [pin, setPin] = useState('')
   const [erreur, setErreur] = useState('')
@@ -221,7 +262,7 @@ export default function EspaceAcces({ accesConfig, onChangerPinAdmin, onChangerN
         <ChangerPin pinActuel={accesConfig.pinAdmin} onChanger={onChangerPinAdmin} />
         {onMigrer && (
           <div className="mt-3 pt-3 border-t border-piste-100">
-            <MigrationAncienneVersion onMigrer={onMigrer} />
+            <MigrationAncienneVersion onMigrer={onMigrer} onMigrerTout={onMigrerTout} />
           </div>
         )}
       </div>
