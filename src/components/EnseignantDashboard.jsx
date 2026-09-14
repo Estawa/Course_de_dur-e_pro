@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical } from 'lucide-react'
+import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import VmaEleveLigne, { LABEL_TEST, formatDateVma } from './VmaEleveLigne'
 import FicheSuiviEleve from './FicheSuiviEleve'
 import VisibiliteClasses from './VisibiliteClasses'
+import EspaceAcces from './EspaceAcces'
 import { storage } from '../utils/storage'
 import { noteFinale, pourcentagesReussite } from '../utils/calc'
 import { genererSeancesTypesSecondes } from '../utils/seancesTypesSecondes'
@@ -15,8 +16,15 @@ const GROUPES_SCOLAIRES = [
   { id: 'premiere_terminale', label: 'Premières / Terminales' }
 ]
 
-export default function EnseignantDashboard({ seances, setSeances, realisations, onModifierRealisation, onSupprimerRealisation, onSupprimerRealisationsEleve, onSupprimerRealisationsClasse, cloudTick }) {
-  const [onglet, setOnglet] = useState('seances') // seances | suivi | vma
+export default function EnseignantDashboard({
+  role, nomCollegue, teacherIdEnseignant, accesConfig, onChangerEspace, onMigrer,
+  onChangerPinAdmin, onChangerNomAdmin, onAjouterCollegue, onSupprimerCollegue, onReinitialiserPinCollegue,
+  seances, setSeances, realisations, onModifierRealisation, onSupprimerRealisation, onSupprimerRealisationsEleve, onSupprimerRealisationsClasse
+}) {
+  const estAdmin = role === 'admin'
+  const [onglet, setOnglet] = useState('seances') // seances | tests | suivi | vma | global | acces
+  const [espaceActifId, setEspaceActifId] = useState(teacherIdEnseignant)
+  const [chargementEspace, setChargementEspace] = useState(false)
   const [editeurOuvert, setEditeurOuvert] = useState(false)
   const [seanceEnEdition, setSeanceEnEdition] = useState(null)
   const [seancePourVisibilite, setSeancePourVisibilite] = useState(null)
@@ -79,12 +87,27 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
   }
 
 
-  // Une mise à jour cloud (nouvel élève connecté, PIN défini, séance réalisée sur un autre
-  // appareil...) doit rafraîchir les listes dérivées du roster local, qui viennent d'être
-  // mises à jour par storage.demarrerSynchroCloud juste avant cet appel.
-  useEffect(() => {
-    if (cloudTick !== undefined) setRosterVersion((v) => v + 1)
-  }, [cloudTick])
+  // Recharge les données de l'espace actuellement consulté (le mien, ou celui d'un collègue en
+  // Vue globale) — plus de synchro temps réel : un nouvel élève connecté ou une séance réalisée
+  // sur un autre appareil n'apparaît qu'après un rechargement explicite.
+  async function actualiser() {
+    setChargementEspace(true)
+    await onChangerEspace(espaceActifId)
+    setChargementEspace(false)
+    setRosterVersion((v) => v + 1)
+  }
+
+  // Vue globale (admin uniquement) : bascule l'espace consulté par tous les onglets ci-dessous
+  // vers celui d'un collègue, ou revient au mien.
+  async function changerEspaceConsulte(id) {
+    setChargementEspace(true)
+    await onChangerEspace(id)
+    setEspaceActifId(id)
+    setClasseSelectionnee(null)
+    setEleveFicheOuverte(null)
+    setChargementEspace(false)
+    setRosterVersion((v) => v + 1)
+  }
 
   const classes = useMemo(() => {
     const depuisRoster = storage.getClasses()
@@ -268,25 +291,54 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
     URL.revokeObjectURL(url)
   }
 
+  const nomCollegueConsulte = espaceActifId !== teacherIdEnseignant
+    ? (accesConfig?.collegues || []).find((c) => c.id === espaceActifId)?.nom
+    : null
+  const monNom = estAdmin ? accesConfig?.nomAdmin : nomCollegue
+
+  async function migrerAncienneVersion(ancienCode) {
+    const resultat = await storage.migrerAncienEspace(ancienCode)
+    await onChangerEspace(espaceActifId)
+    setRosterVersion((v) => v + 1)
+    return resultat
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-1">
         <h2 className="font-display text-2xl text-piste-900">Espace enseignant</h2>
+        <button
+          onClick={actualiser}
+          disabled={chargementEspace}
+          className="flex items-center gap-1.5 text-xs font-medium text-piste-600 hover:text-piste-900 disabled:opacity-50"
+        >
+          <RefreshCw size={13} className={chargementEspace ? 'animate-spin' : ''} /> Actualiser
+        </button>
       </div>
+      <p className="text-xs text-piste-500 mb-4">Connecté·e en tant que {monNom}</p>
 
-      {storage.cloudDisponible() && storage.getCodeSync() && (
-        <div className="flex items-center gap-1.5 mb-4 text-[11px] text-piste-500">
-          <span className="w-1.5 h-1.5 rounded-full bg-piste-500" />
-          Synchronisation active — code « {storage.getCodeSync()} » (partage-le via le flashcode)
+      {nomCollegueConsulte && (
+        <div className="flex items-center justify-between gap-2 mb-4 bg-piste-50 border border-piste-200 rounded-xl px-3.5 py-2.5">
+          <p className="text-xs text-piste-700">
+            <ArrowLeftRight size={12} className="inline mr-1.5 -mt-0.5" />
+            Vue globale — tu consultes l'espace de <span className="font-medium">{nomCollegueConsulte}</span>
+          </p>
+          <button
+            onClick={() => changerEspaceConsulte(teacherIdEnseignant)}
+            className="shrink-0 text-[11px] font-medium text-piste-800 underline"
+          >
+            Revenir à mon espace
+          </button>
         </div>
       )}
 
-      <div className="flex gap-1.5 mb-6 bg-piste-50 rounded-full p-1 w-fit">
+      <div className="flex gap-1.5 mb-6 bg-piste-50 rounded-full p-1 w-fit flex-wrap">
         {[
           { id: 'seances', label: 'Séances' },
           { id: 'tests', label: 'Tests' },
           { id: 'suivi', label: 'Élèves & suivi' },
-          { id: 'vma', label: 'VMA' }
+          { id: 'vma', label: 'VMA' },
+          ...(estAdmin ? [{ id: 'global', label: 'Vue globale' }, { id: 'acces', label: 'Accès' }] : [])
         ].map((o) => (
           <button
             key={o.id}
@@ -297,6 +349,47 @@ export default function EnseignantDashboard({ seances, setSeances, realisations,
           </button>
         ))}
       </div>
+
+      {onglet === 'global' && (
+        <section>
+          <h3 className="text-xs font-semibold tracking-wide text-piste-500 uppercase mb-3">Vue globale</h3>
+          <p className="text-xs text-piste-500 mb-4">
+            Choisis un collègue pour consulter et gérer son espace (Séances, Tests, Élèves & suivi, VMA)
+            comme si tu étais connecté·e avec son code. Reviens à ton espace avec le bouton ci-dessus une
+            fois terminé.
+          </p>
+          {(accesConfig?.collegues || []).length === 0 ? (
+            <p className="text-sm text-piste-500">Aucun collègue ajouté pour l'instant (onglet Accès).</p>
+          ) : (
+            <div className="space-y-2">
+              {(accesConfig.collegues || []).map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => changerEspaceConsulte(c.id)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition text-left ${espaceActifId === c.id ? 'bg-piste-800 text-white border-piste-800' : 'bg-white border-piste-100 hover:border-piste-300'}`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <Users size={14} /> {c.nom}
+                  </span>
+                  <ChevronRight size={16} className={espaceActifId === c.id ? 'text-white' : 'text-piste-400'} />
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {onglet === 'acces' && (
+        <EspaceAcces
+          accesConfig={accesConfig}
+          onChangerPinAdmin={onChangerPinAdmin}
+          onChangerNomAdmin={onChangerNomAdmin}
+          onAjouterCollegue={onAjouterCollegue}
+          onSupprimerCollegue={onSupprimerCollegue}
+          onReinitialiserPinCollegue={onReinitialiserPinCollegue}
+          onMigrer={migrerAncienneVersion}
+        />
+      )}
 
       {onglet === 'seances' && (
         <section>

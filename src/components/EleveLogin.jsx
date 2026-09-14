@@ -1,19 +1,45 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Footprints, ChevronLeft, Lock } from 'lucide-react'
 import { storage } from '../utils/storage'
 
-export default function EleveLogin({ onConnecte }) {
-  const classes = useMemo(() => storage.getClasses(), [])
-  const [etape, setEtape] = useState(classes.length > 0 ? 'classe' : 'saisieLibre')
+// accesConfig: { pinAdmin, nomAdmin, collegues: [{id, nom, pin}] } — sert à construire la liste
+// des professeurs parmi lesquels l'élève choisit le sien (aucun code n'est demandé ici : ce
+// n'est pas une connexion enseignant).
+export default function EleveLogin({ accesConfig, onConnecte }) {
+  const professeurs = useMemo(() => {
+    const liste = [{ id: 'admin', nom: accesConfig?.nomAdmin || 'Mr Guilhem' }]
+    ;(accesConfig?.collegues || []).forEach((c) => liste.push({ id: c.id, nom: c.nom }))
+    return liste
+  }, [accesConfig])
+
+  const [teacherId, setTeacherId] = useState('')
+  const [chargementEspace, setChargementEspace] = useState(false)
+  const [espacePret, setEspacePret] = useState(false)
+  const [etape, setEtape] = useState('prof') // prof | classe | nom | pin | saisieLibre
   const [classe, setClasse] = useState('')
   const [eleveId, setEleveId] = useState('')
   const [pin, setPin] = useState('')
   const [pinConfirm, setPinConfirm] = useState('')
   const [erreur, setErreur] = useState('')
 
-  const eleves = classe ? storage.getElevesClasse(classe) : []
-  const eleveSelectionne = eleveId ? storage.trouverEleve(classe, eleveId) : null
+  const classes = espacePret ? storage.getClasses() : []
+  const eleves = espacePret && classe ? storage.getElevesClasse(classe) : []
+  const eleveSelectionne = espacePret && eleveId ? storage.trouverEleve(classe, eleveId) : null
   const premierePinEnCours = eleveSelectionne && !eleveSelectionne.pin
+
+  // Charge l'espace (roster) du professeur choisi, puis passe à l'étape classe (ou à la
+  // saisie libre si ce professeur n'a encore aucune classe importée).
+  function choisirProfesseur(id) {
+    setTeacherId(id)
+    setErreur('')
+    setChargementEspace(true)
+    setEspacePret(false)
+    storage.chargerEspace(id).then(() => {
+      setChargementEspace(false)
+      setEspacePret(true)
+      setEtape(storage.getClasses().length > 0 ? 'classe' : 'saisieLibre')
+    })
+  }
 
   function choisirClasse(c) {
     setClasse(c)
@@ -31,8 +57,8 @@ export default function EleveLogin({ onConnecte }) {
 
   function connecterAvec(id) {
     const eleve = storage.trouverEleve(classe, id)
-    storage.setEleveActifId(id)
-    onConnecte({ id: eleve.id, nom: eleve.nom, prenom: eleve.prenom, classe })
+    storage.setEleveActifPointeur(teacherId, id)
+    onConnecte({ id: eleve.id, nom: eleve.nom, prenom: eleve.prenom, classe, teacherId })
   }
 
   function validerPin(e) {
@@ -59,7 +85,7 @@ export default function EleveLogin({ onConnecte }) {
     }
   }
 
-  // --- Repli : saisie libre si aucune classe importée ---
+  // --- Repli : saisie libre si ce professeur n'a encore aucune classe importée ---
   function validerSaisieLibre(e) {
     e.preventDefault()
     const form = e.target
@@ -79,20 +105,42 @@ export default function EleveLogin({ onConnecte }) {
     setEtape('pin')
   }
 
-  if (etape === 'saisieLibre') {
-    const diagCode = storage.getCodeSync()
-    const diagCloud = storage.cloudDisponible()
+  const enTeteProf = (
+    <div className="flex flex-col items-center text-center mb-8">
+      <div className="w-16 h-16 rounded-2xl bg-piste-800 flex items-center justify-center mb-4">
+        <Footprints className="text-piste-200" size={30} />
+      </div>
+      <h2 className="font-display text-2xl text-piste-900">Bienvenue</h2>
+    </div>
+  )
+
+  if (etape === 'prof') {
     return (
       <div className="max-w-md mx-auto px-6 py-14">
-        <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-piste-800 flex items-center justify-center mb-4">
-            <Footprints className="text-piste-200" size={30} />
-          </div>
-          <h2 className="font-display text-2xl text-piste-900">Bienvenue</h2>
-          <p className="text-piste-600 text-sm mt-1">
-            Aucune classe importée pour l'instant : identifie-toi pour créer ta fiche.
-          </p>
-        </div>
+        {enTeteProf}
+        <label className="block text-sm font-medium text-piste-800 mb-1">Ton professeur d'EPS</label>
+        <select
+          value={teacherId}
+          onChange={(e) => { if (e.target.value) choisirProfesseur(e.target.value) }}
+          className="w-full bg-white border-2 border-piste-100 focus:border-piste-500 rounded-xl px-4 py-3.5 font-medium text-piste-900 transition focus:outline-none"
+        >
+          <option value="" disabled>Sélectionne ton professeur...</option>
+          {professeurs.map((p) => (
+            <option key={p.id} value={p.id}>{p.nom}</option>
+          ))}
+        </select>
+        {chargementEspace && <p className="text-sm text-piste-500 text-center mt-4">Chargement...</p>}
+      </div>
+    )
+  }
+
+  if (etape === 'saisieLibre') {
+    return (
+      <div className="max-w-md mx-auto px-6 py-14">
+        {enTeteProf}
+        <p className="text-piste-600 text-sm text-center -mt-4 mb-8">
+          Aucune classe importée pour l'instant chez {professeurs.find((p) => p.id === teacherId)?.nom} : identifie-toi pour créer ta fiche.
+        </p>
         <form onSubmit={validerSaisieLibre} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-piste-800 mb-1">Prénom</label>
@@ -111,24 +159,18 @@ export default function EleveLogin({ onConnecte }) {
             Continuer
           </button>
         </form>
-        <p className="text-[10px] text-piste-300 text-center mt-6">
-          Diagnostic synchro — cloud : {diagCloud ? 'disponible' : 'indisponible'} · code : {diagCode || 'aucun'}
-        </p>
+        <button onClick={() => setEtape('prof')} className="flex items-center gap-1 text-sm text-piste-600 mt-6 mx-auto">
+          <ChevronLeft size={16} /> Changer de professeur
+        </button>
       </div>
     )
   }
 
   if (etape === 'classe') {
-    const diagCode = storage.getCodeSync()
     return (
       <div className="max-w-md mx-auto px-6 py-14">
-        <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-piste-800 flex items-center justify-center mb-4">
-            <Footprints className="text-piste-200" size={30} />
-          </div>
-          <h2 className="font-display text-2xl text-piste-900">Bienvenue</h2>
-          <p className="text-piste-600 text-sm mt-1">Choisis ta classe pour commencer.</p>
-        </div>
+        {enTeteProf}
+        <p className="text-piste-600 text-sm text-center -mt-4 mb-8">Choisis ta classe pour commencer.</p>
         <div className="grid grid-cols-2 gap-2.5">
           {classes.map((c) => (
             <button
@@ -140,9 +182,9 @@ export default function EleveLogin({ onConnecte }) {
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-piste-300 text-center mt-6">
-          Synchro — code : {diagCode || 'aucun'}
-        </p>
+        <button onClick={() => setEtape('prof')} className="flex items-center gap-1 text-sm text-piste-600 mt-8 mx-auto">
+          <ChevronLeft size={16} /> Changer de professeur
+        </button>
       </div>
     )
   }
@@ -172,9 +214,6 @@ export default function EleveLogin({ onConnecte }) {
             ))}
           </div>
         )}
-        <p className="text-[10px] text-piste-300 text-center mt-6">
-          Synchro — code : {storage.getCodeSync() || 'aucun'} · {eleves.length} élève(s) chargé(s)
-        </p>
       </div>
     )
   }
