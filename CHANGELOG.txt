@@ -128,6 +128,13 @@ v1.2.0 — Bibliothèque, Séance vierge, Outils, Full Power
 - Outils : VMA personnelle (saisie/màj), tests de VMA (Demi-Cooper 6min, 4×3min avec détection d'anomalie, Gacon 45/15 avec demi-palier), chronomètre avec distance/vitesse, échelle de Borg de référence, performances estimées par distance à partir de la VMA (et %VMA inverse à partir d'une perf réalisée)
 - Guidage GPS/minuteur géré phase par phase (travail/récupération) avec gong à chaque transition
 
+v1.31.0 — Fiabilité pendant la séance (écran/reprise/anti-appui accidentel)
+- L'écran ne s'éteint plus pendant toute la durée d'une séance (échauffement, blocs de course, bilans, Borg, observation) grâce au Wake Lock du navigateur ; se relâche automatiquement à la fin ou à l'abandon
+- "Terminer le bloc" et "Abandonner sans enregistrer" demandent désormais une confirmation explicite (comme sur le test VAM-EVAL) avant d'agir, pour éviter d'arrêter la séance sur un appui accidentel pendant la course
+- Suppression de la flèche retour de l'en-tête pendant le déroulement d'une séance : seul le bouton "Abandonner sans enregistrer" (avec sa confirmation) permet désormais de sortir
+- Reprise de séance : si l'appli se ferme ou est tuée par le téléphone pendant une séance (mise en veille prolongée, manque de mémoire...), elle propose de la reprendre exactement là où elle en était à la reconnexion, avec le chrono du bloc en cours qui continue de défiler sur la durée réelle écoulée pendant la coupure
+- Limite connue : en guidage GPS, la distance déjà parcourue sur le bloc interrompu n'est pas restaurée après une reprise (le chrono, lui, reprend correctement)
+
 v1.1.0 — Découpage en blocs
 - Chaque niveau est désormais une suite de blocs de course successifs (nombre libre par niveau)
 - Bilan après chaque bloc : Réussi / Partiellement réussi / Non réussi, avec note d'explication si le bloc n'est pas pleinement réussi
