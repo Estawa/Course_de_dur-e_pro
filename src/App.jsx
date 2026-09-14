@@ -29,6 +29,11 @@ export default function App() {
   const [niveauActif, setNiveauActif] = useState(null)
   const [dernierResultat, setDernierResultat] = useState(null)
 
+  // Vrai tant qu'un test VMA ou le Fartlek évaluatif a un chrono actif (effort/palier/course en
+  // cours), pour désactiver la flèche retour de l'en-tête et éviter d'en sortir par un appui
+  // accidentel — même logique que l'absence de flèche retour pendant la séance de travail.
+  const [activiteEnCours, setActiviteEnCours] = useState(false)
+
   // Reprise de séance après fermeture/mise en veille prolongée de l'appli pendant son déroulement.
   const [sessionAReprendre, setSessionAReprendre] = useState(null) // snapshot proposé, en attente de choix
   const [repriseActive, setRepriseActive] = useState(null) // snapshot accepté, transmis à SeanceRunner
@@ -36,7 +41,7 @@ export default function App() {
   useEffect(() => {
     const e = storage.getEleveActif()
     if (!e) return
-    const session = storage.getSessionCours(e)
+    const session = storage.getSessionCours(e, 'course')
     if (session) setSessionAReprendre(session)
   }, [])
 
@@ -49,12 +54,12 @@ export default function App() {
   }
 
   function handleIgnorerSession() {
-    storage.effacerSessionCours(eleve)
+    storage.effacerSessionCours(eleve, 'course')
     setSessionAReprendre(null)
   }
 
   function handleProgressSeance(snapshot) {
-    storage.sauvegarderSessionCours(eleve, { seanceActive, niveauActif, ...snapshot })
+    storage.sauvegarderSessionCours(eleve, 'course', { seanceActive, niveauActif, ...snapshot })
   }
 
   // Applique un éventuel code de synchro reçu par lien (?c=XXXXX, cas d'un élève qui
@@ -154,13 +159,13 @@ export default function App() {
     storage.ajouterRealisation(realisation)
     setRealisations([...realisations, realisation])
     setDernierResultat(realisation)
-    storage.effacerSessionCours(eleve)
+    storage.effacerSessionCours(eleve, 'course')
     setRepriseActive(null)
     setEcran('bilan')
   }
 
   function handleAbandonSeance() {
-    storage.effacerSessionCours(eleve)
+    storage.effacerSessionCours(eleve, 'course')
     setRepriseActive(null)
     setEcran('tuiles')
   }
@@ -225,8 +230,11 @@ export default function App() {
 
   // 'course' est volontairement exclu : pendant le déroulement du chrono, la sortie ne doit être
   // possible que via le bouton "Abandonner sans enregistrer" (avec sa confirmation), jamais par un
-  // simple appui sur la flèche retour de l'en-tête.
-  const peutRevenir = ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'bilan', 'enseignant', 'enseignantPin', 'partage', 'fartlek'].includes(ecran)
+  // simple appui sur la flèche retour de l'en-tête. Même logique via `activiteEnCours` pour les
+  // tests VMA et le Fartlek évaluatif, imbriqués plus profondément dans l'arborescence.
+  const peutRevenir =
+    !activiteEnCours &&
+    ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'bilan', 'enseignant', 'enseignantPin', 'partage', 'fartlek'].includes(ecran)
 
   function handleRetour() {
     if (['bibliotheque', 'vierge', 'outils'].includes(ecran)) setEcran('tuiles')
@@ -271,10 +279,10 @@ export default function App() {
 
       {ecran === 'vierge' && <SeanceVierge onLancer={handleLancerSeanceVierge} />}
 
-      {ecran === 'outils' && <OutilsEleve eleve={eleve} onComposerSeance={() => setEcran('vierge')} onLancerFartlek={() => setEcran('fartlek')} />}
+      {ecran === 'outils' && <OutilsEleve eleve={eleve} onComposerSeance={() => setEcran('vierge')} onLancerFartlek={() => setEcran('fartlek')} onActiviteEnCours={setActiviteEnCours} />}
 
       {ecran === 'fartlek' && (
-        <FartlekEval eleve={eleve} vmaRef={vmaRef} onTermine={() => setEcran('tuiles')} />
+        <FartlekEval eleve={eleve} vmaRef={vmaRef} onTermine={() => setEcran('tuiles')} onActiviteEnCours={setActiviteEnCours} />
       )}
 
       {ecran === 'choixNiveau' && seanceActive && (
