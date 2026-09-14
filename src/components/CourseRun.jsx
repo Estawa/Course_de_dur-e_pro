@@ -1,20 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
-import { Square, TrendingDown, TrendingUp, CheckCircle2 } from 'lucide-react'
+import { Square, TrendingDown, TrendingUp, CheckCircle2, LogOut } from 'lucide-react'
 import { beepDepart, beepFin, planifierBipRegulation, gongTransition, annoncerVocal } from '../utils/audio'
 import { formatDuree, vitesseVersAllure } from '../utils/calc'
 import { libellePhase } from '../utils/fullpower'
 
 const TOLERANCE_GPS = 0.09 // ±9%, même tolérance que Fractionné GPS Pro
 
-export default function CourseRun({ phases, guidage, distanceCible, dureeCible, labelBloc, onTermineBloc, onAbandon }) {
-  const [etat, setEtat] = useState('latence') // latence | course | fin
+// resumeStartTs : si fourni (reprise après mise en veille/fermeture de l'appli), le bloc démarre
+// directement en course avec ce timestamp de départ, sans repasser par le décompte de latence —
+// le chrono reprend exactement là où il en était, comme si rien ne s'était passé.
+// onDemarre : appelé une seule fois avec le timestamp réel de départ du bloc (latence normale ou
+// reprise), pour que le parent puisse le sauvegarder en vue d'une éventuelle prochaine reprise.
+export default function CourseRun({ phases, guidage, distanceCible, dureeCible, labelBloc, onTermineBloc, onAbandon, resumeStartTs, onDemarre }) {
+  const [etat, setEtat] = useState(resumeStartTs ? 'course' : 'latence') // latence | course | fin
   const [compteALatence, setCompteALatence] = useState(4)
   const [elapsed, setElapsed] = useState(0)
   const [distance, setDistance] = useState(0)
   const [vitesseInstant, setVitesseInstant] = useState(0)
   const [annonce, setAnnonce] = useState(null)
+  // Empêche d'arrêter le bloc par un appui accidentel (téléphone tenu/rangé en courant) : un
+  // premier appui affiche une confirmation qui disparaît d'elle-même après 3s si elle n'est pas
+  // validée. null | 'terminer' | 'abandonner'.
+  const [confirmation, setConfirmation] = useState(null)
 
-  const startRef = useRef(null)
+  const startRef = useRef(resumeStartTs || null)
   const watchIdRef = useRef(null)
   const lastPosRef = useRef(null)
   const bipTimeoutRef = useRef(null)
@@ -23,6 +32,7 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
   const dernierIndexPhaseRef = useRef(-1)
   const termineAutoRef = useRef(false)
   const annonceTimeoutRef = useRef(null)
+  const confirmationTimeoutRef = useRef(null)
 
   const cumul = phases.reduce((acc, p, i) => {
     acc.push((acc[i - 1] || 0) + p.duree_s)
@@ -63,11 +73,21 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
       beepDepart()
       setEtat('course')
       startRef.current = Date.now()
+      onDemarre?.(startRef.current)
       return
     }
     const t = setTimeout(() => setCompteALatence((c) => c - 1), 800)
     return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat, compteALatence])
+
+  // Cas d'une reprise après mise en veille/fermeture de l'appli : le composant démarre déjà en
+  // 'course' (voir useState plus haut), on signale juste le départ au parent pour qu'il sache
+  // que ce timestamp est désormais "consommé" et ne doit plus être réutilisé pour le bloc suivant.
+  useEffect(() => {
+    if (resumeStartTs) onDemarre?.(resumeStartTs)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (etat !== 'course') return
@@ -141,6 +161,27 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
     bipTimeoutRef.current = planifierBipRegulation(ecart, () => {})
     return () => clearTimeout(bipTimeoutRef.current)
   }, [vitesseInstant, etat, guidage, vitesseCible])
+
+  function demanderConfirmation(action) {
+    setConfirmation(action)
+    clearTimeout(confirmationTimeoutRef.current)
+    confirmationTimeoutRef.current = setTimeout(() => setConfirmation(null), 3000)
+  }
+
+  function annulerConfirmation() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmation(null)
+  }
+
+  function confirmerAction() {
+    clearTimeout(confirmationTimeoutRef.current)
+    const action = confirmation
+    setConfirmation(null)
+    if (action === 'terminer') arreter(false)
+    else if (action === 'abandonner') onAbandon()
+  }
+
+  useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
 
   function arreter(automatique = false) {
     beepFin()
@@ -259,15 +300,43 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
         </div>
       )}
 
-      <button
-        onClick={() => arreter(false)}
-        className="w-full flex items-center justify-center gap-2 bg-alerte hover:bg-alerte/90 text-white font-medium py-4 rounded-xl transition active:scale-[0.98]"
-      >
-        <Square size={16} fill="white" /> Terminer le bloc
-      </button>
-      <button onClick={onAbandon} className="mt-3 text-xs text-piste-400 underline">
-        Abandonner sans enregistrer
-      </button>
+      {confirmation === null && (
+        <>
+          <button
+            onClick={() => demanderConfirmation('terminer')}
+            className="w-full flex items-center justify-center gap-2 bg-alerte hover:bg-alerte/90 text-white font-medium py-4 rounded-xl transition active:scale-[0.98]"
+          >
+            <Square size={16} fill="white" /> Terminer le bloc
+          </button>
+          <button onClick={() => demanderConfirmation('abandonner')} className="mt-3 text-xs text-piste-400 underline">
+            Abandonner sans enregistrer
+          </button>
+        </>
+      )}
+
+      {confirmation === 'terminer' && (
+        <div className="rounded-xl border-2 border-alerte/40 bg-[#fbeeea] p-4">
+          <p className="text-xs text-piste-700 mb-3">Confirme pour terminer ce bloc maintenant</p>
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={confirmerAction} className="flex items-center gap-2 bg-alerte text-white px-5 py-3 rounded-xl font-medium">
+              <Square size={16} fill="white" /> Confirmer
+            </button>
+            <button onClick={annulerConfirmation} className="text-xs text-piste-500 underline px-2">Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {confirmation === 'abandonner' && (
+        <div className="rounded-xl border-2 border-alerte/40 bg-[#fbeeea] p-4">
+          <p className="text-xs text-piste-700 mb-3">Confirme pour abandonner ce bloc sans l'enregistrer</p>
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={confirmerAction} className="flex items-center gap-2 bg-alerte text-white px-5 py-3 rounded-xl font-medium">
+              <LogOut size={16} /> Confirmer l'abandon
+            </button>
+            <button onClick={annulerConfirmation} className="text-xs text-piste-500 underline px-2">Annuler</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
