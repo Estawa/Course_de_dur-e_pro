@@ -189,6 +189,26 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
                 )}
               </div>
 
+              {n.blocs.some((b) => b.mode === 'simple') && (
+                <div className="mb-3">
+                  <label className="block text-xs text-piste-600 mb-1">
+                    Guidage <span className="text-piste-400 font-normal">(blocs Simple de ce niveau)</span>
+                  </label>
+                  <div className="flex gap-1.5 max-w-[220px]">
+                    {['gps', 'minuteur'].map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => majNiveau(n.id, 'guidage', mode)}
+                        className={`flex-1 text-xs py-1.5 rounded-lg border transition ${n.guidage === mode ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-700'}`}
+                      >
+                        {mode === 'gps' ? 'GPS' : 'Minuteur'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-4 mb-2">
                 {n.blocs.map((b, i) => (
                   <div key={b.id} className="bg-piste-50 rounded-lg p-3">
