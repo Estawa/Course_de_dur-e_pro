@@ -1,3 +1,9 @@
+v1.39.0 — Correctif : indicateur d'allure GPS absent sur les blocs Simple
+- Bug identifié : pour un niveau (Facile/Moyen/Difficile) utilisant des blocs "Simple" (distance/durée saisies directement, hors Full Power), le guidage restait toujours figé sur "Minuteur" à la création, sans aucun réglage possible dans l'éditeur de séance — l'indicateur d'allure GPS (vitesse instantanée, écart à la cible, distance parcourue) ne pouvait donc jamais s'afficher pendant la course, quelle que soit la séance
+- Seules les 7 séances types pré-encodées (import automatique, en Full Power) avaient le GPS activé par défaut, ce qui masquait le problème sur les séances construites/modifiées à la main
+- Ajout, dans l'éditeur de séance, d'un sélecteur GPS / Minuteur par niveau (visible dès qu'au moins un bloc du niveau est en mode Simple), identique à celui déjà présent pour les blocs Full Power — permet désormais d'activer le guidage GPS sur n'importe quelle séance créée manuellement
+- Les niveaux déjà enregistrés conservent leur guidage actuel (Minuteur par défaut) tant qu'il n'est pas modifié via ce nouveau sélecteur
+
 v1.30.0 — Repères Série / Répétition pendant la course
 - Pendant un bloc structuré en Full Power (plusieurs séries/répétitions), l'écran de course affiche désormais "Série X/N · Répétition Y/Z" en plus de la phase en cours
 - En mode minuteur, le gros décompte affiche le temps restant sur la série en cours (et non plus sur tout le bloc), avec le temps restant sur l'ensemble du bloc rappelé en plus petit en dessous
