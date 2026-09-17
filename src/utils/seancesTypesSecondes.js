@@ -23,7 +23,7 @@ function structure(types, sequence, nbTours = 1, recupSerie = null) {
     types,
     sequence,
     nbTours,
-    guidage: 'minuteur',
+    guidage: 'gps',
     recupSerie: recupSerie || { active: false, duree_s: 120, pct_vma: 60 },
     recupFinale: { active: true, duree_s: 300, pct_vma: 57 }
   }
@@ -59,7 +59,7 @@ function niveau(nom, struct) {
   return {
     id: crypto.randomUUID(),
     nom,
-    guidage: 'minuteur',
+    guidage: 'gps',
     visible: true,
     echauffement: { active: true, duree_s: 480 },
     blocs: [{ id: crypto.randomUUID(), mode: 'fullpower', structure: struct }]
