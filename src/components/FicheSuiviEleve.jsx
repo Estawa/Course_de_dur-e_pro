@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, KeyRound, UserX, Trash2, 
 import VmaEleveLigne from './VmaEleveLigne'
 import ComportementAjustement from './ComportementAjustement'
 import { storage } from '../utils/storage'
-import { noteFinale, pourcentagesReussite } from '../utils/calc'
+import { noteFinale, pourcentagesReussite, blocAvecGps } from '../utils/calc'
 
 // Distance de glissement horizontal minimale (px) pour déclencher un changement de fiche,
 // et écart vertical maximal toléré pour ne pas confondre avec un scroll de la liste.
@@ -274,7 +274,14 @@ export default function FicheSuiviEleve({
                 const noteBase = r.noteReelle ?? r.note
                 const noteAvecComportement = noteFinale(r)
                 const ajustement = r.ajustementComportement || 0
-                const labelGps = r.noteReelleAvecGps === undefined ? null : r.noteReelleAvecGps ? '(ac GPS)' : '(Sans GPS)'
+                // Détail bloc par bloc : combien ont effectivement été mesurés par GPS (guidage
+                // demandé en GPS, avec repli automatique sur minuteur si le GPS n'a pas fonctionné).
+                const blocsGpsDemandes = r.blocsResultats?.filter((b) => b.guidage === 'gps') ?? []
+                const nbBlocsGpsMesures = blocsGpsDemandes.filter(blocAvecGps).length
+                const labelGps =
+                  blocsGpsDemandes.length === 0
+                    ? null
+                    : `${nbBlocsGpsMesures}/${blocsGpsDemandes.length} bloc${blocsGpsDemandes.length > 1 ? 's' : ''} mesuré${nbBlocsGpsMesures > 1 ? 's' : ''} par GPS`
                 const pct = pourcentagesReussite(r.blocsResultats)
                 return (
                   <div key={r.id} className="bg-piste-50 rounded-lg px-3 py-2.5">
@@ -289,6 +296,7 @@ export default function FicheSuiviEleve({
                             Allure {pct.allure}% · Distance/durée {pct.distanceDuree}%
                           </p>
                         )}
+                        {labelGps && <p className="text-[11px] text-piste-500">{labelGps}</p>}
                       </div>
                       <div className="flex items-start gap-2">
                         <div className="text-right">
@@ -296,7 +304,6 @@ export default function FicheSuiviEleve({
                           {ajustement !== 0 && (
                             <p className="text-[10px] text-piste-500">{noteBase}/20 base {ajustement > 0 ? '+' : ''}{ajustement}</p>
                           )}
-                          {labelGps && <p className="text-[10px] text-piste-500">{labelGps}</p>}
                         </div>
                         {onSupprimerRealisation && (
                           <button

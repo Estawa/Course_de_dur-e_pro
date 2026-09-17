@@ -140,6 +140,18 @@ function MigrationAncienneVersion({ onMigrer, onMigrerTout, onMigrerListe }) {
                 </table>
               </div>
             </details>
+            {resultatListe.conflits && resultatListe.conflits.length > 0 && (
+              <div className="bg-white rounded-lg p-2 border border-piste-300">
+                <p className="text-piste-800 font-medium mb-1">
+                  {resultatListe.conflits.length} élève(s) retrouvé(s) sous une classe différente de celle indiquée par un ancien code — non déplacés automatiquement, à vérifier :
+                </p>
+                {resultatListe.conflits.map((c, i) => (
+                  <p key={i} className="text-piste-600">
+                    {c.prenom} {c.nom} : resté dans <strong>{c.classeExistante}</strong> (un ancien code le indiquait dans {c.classeAncienCode})
+                  </p>
+                ))}
+              </div>
+            )}
             {resultatListe.detail.some((d) => !d.ok) && (
               <div className="bg-white rounded-lg p-2 border border-alerte/30">
                 <p className="text-alerte font-medium mb-1">Codes en échec :</p>

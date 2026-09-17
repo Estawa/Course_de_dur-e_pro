@@ -3,6 +3,7 @@ import { Square, TrendingDown, TrendingUp, CheckCircle2, LogOut } from 'lucide-r
 import { beepDepart, beepFin, planifierBipRegulation, gongTransition, annoncerVocal } from '../utils/audio'
 import { formatDuree, vitesseVersAllure } from '../utils/calc'
 import { libellePhase } from '../utils/fullpower'
+import IndicateurGps from './IndicateurGps'
 
 const TOLERANCE_GPS = 0.09 // ±9%, même tolérance que Fractionné GPS Pro
 
@@ -17,6 +18,9 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
   const [elapsed, setElapsed] = useState(0)
   const [distance, setDistance] = useState(0)
   const [vitesseInstant, setVitesseInstant] = useState(0)
+  // null = recherche en cours, true = GPS actif et exploité, false = indisponible/refusé →
+  // repli automatique sur l'affichage minuteur (guidage 'gps' demandé "tant que possible").
+  const [gpsOk, setGpsOk] = useState(guidage === 'gps' ? null : false)
   const [annonce, setAnnonce] = useState(null)
   // Empêche d'arrêter le bloc par un appui accidentel (téléphone tenu/rangé en courant) : un
   // premier appui affiche une confirmation qui disparaît d'elle-même après 3s si elle n'est pas
@@ -123,13 +127,19 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elapsed, etat])
 
-  // Guidage GPS
+  // Guidage GPS : tenté dès que le bloc est en mode 'gps'. En cas d'échec (refus, indisponible,
+  // timeout), gpsOk passe à false et l'écran bascule sur l'affichage minuteur (voir rendu plus
+  // bas) — le guidage "GPS tant que possible" ne bloque jamais la séance.
   useEffect(() => {
     if (etat !== 'course' || guidage !== 'gps') return
-    if (!('geolocation' in navigator)) return
+    if (!('geolocation' in navigator)) {
+      setGpsOk(false)
+      return
+    }
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
+        setGpsOk(true)
         const { latitude, longitude, speed } = pos.coords
         const now = Date.now()
         if (lastPosRef.current) {
@@ -137,16 +147,21 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
           if (dt > 0) {
             const d = haversine(lastPosRef.current, { latitude, longitude })
             const vInstant = speed != null && speed >= 0 ? speed : d / dt
+            const vKmh = vInstant * 3.6
+            // Sous 0,5 km/h, bruit GPS normal à l'arrêt plutôt qu'un déplacement réel.
+            const vAffichee = vKmh < 0.5 ? 0 : vKmh
             setDistance((prev) => prev + d)
-            setVitesseInstant(vInstant * 3.6)
+            setVitesseInstant(vAffichee)
             if (phaseCourante?.phase === 'travail') {
-              vitessesTravailRef.current.push(vInstant * 3.6)
+              vitessesTravailRef.current.push(vAffichee)
             }
           }
         }
         lastPosRef.current = { latitude, longitude, time: now }
       },
-      () => {},
+      // Ne repasse jamais gpsOk à false une fois qu'un point valide a été reçu (évite un
+      // aller-retour intempestif sur une seule mesure ratée) ; sinon, GPS considéré indisponible.
+      () => setGpsOk((prev) => (prev === true ? prev : false)),
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
     )
     return () => {
@@ -154,13 +169,13 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
     }
   }, [etat, guidage])
 
-  // Bips de régulation d'allure (mode GPS)
+  // Bips de régulation d'allure (mode GPS actif uniquement)
   useEffect(() => {
-    if (etat !== 'course' || guidage !== 'gps' || !vitesseCible) return
+    if (etat !== 'course' || guidage !== 'gps' || gpsOk !== true || !vitesseCible) return
     const ecart = (vitesseInstant - vitesseCible) / vitesseCible
     bipTimeoutRef.current = planifierBipRegulation(ecart, () => {})
     return () => clearTimeout(bipTimeoutRef.current)
-  }, [vitesseInstant, etat, guidage, vitesseCible])
+  }, [vitesseInstant, etat, guidage, gpsOk, vitesseCible])
 
   function demanderConfirmation(action) {
     setConfirmation(action)
@@ -191,8 +206,11 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
 
     const dureeReelle = elapsed
     let termine, respectAllure
+    // Le calcul GPS ne s'applique que si le GPS a effectivement fonctionné pendant le bloc ;
+    // sinon (indisponible/refusé), repli sur le même calcul que le guidage minuteur.
+    const gpsExploitable = guidage === 'gps' && gpsOk === true
 
-    if (guidage === 'gps') {
+    if (gpsExploitable) {
       termine = automatique || distance >= distanceCible * 0.95
       const vs = vitessesTravailRef.current
       const vitesseMoyenne = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : 0
@@ -204,6 +222,7 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
         : false
       onTermineBloc({
         guidage,
+        viaGPS: true,
         termine,
         respectAllure,
         distanceRealisee: Math.round(distance),
@@ -217,6 +236,7 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
       respectAllure = Math.abs(dureeReelle - dureeCible) / dureeCible <= 0.1
       onTermineBloc({
         guidage,
+        viaGPS: false,
         termine,
         respectAllure,
         distanceRealisee: distanceCible,
@@ -241,6 +261,13 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
   const ecartPct = vitesseCible ? ((vitesseInstant - vitesseCible) / vitesseCible) * 100 : 0
   const dansLaZone = Math.abs(ecartPct) < 5
 
+  // En récupération, le gros chrono central décompte vers 0 (au lieu de monter) pour bien
+  // distinguer visuellement du travail — la récup reste chronométrée en interne de la même façon.
+  const enRecup = phaseCourante?.phase === 'recup'
+  const tempsAfficheGrandChrono = enRecup
+    ? Math.max(0, (phaseCourante?.duree_s || 0) - phaseElapsed)
+    : phaseElapsed
+
   return (
     <div className="max-w-md mx-auto px-6 py-8 text-center">
       {annonce && (
@@ -262,14 +289,20 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
       <p className="text-[11px] uppercase tracking-wide font-medium text-piste-600 mb-3">
         {phaseCourante?.phase === 'recup' ? 'Récupération' : 'Travail'}{phaseCourante?.typeLettre ? ` · Type ${phaseCourante.typeLettre}` : ''}
       </p>
-      <div className="font-display text-6xl text-piste-900 mb-2 tabular-nums">{formatDuree(phaseElapsed)}</div>
+      <div className="font-display text-6xl text-piste-900 mb-2 tabular-nums">
+        {enRecup && '-'}{formatDuree(tempsAfficheGrandChrono)}
+      </div>
       <p className="text-sm text-piste-500 mb-1">Objectif phase {formatDuree(phaseCourante?.duree_s || 0)} · {vitesseVersAllure(vitesseCible)}</p>
       {repTotal > 0 && finIndexRep > indexPhase && (
         <p className="text-xs text-piste-400 mb-8">Reste {formatDuree(repetitionRestante)} pour finir cette répétition (travail + récup)</p>
       )}
       {!(repTotal > 0 && finIndexRep > indexPhase) && <div className="mb-8" />}
 
-      {guidage === 'gps' ? (
+      {guidage === 'gps' && gpsOk !== true && (
+        <IndicateurGps gpsOk={gpsOk} className="mb-4 flex justify-center" />
+      )}
+
+      {guidage === 'gps' && gpsOk === true ? (
         <div className={`rounded-2xl border-2 p-6 mb-8 transition-colors ${dansLaZone ? 'border-piste-400 bg-piste-50' : 'border-alerte/50 bg-[#fbeeea]'}`}>
           <div className="flex items-center justify-center gap-2 mb-1">
             {ecartPct > 5 && <TrendingUp className="text-alerte" size={20} />}

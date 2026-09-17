@@ -83,11 +83,11 @@ export default function ImportEleves({ onImporte, onFermer }) {
     const classe = (forcerClasseUnique || !classeBrute ? classeCible.trim() : classeBrute).toUpperCase()
     const classeOrigine = classeBrute ? classeBrute.toUpperCase() : ''
     const sexe = iSexe !== undefined ? normaliserSexe(ligne[iSexe]) : ''
-    const existant = classe
-      ? storage.getElevesClasse(classe).find(
-          (e) => normaliser(e.nom) === normaliser(nom) && normaliser(e.prenom) === normaliser(prenom)
-        )
-      : null
+    // Cherché dans TOUTES les classes déjà connues (pas seulement la classe cible de cette ligne)
+    // pour repérer correctement un élève déjà présent ailleurs — ex. sous sa classe d'origine
+    // pendant qu'on importe son groupe classe — et éviter d'en faire un doublon en aperçu.
+    const trouve = (nom || prenom) ? storage.trouverEleveParNom(nom, prenom) : null
+    const existant = trouve ? trouve.eleve : null
     return { matchId: existant ? existant.id : null, nom, prenom, classe, classeOrigine, sexe }
   }
 
@@ -108,7 +108,14 @@ export default function ImportEleves({ onImporte, onFermer }) {
       setErreur('Aucun élève sélectionné.')
       return
     }
-    storage.appliquerImportRoster(eleves, mode)
+    const conflits = storage.appliquerImportRoster(eleves, mode)
+    if (conflits.length > 0) {
+      alert(
+        `${conflits.length} élève(s) déjà connu(s) sous une autre classe n'ont pas été déplacés automatiquement (pour éviter tout doublon) :\n\n` +
+        conflits.map((c) => `${c.prenom} ${c.nom} : resté dans ${c.classeExistante} (ce fichier l'indiquait dans ${c.classeFichier})`).join('\n') +
+        `\n\nVérifie dans "Élèves & suivi" s'il faut les déplacer manuellement vers le bon groupe classe.`
+      )
+    }
     onImporte()
   }
 
