@@ -37,10 +37,10 @@ export function calculerNoteSeance(blocsResultats) {
   return Math.round((total / blocsResultats.length) * 2) / 2
 }
 
-// Un bloc dispose de données GPS exploitables si le guidage était GPS
-// et qu'une vitesse a effectivement été mesurée (permission accordée, position captée).
+// Un bloc dispose de données GPS exploitables si le GPS a effectivement été utilisé pendant le
+// bloc (tenté automatiquement à chaque fois) et qu'une vitesse a été mesurée.
 export function blocAvecGps(bloc) {
-  return bloc.guidage === 'gps' && !!bloc.vitesseMoyenne && bloc.vitesseMoyenne > 0 && !!bloc.vitesseCible
+  return !!bloc.viaGPS && !!bloc.vitesseMoyenne && bloc.vitesseMoyenne > 0 && !!bloc.vitesseCible
 }
 
 // Note "réelle" d'un bloc à partir de l'écart mesuré par GPS entre l'allure prévue et l'allure réalisée.
