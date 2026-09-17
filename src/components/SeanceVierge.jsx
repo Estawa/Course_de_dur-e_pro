@@ -32,7 +32,6 @@ export default function SeanceVierge({ onLancer }) {
             niveau: {
               id: crypto.randomUUID(),
               nom: 'Séance libre',
-              guidage: structure.guidage,
               blocs: [{ id: crypto.randomUUID(), mode: 'fullpower', structure }]
             }
           })

@@ -18,7 +18,7 @@ function echauffementVide() {
 }
 
 function niveauVide(nom) {
-  return { id: crypto.randomUUID(), nom, guidage: 'minuteur', visible: true, echauffement: echauffementVide(), blocs: [blocSimpleVide(), blocSimpleVide(), blocSimpleVide()] }
+  return { id: crypto.randomUUID(), nom, visible: true, echauffement: echauffementVide(), blocs: [blocSimpleVide(), blocSimpleVide(), blocSimpleVide()] }
 }
 
 // Reconstruit l'état éditable d'un niveau déjà enregistré.
@@ -26,7 +26,6 @@ function niveauDepuisSeance(n) {
   return {
     id: n.id,
     nom: n.nom,
-    guidage: n.guidage,
     visible: n.visible !== false,
     echauffement: n.echauffement ? { ...n.echauffement } : echauffementVide(),
     blocs: n.blocs.map((b) =>
@@ -88,7 +87,6 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
     const niveauxFinaux = niveaux.map((n) => ({
       id: n.id,
       nom: n.nom,
-      guidage: n.guidage,
       visible: n.visible !== false,
       echauffement: { active: !!n.echauffement?.active, duree_s: Number(n.echauffement?.duree_s) || 0 },
       blocs: n.blocs.map((b) => {
@@ -188,26 +186,6 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
                   />
                 )}
               </div>
-
-              {n.blocs.some((b) => b.mode === 'simple') && (
-                <div className="mb-3">
-                  <label className="block text-xs text-piste-600 mb-1">
-                    Guidage <span className="text-piste-400 font-normal">(blocs Simple de ce niveau)</span>
-                  </label>
-                  <div className="flex gap-1.5 max-w-[220px]">
-                    {['gps', 'minuteur'].map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => majNiveau(n.id, 'guidage', mode)}
-                        className={`flex-1 text-xs py-1.5 rounded-lg border transition ${n.guidage === mode ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-700'}`}
-                      >
-                        {mode === 'gps' ? 'GPS' : 'Minuteur'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <div className="space-y-4 mb-2">
                 {n.blocs.map((b, i) => (

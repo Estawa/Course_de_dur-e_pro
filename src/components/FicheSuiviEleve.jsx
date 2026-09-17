@@ -274,9 +274,10 @@ export default function FicheSuiviEleve({
                 const noteBase = r.noteReelle ?? r.note
                 const noteAvecComportement = noteFinale(r)
                 const ajustement = r.ajustementComportement || 0
-                // Détail bloc par bloc : combien ont effectivement été mesurés par GPS (guidage
-                // demandé en GPS, avec repli automatique sur minuteur si le GPS n'a pas fonctionné).
-                const blocsGpsDemandes = r.blocsResultats?.filter((b) => b.guidage === 'gps') ?? []
+                // Détail bloc par bloc : le GPS est désormais toujours tenté automatiquement, avec
+                // repli invisible sur minuteur s'il n'a pas fonctionné — on compte donc sur combien
+                // de blocs il a effectivement pu être exploité.
+                const blocsGpsDemandes = r.blocsResultats ?? []
                 const nbBlocsGpsMesures = blocsGpsDemandes.filter(blocAvecGps).length
                 const labelGps =
                   blocsGpsDemandes.length === 0

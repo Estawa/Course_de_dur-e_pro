@@ -9,18 +9,18 @@ import { calculerNoteSeance } from '../utils/calc'
 import { expanserStructure, dureeTotaleStructure, distanceTotaleStructure } from '../utils/fullpower'
 import { useWakeLock } from '../utils/wakeLock'
 
+// Le guidage GPS est désormais toujours tenté automatiquement par CourseRun (repli invisible sur
+// minuteur si indisponible) : plus besoin de choisir un mode de guidage ici.
 function preparerBloc(bloc, niveau, vmaRef) {
   if (bloc.mode === 'fullpower' && bloc.structure) {
     return {
       phases: expanserStructure(bloc.structure, vmaRef),
-      guidage: bloc.structure.guidage,
       distanceCible: distanceTotaleStructure(bloc.structure, vmaRef),
       dureeCible: dureeTotaleStructure(bloc.structure)
     }
   }
   return {
     phases: [{ phase: 'travail', duree_s: bloc.duree_s, vitesse_kmh: bloc.allure_kmh }],
-    guidage: niveau.guidage,
     distanceCible: bloc.distance_m,
     dureeCible: bloc.duree_s
   }
@@ -120,7 +120,6 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
     return (
       <CourseRun
         phases={preparation.phases}
-        guidage={preparation.guidage}
         distanceCible={preparation.distanceCible}
         dureeCible={preparation.dureeCible}
         labelBloc={labelBloc}

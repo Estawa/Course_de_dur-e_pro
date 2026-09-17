@@ -10,25 +10,24 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
   const [types, setTypes] = useState(structureInitiale?.types || [typeVide('A')])
   const [sequence, setSequence] = useState(structureInitiale?.sequence || [])
   const [nbTours, setNbTours] = useState(structureInitiale?.nbTours || 1)
-  const [guidage, setGuidage] = useState(structureInitiale?.guidage || 'gps')
   const [recupSerie, setRecupSerie] = useState(structureInitiale?.recupSerie || recupVide(120, 50))
   const [recupFinale, setRecupFinale] = useState(structureInitiale?.recupFinale || recupVide(180, 40))
 
-  function emettre(nTypes, nSequence, nNbTours, nGuidage, nRecupSerie = recupSerie, nRecupFinale = recupFinale) {
-    onChange({ types: nTypes, sequence: nSequence, nbTours: nNbTours, guidage: nGuidage, recupSerie: nRecupSerie, recupFinale: nRecupFinale })
+  function emettre(nTypes, nSequence, nNbTours, nRecupSerie = recupSerie, nRecupFinale = recupFinale) {
+    onChange({ types: nTypes, sequence: nSequence, nbTours: nNbTours, recupSerie: nRecupSerie, recupFinale: nRecupFinale })
   }
 
   function ajouterType() {
     if (types.length >= 4) return
     const nouveaux = [...types, typeVide(LETTRES[types.length])]
     setTypes(nouveaux)
-    emettre(nouveaux, sequence, nbTours, guidage)
+    emettre(nouveaux, sequence, nbTours)
   }
 
   function majType(id, champ, valeur) {
     const nouveaux = types.map((t) => (t.id === id ? { ...t, [champ]: valeur } : t))
     setTypes(nouveaux)
-    emettre(nouveaux, sequence, nbTours, guidage)
+    emettre(nouveaux, sequence, nbTours)
   }
 
   function supprimerType(id) {
@@ -36,48 +35,43 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
     const nSeq = sequence.filter((s) => s.typeId !== id)
     setTypes(nouveaux)
     setSequence(nSeq)
-    emettre(nouveaux, nSeq, nbTours, guidage)
+    emettre(nouveaux, nSeq, nbTours)
   }
 
   function ajouterSequence() {
     if (!types.length) return
     const nSeq = [...sequence, { typeId: types[0].id, repetitions: 4 }]
     setSequence(nSeq)
-    emettre(types, nSeq, nbTours, guidage)
+    emettre(types, nSeq, nbTours)
   }
 
   function majSequence(index, champ, valeur) {
     const nSeq = sequence.map((s, i) => (i === index ? { ...s, [champ]: valeur } : s))
     setSequence(nSeq)
-    emettre(types, nSeq, nbTours, guidage)
+    emettre(types, nSeq, nbTours)
   }
 
   function supprimerSequence(index) {
     const nSeq = sequence.filter((_, i) => i !== index)
     setSequence(nSeq)
-    emettre(types, nSeq, nbTours, guidage)
-  }
-
-  function changerGuidage(mode) {
-    setGuidage(mode)
-    emettre(types, sequence, nbTours, mode)
+    emettre(types, nSeq, nbTours)
   }
 
   function changerNbTours(val) {
     setNbTours(val)
-    emettre(types, sequence, val, guidage)
+    emettre(types, sequence, val)
   }
 
   function majRecupSerie(champ, valeur) {
     const n = { ...recupSerie, [champ]: valeur }
     setRecupSerie(n)
-    emettre(types, sequence, nbTours, guidage, n, recupFinale)
+    emettre(types, sequence, nbTours, n, recupFinale)
   }
 
   function majRecupFinale(champ, valeur) {
     const n = { ...recupFinale, [champ]: valeur }
     setRecupFinale(n)
-    emettre(types, sequence, nbTours, guidage, recupSerie, n)
+    emettre(types, sequence, nbTours, recupSerie, n)
   }
 
   const dureeTotale = dureeTotaleStructure({ types, sequence, nbTours: Number(nbTours) || 1, recupSerie, recupFinale })
@@ -158,23 +152,7 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <ChampNombre label="Nombre de tours de la séquence" valeur={nbTours} onChange={changerNbTours} />
-        <div>
-          <label className="block text-xs text-piste-600 mb-1">Guidage</label>
-          <div className="flex gap-1.5">
-            {['gps', 'minuteur'].map((mode) => (
-              <button
-                key={mode}
-                onClick={() => changerGuidage(mode)}
-                className={`flex-1 text-xs py-1.5 rounded-lg border transition ${guidage === mode ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-700'}`}
-              >
-                {mode === 'gps' ? 'GPS' : 'Minuteur'}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      <ChampNombre label="Nombre de tours de la séquence" valeur={nbTours} onChange={changerNbTours} />
 
       <div className="border border-piste-100 rounded-xl p-3 space-y-2">
         <label className="flex items-center gap-2 text-xs font-medium text-piste-800">

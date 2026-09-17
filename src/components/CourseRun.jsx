@@ -12,15 +12,17 @@ const TOLERANCE_GPS = 0.09 // ±9%, même tolérance que Fractionné GPS Pro
 // le chrono reprend exactement là où il en était, comme si rien ne s'était passé.
 // onDemarre : appelé une seule fois avec le timestamp réel de départ du bloc (latence normale ou
 // reprise), pour que le parent puisse le sauvegarder en vue d'une éventuelle prochaine reprise.
-export default function CourseRun({ phases, guidage, distanceCible, dureeCible, labelBloc, onTermineBloc, onAbandon, resumeStartTs, onDemarre }) {
+// Le GPS est toujours tenté automatiquement (recherche dès le montage, comme pour les tests VMA) :
+// s'il répond, l'écran d'allure GPS s'affiche ; sinon, repli invisible sur l'affichage minuteur.
+export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc, onTermineBloc, onAbandon, resumeStartTs, onDemarre }) {
   const [etat, setEtat] = useState(resumeStartTs ? 'course' : 'latence') // latence | course | fin
   const [compteALatence, setCompteALatence] = useState(4)
   const [elapsed, setElapsed] = useState(0)
   const [distance, setDistance] = useState(0)
   const [vitesseInstant, setVitesseInstant] = useState(0)
   // null = recherche en cours, true = GPS actif et exploité, false = indisponible/refusé →
-  // repli automatique sur l'affichage minuteur (guidage 'gps' demandé "tant que possible").
-  const [gpsOk, setGpsOk] = useState(guidage === 'gps' ? null : false)
+  // repli automatique sur l'affichage minuteur.
+  const [gpsOk, setGpsOk] = useState(null)
   const [annonce, setAnnonce] = useState(null)
   // Empêche d'arrêter le bloc par un appui accidentel (téléphone tenu/rangé en courant) : un
   // premier appui affiche une confirmation qui disparaît d'elle-même après 3s si elle n'est pas
@@ -127,11 +129,12 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elapsed, etat])
 
-  // Guidage GPS : tenté dès que le bloc est en mode 'gps'. En cas d'échec (refus, indisponible,
-  // timeout), gpsOk passe à false et l'écran bascule sur l'affichage minuteur (voir rendu plus
-  // bas) — le guidage "GPS tant que possible" ne bloque jamais la séance.
+  // Guidage GPS : toujours tenté automatiquement, dès le montage (recherche déjà en cours pendant
+  // le décompte de latence, comme pour les tests VMA), pour être fixé au plus tôt une fois la
+  // course lancée. En cas d'échec (refus, indisponible, timeout), gpsOk passe à false et l'écran
+  // bascule sur l'affichage minuteur (voir rendu plus bas) — jamais de blocage de la séance.
   useEffect(() => {
-    if (etat !== 'course' || guidage !== 'gps') return
+    if (etat === 'fin') return
     if (!('geolocation' in navigator)) {
       setGpsOk(false)
       return
@@ -140,6 +143,7 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setGpsOk(true)
+        if (etat !== 'course') return
         const { latitude, longitude, speed } = pos.coords
         const now = Date.now()
         if (lastPosRef.current) {
@@ -167,15 +171,15 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
     return () => {
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current)
     }
-  }, [etat, guidage])
+  }, [etat])
 
-  // Bips de régulation d'allure (mode GPS actif uniquement)
+  // Bips de régulation d'allure (dès que le GPS répond)
   useEffect(() => {
-    if (etat !== 'course' || guidage !== 'gps' || gpsOk !== true || !vitesseCible) return
+    if (etat !== 'course' || gpsOk !== true || !vitesseCible) return
     const ecart = (vitesseInstant - vitesseCible) / vitesseCible
     bipTimeoutRef.current = planifierBipRegulation(ecart, () => {})
     return () => clearTimeout(bipTimeoutRef.current)
-  }, [vitesseInstant, etat, guidage, gpsOk, vitesseCible])
+  }, [vitesseInstant, etat, gpsOk, vitesseCible])
 
   function demanderConfirmation(action) {
     setConfirmation(action)
@@ -208,7 +212,7 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
     let termine, respectAllure
     // Le calcul GPS ne s'applique que si le GPS a effectivement fonctionné pendant le bloc ;
     // sinon (indisponible/refusé), repli sur le même calcul que le guidage minuteur.
-    const gpsExploitable = guidage === 'gps' && gpsOk === true
+    const gpsExploitable = gpsOk === true
 
     if (gpsExploitable) {
       termine = automatique || distance >= distanceCible * 0.95
@@ -221,7 +225,6 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
         ? Math.abs(vitesseMoyenne - vitesseCibleMoyenneTravail) / vitesseCibleMoyenneTravail <= TOLERANCE_GPS
         : false
       onTermineBloc({
-        guidage,
         viaGPS: true,
         termine,
         respectAllure,
@@ -235,7 +238,6 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
       termine = automatique || dureeReelle >= dureeCible * 0.9
       respectAllure = Math.abs(dureeReelle - dureeCible) / dureeCible <= 0.1
       onTermineBloc({
-        guidage,
         viaGPS: false,
         termine,
         respectAllure,
@@ -253,7 +255,8 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
     return (
       <div className="max-w-md mx-auto px-6 py-24 text-center">
         <p className="text-piste-600 mb-4">Prépare-toi...</p>
-        <div className="font-display text-7xl text-piste-900">{compteALatence}</div>
+        <div className="font-display text-7xl text-piste-900 mb-6">{compteALatence}</div>
+        <IndicateurGps gpsOk={gpsOk} className="flex justify-center" />
       </div>
     )
   }
@@ -298,11 +301,11 @@ export default function CourseRun({ phases, guidage, distanceCible, dureeCible, 
       )}
       {!(repTotal > 0 && finIndexRep > indexPhase) && <div className="mb-8" />}
 
-      {guidage === 'gps' && gpsOk !== true && (
+      {gpsOk !== true && (
         <IndicateurGps gpsOk={gpsOk} className="mb-4 flex justify-center" />
       )}
 
-      {guidage === 'gps' && gpsOk === true ? (
+      {gpsOk === true ? (
         <div className={`rounded-2xl border-2 p-6 mb-8 transition-colors ${dansLaZone ? 'border-piste-400 bg-piste-50' : 'border-alerte/50 bg-[#fbeeea]'}`}>
           <div className="flex items-center justify-center gap-2 mb-1">
             {ecartPct > 5 && <TrendingUp className="text-alerte" size={20} />}
