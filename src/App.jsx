@@ -233,7 +233,6 @@ export default function App() {
       seanceTitre: seanceActive.titre,
       niveauNom: niveauActif.nom,
       date: Date.now(),
-      guidage: niveauActif.guidage,
       noteReelle,
       noteReelleAvecGps,
       ...resultat
