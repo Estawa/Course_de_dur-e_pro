@@ -1,3 +1,9 @@
+v1.40.0 — GPS automatique, plus de réglage manuel de guidage
+- Le choix manuel "GPS / Minuteur" (par niveau pour les blocs Simple depuis la v1.39, ou par bloc Full Power) est supprimé : pendant une séance, le GPS est désormais toujours tenté automatiquement, exactement comme pour les tests VMA — recherche dès le décompte de départ (4-3-2-1), avec un indicateur "Recherche du GPS… / GPS actif / GPS inactif"
+- Si le GPS répond, l'écran d'allure GPS (vitesse instantanée, écart à la cible, distance parcourue) s'affiche automatiquement ; s'il ne répond pas (refus, zone sans signal, téléphone non disponible), repli invisible et automatique sur l'affichage minuteur classique, sans aucune action de l'élève ni réglage préalable du professeur
+- Séances déjà enregistrées : leur guidage n'a plus d'effet et n'a pas besoin d'être modifié, tout bloc de course tente désormais le GPS automatiquement
+- Fiche de suivi élève : le comptage "X/Y blocs mesurés par GPS" se base maintenant sur les blocs où le GPS a effectivement fonctionné, sur l'ensemble des blocs réalisés (puisque le GPS est toujours tenté)
+
 v1.39.0 — Correctif : indicateur d'allure GPS absent sur les blocs Simple
 - Bug identifié : pour un niveau (Facile/Moyen/Difficile) utilisant des blocs "Simple" (distance/durée saisies directement, hors Full Power), le guidage restait toujours figé sur "Minuteur" à la création, sans aucun réglage possible dans l'éditeur de séance — l'indicateur d'allure GPS (vitesse instantanée, écart à la cible, distance parcourue) ne pouvait donc jamais s'afficher pendant la course, quelle que soit la séance
 - Seules les 7 séances types pré-encodées (import automatique, en Full Power) avaient le GPS activé par défaut, ce qui masquait le problème sur les séances construites/modifiées à la main
