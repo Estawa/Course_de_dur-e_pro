@@ -189,9 +189,10 @@ export function tauxReussiteRealisation(r) {
 
 // Une réalisation exclue (souci de santé avéré, contexte particulier...) ne compte plus dans la
 // moyenne de cycle tant qu'elle n'est pas réactivée par le professeur, mais reste visible dans
-// l'historique et peut toujours être consultée séance par séance.
+// l'historique et peut toujours être consultée séance par séance. Un Run en direct (course libre
+// sans objectif prescrit, sans note) n'entre jamais dans ce calcul non plus.
 export function syntheseCycle(realisationsEleve) {
-  const comptees = realisationsEleve.filter((r) => !r.exclureCycle)
+  const comptees = realisationsEleve.filter((r) => !r.exclureCycle && !r.runDirect)
   if (!comptees.length) return null
   const notes = comptees.map((r) => noteFinale(r))
   const moyenne = notes.reduce((a, b) => a + b, 0) / notes.length
