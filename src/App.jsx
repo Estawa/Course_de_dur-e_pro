@@ -13,6 +13,8 @@ import EnseignantPin from './components/EnseignantPin'
 import EnseignantDashboard from './components/EnseignantDashboard'
 import PartageApp from './components/PartageApp'
 import FartlekEval from './components/FartlekEval'
+import RunDirect from './components/RunDirect'
+import RunDirectBilan from './components/RunDirectBilan'
 import { storage } from './utils/storage'
 import { calculerNoteReelle } from './utils/calc'
 
@@ -31,6 +33,7 @@ export default function App() {
   const [seanceActive, setSeanceActive] = useState(null)
   const [niveauActif, setNiveauActif] = useState(null)
   const [dernierResultat, setDernierResultat] = useState(null)
+  const [dernierRunDirect, setDernierRunDirect] = useState(null)
 
   // Session enseignant : locale à l'appareil (rôle + identité), les données elles-mêmes sont
   // rechargées à chaque fois via storage.chargerEspace(teacherId).
@@ -224,6 +227,36 @@ export default function App() {
     setEcran('course')
   }
 
+  function handleLancerRunDirect() {
+    setEcran('runDirect')
+  }
+
+  // Le Run en direct n'est pas comparé à un objectif prescrit (pas de bloc/niveau de
+  // bibliothèque) : la réalisation enregistrée porte un indicateur `runDirect` dédié plutôt que
+  // blocsResultats/note, avec blocsResultats = [] pour rester compatible avec le code existant
+  // (historique élève, fiche de suivi) qui suppose ce tableau toujours présent.
+  function handleTermineRunDirect(resultat) {
+    const titre = resultat.mode === 'complete' ? 'Run direct séance complète' : 'Run direct course immédiate'
+    const realisation = {
+      id: crypto.randomUUID(),
+      eleve,
+      seanceId: 'run-direct',
+      seanceTitre: titre,
+      niveauNom: '',
+      date: Date.now(),
+      blocsResultats: [],
+      runDirect: resultat
+    }
+    storage.ajouterRealisation(realisation)
+    setRealisations((prev) => [...prev, realisation])
+    setDernierRunDirect(resultat)
+    setEcran('runDirectBilan')
+  }
+
+  function handleAbandonRunDirect() {
+    setEcran('outils')
+  }
+
   function handleFinSeance(resultat) {
     const { note: noteReelle, avecGps: noteReelleAvecGps } = calculerNoteReelle(resultat.blocsResultats)
     const realisation = {
@@ -293,7 +326,9 @@ export default function App() {
     enseignantPin: 'Espace enseignant',
     enseignant: 'Espace enseignant',
     partage: 'Partager l\'application',
-    fartlek: 'Fartlek évaluatif'
+    fartlek: 'Fartlek évaluatif',
+    runDirect: 'Run en direct',
+    runDirectBilan: 'Bilan du run'
   }
 
   // 'course' est volontairement exclu : pendant le déroulement du chrono, la sortie ne doit être
@@ -302,7 +337,7 @@ export default function App() {
   // tests VMA et le Fartlek évaluatif, imbriqués plus profondément dans l'arborescence.
   const peutRevenir =
     !activiteEnCours &&
-    ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'bilan', 'enseignant', 'enseignantPin', 'partage', 'fartlek'].includes(ecran)
+    ['bibliotheque', 'vierge', 'outils', 'choixNiveau', 'apercu', 'bilan', 'enseignant', 'enseignantPin', 'partage', 'fartlek', 'runDirect', 'runDirectBilan'].includes(ecran)
 
   function handleRetour() {
     if (['bibliotheque', 'vierge', 'outils'].includes(ecran)) setEcran('tuiles')
@@ -310,6 +345,8 @@ export default function App() {
     else if (ecran === 'apercu') setEcran('choixNiveau')
     else if (ecran === 'bilan') setEcran('tuiles')
     else if (ecran === 'fartlek') setEcran('tuiles')
+    else if (ecran === 'runDirect') setEcran('outils')
+    else if (ecran === 'runDirectBilan') setEcran('tuiles')
     else if (ecran === 'enseignantPin' || ecran === 'enseignant') setEcran(eleve ? 'tuiles' : 'accueil')
     else if (ecran === 'partage') setEcran(eleve ? 'tuiles' : 'accueil')
   }
@@ -322,7 +359,7 @@ export default function App() {
         title={titres[ecran]}
         onBack={peutRevenir ? handleRetour : null}
         onEnseignant={handleAccesEnseignant}
-        showEnseignant={ecran !== 'course'}
+        showEnseignant={ecran !== 'course' && !(ecran === 'runDirect' && activiteEnCours)}
         onPartager={() => setEcran('partage')}
         showPartage={ecran === 'accueil'}
       />
@@ -349,7 +386,15 @@ export default function App() {
 
       {ecran === 'vierge' && <SeanceVierge onLancer={handleLancerSeanceVierge} />}
 
-      {ecran === 'outils' && <OutilsEleve eleve={eleve} onComposerSeance={() => setEcran('vierge')} onLancerFartlek={() => setEcran('fartlek')} onActiviteEnCours={setActiviteEnCours} />}
+      {ecran === 'outils' && <OutilsEleve eleve={eleve} onComposerSeance={() => setEcran('vierge')} onLancerFartlek={() => setEcran('fartlek')} onLancerRunDirect={handleLancerRunDirect} onActiviteEnCours={setActiviteEnCours} />}
+
+      {ecran === 'runDirect' && (
+        <RunDirect vmaRef={vmaRef} onTermine={handleTermineRunDirect} onAbandon={handleAbandonRunDirect} onActiviteEnCours={setActiviteEnCours} />
+      )}
+
+      {ecran === 'runDirectBilan' && dernierRunDirect && (
+        <RunDirectBilan resultat={dernierRunDirect} onRetourAccueil={() => setEcran('tuiles')} />
+      )}
 
       {ecran === 'fartlek' && (
         <FartlekEval eleve={eleve} vmaRef={vmaRef} onTermine={() => setEcran('tuiles')} onActiviteEnCours={setActiviteEnCours} />
