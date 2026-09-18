@@ -4,13 +4,12 @@ import BilanBloc from './BilanBloc'
 import BorgScale from './BorgScale'
 import ObservationFinale from './ObservationFinale'
 import Echauffement from './Echauffement'
+import Recuperation from './Recuperation'
 import FinSeanceAnnonce from './FinSeanceAnnonce'
 import { calculerNoteSeance } from '../utils/calc'
 import { expanserStructure, dureeTotaleStructure, distanceTotaleStructure } from '../utils/fullpower'
 import { useWakeLock } from '../utils/wakeLock'
 
-// Le guidage GPS est désormais toujours tenté automatiquement par CourseRun (repli invisible sur
-// minuteur si indisponible) : plus besoin de choisir un mode de guidage ici.
 function preparerBloc(bloc, niveau, vmaRef) {
   if (bloc.mode === 'fullpower' && bloc.structure) {
     return {
@@ -26,19 +25,23 @@ function preparerBloc(bloc, niveau, vmaRef) {
   }
 }
 
-// reprise : snapshot sauvegardé (voir storage.sauvegarderSessionCours) si la séance avait été
-// interrompue par une fermeture/mise en veille prolongée de l'appli ; null pour un démarrage normal.
-// onProgress : appelé à chaque étape franchie pour que le parent persiste la progression.
+// Déroulement complet d'une séance : Échauffement (si activé pour ce niveau) → Borg → blocs de
+// Travail (boucle course/bilan existante, inchangée) → Borg → Récupération de fin de séance
+// (skippable, avec retour arrière possible en cas d'erreur de manipulation, tant que le bilan
+// final n'est pas validé) → Borg (sauf récup sautée) → annonce de fin → observation générale.
 export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFinSeance, onAbandon }) {
-  useWakeLock(true) // empêche l'écran de s'éteindre pendant toute la durée de la séance
+  useWakeLock(true)
+
+  const echauffementActif = !!niveau.echauffement?.active
 
   const [indexBloc, setIndexBloc] = useState(() => reprise?.indexBloc ?? 0)
-  const [phase, setPhase] = useState(() => reprise?.phase ?? (niveau.echauffement?.active ? 'echauffement' : 'course'))
+  const [phase, setPhase] = useState(() => reprise?.phase ?? (echauffementActif ? 'echauffement' : 'course'))
   const [resultatsCourseBloc, setResultatsCourseBloc] = useState(() => reprise?.resultatsCourseBloc ?? null)
   const [blocsResultats, setBlocsResultats] = useState(() => reprise?.blocsResultats ?? [])
-  const [borg, setBorg] = useState(() => reprise?.borg ?? null)
-  // Le timestamp réel de départ du bloc de course en cours (pour que le chrono reprenne pile là
-  // où il en était après une fermeture/mise en veille, au lieu de repartir de zéro).
+  const [echauffementResultat, setEchauffementResultat] = useState(() => reprise?.echauffementResultat ?? null)
+  const [recuperationResultat, setRecuperationResultat] = useState(() => reprise?.recuperationResultat ?? null)
+  const [recuperationSautee, setRecuperationSautee] = useState(() => reprise?.recuperationSautee ?? false)
+  const [borgParPhase, setBorgParPhase] = useState(() => reprise?.borgParPhase ?? { echauffement: null, travail: null, recuperation: null })
   const courseStartTsRef = useRef(reprise?.courseEtat === 'course' ? reprise.courseStartTs : null)
   const [repriseConsommee, setRepriseConsommee] = useState(false)
 
@@ -47,26 +50,20 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
       indexBloc,
       phase,
       blocsResultats,
-      borg,
+      echauffementResultat,
+      recuperationResultat,
+      recuperationSautee,
+      borgParPhase,
       resultatsCourseBloc,
       courseStartTs: courseStartTsRef.current,
       courseEtat: phase === 'course' ? 'course' : null
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indexBloc, phase, blocsResultats, borg, resultatsCourseBloc])
+  }, [indexBloc, phase, blocsResultats, echauffementResultat, recuperationResultat, recuperationSautee, borgParPhase, resultatsCourseBloc])
 
   function handleCourseDemarre(ts) {
     courseStartTsRef.current = ts
     setRepriseConsommee(true)
-    onProgress?.({
-      indexBloc,
-      phase: 'course',
-      blocsResultats,
-      borg,
-      resultatsCourseBloc,
-      courseStartTs: ts,
-      courseEtat: 'course'
-    })
   }
 
   const resumeStartTs =
@@ -76,8 +73,18 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
 
   const bloc = niveau.blocs[indexBloc]
   const dernierBloc = indexBloc === niveau.blocs.length - 1
-  const labelBloc = `Bloc ${indexBloc + 1}/${niveau.blocs.length} · ${niveau.nom}`
-  const preparation = preparerBloc(bloc, niveau, vmaRef)
+  const labelBloc = bloc ? `Bloc ${indexBloc + 1}/${niveau.blocs.length} · ${niveau.nom}` : niveau.nom
+  const preparation = bloc ? preparerBloc(bloc, niveau, vmaRef) : null
+
+  function handleTermineEchauffement(resultat) {
+    setEchauffementResultat(resultat)
+    setPhase('borgEchauffement')
+  }
+
+  function handleValideBorgEchauffement(valeur) {
+    setBorgParPhase((p) => ({ ...p, echauffement: valeur }))
+    setPhase('course')
+  }
 
   function handleTermineBloc(resultatCourse) {
     setResultatsCourseBloc(resultatCourse)
@@ -90,7 +97,7 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
     setBlocsResultats(nouveauxResultats)
 
     if (dernierBloc) {
-      setPhase('finAnnonce')
+      setPhase('borgTravail')
     } else {
       setIndexBloc((i) => i + 1)
       setPhase('course')
@@ -98,22 +105,57 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
     }
   }
 
-  function handleFinAnnonceTerminee() {
-    setPhase('borg')
+  function handleValideBorgTravail(valeur) {
+    setBorgParPhase((p) => ({ ...p, travail: valeur }))
+    setPhase('recuperation')
   }
 
-  function handleValideBorg(valeurBorg) {
-    setBorg(valeurBorg)
+  function handleTermineRecuperation(resultat) {
+    setRecuperationResultat(resultat)
+    setRecuperationSautee(false)
+    setPhase('borgRecuperation')
+  }
+
+  function handlePasserRecuperation() {
+    setRecuperationSautee(true)
+    setPhase('finAnnonce')
+  }
+
+  function handleValideBorgRecuperation(valeur) {
+    setBorgParPhase((p) => ({ ...p, recuperation: valeur }))
+    setPhase('finAnnonce')
+  }
+
+  function handleReprendreRecuperation() {
+    setRecuperationSautee(false)
+    setRecuperationResultat(null)
+    setPhase('recuperation')
+  }
+
+  function handleFinAnnonceTerminee() {
     setPhase('observation')
   }
 
   function handleValideObservation(observationGenerale) {
     const note = calculerNoteSeance(blocsResultats)
-    onFinSeance({ blocsResultats, borg, observationGenerale, note })
+    onFinSeance({
+      blocsResultats,
+      echauffementResultat,
+      recuperationResultat,
+      recuperationSautee,
+      borgParPhase,
+      borg: borgParPhase.recuperation ?? borgParPhase.travail ?? borgParPhase.echauffement ?? null,
+      observationGenerale,
+      note
+    })
   }
 
   if (phase === 'echauffement') {
-    return <Echauffement duree_s={niveau.echauffement.duree_s} onTermine={() => setPhase('course')} />
+    return <Echauffement onTermine={handleTermineEchauffement} />
+  }
+
+  if (phase === 'borgEchauffement') {
+    return <BorgScale titre="Ton ressenti après l'échauffement" onValide={handleValideBorgEchauffement} />
   }
 
   if (phase === 'course') {
@@ -135,13 +177,32 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
     return <BilanBloc labelBloc={labelBloc} onValide={handleValideBilanBloc} />
   }
 
+  if (phase === 'borgTravail') {
+    return <BorgScale titre="Ton ressenti après le travail" onValide={handleValideBorgTravail} />
+  }
+
+  if (phase === 'recuperation') {
+    return <Recuperation onTermine={handleTermineRecuperation} onPasser={handlePasserRecuperation} />
+  }
+
+  if (phase === 'borgRecuperation') {
+    return <BorgScale titre="Ton ressenti après la récupération" onValide={handleValideBorgRecuperation} />
+  }
+
   if (phase === 'finAnnonce') {
     return <FinSeanceAnnonce onTermine={handleFinAnnonceTerminee} />
   }
 
-  if (phase === 'borg') {
-    return <BorgScale onValide={handleValideBorg} />
-  }
-
-  return <ObservationFinale onValide={handleValideObservation} />
+  return (
+    <div>
+      {recuperationSautee && (
+        <div className="max-w-md mx-auto px-6 pt-6 -mb-2">
+          <button onClick={handleReprendreRecuperation} className="text-xs text-piste-500 underline">
+            ← Récupération passée par erreur ? Revenir la faire
+          </button>
+        </div>
+      )}
+      <ObservationFinale onValide={handleValideObservation} />
+    </div>
+  )
 }

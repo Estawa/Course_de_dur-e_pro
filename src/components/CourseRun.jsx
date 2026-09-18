@@ -35,6 +35,14 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
   const bipTimeoutRef = useRef(null)
   const intervalRef = useRef(null)
   const vitessesTravailRef = useRef([])
+  // Échantillons de vitesse groupés par index de phase (travail ET récup), pour permettre un
+  // calcul de réussite fin par phase (allure, récup, régularité) et non plus seulement un
+  // agrégat unique sur tout le bloc. indexPhaseRef est tenu à jour à chaque render (voir plus
+  // bas) car le callback GPS est enregistré une seule fois (effet dépendant seulement de
+  // `etat`) : lire `indexPhase` directement dans ce callback donnerait une valeur figée à
+  // l'index du tout premier render ('travail' quasi toujours), jamais mise à jour ensuite.
+  const phaseSamplesRef = useRef({})
+  const indexPhaseRef = useRef(0)
   const dernierIndexPhaseRef = useRef(-1)
   const termineAutoRef = useRef(false)
   const annonceTimeoutRef = useRef(null)
@@ -60,6 +68,10 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
   const serieTotal = phaseCourante?.serieTotal ?? null
   const repIndex = phaseCourante?.repIndex ?? null
   const repTotal = phaseCourante?.repTotal ?? null
+
+  useEffect(() => {
+    indexPhaseRef.current = indexPhase
+  }, [indexPhase])
 
   function finDuGroupe(cle) {
     const valeur = phaseCourante?.[cle]
@@ -156,8 +168,14 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
             const vAffichee = vKmh < 0.5 ? 0 : vKmh
             setDistance((prev) => prev + d)
             setVitesseInstant(vAffichee)
-            if (phaseCourante?.phase === 'travail') {
+            const iPhase = indexPhaseRef.current
+            const pCourante = phases[iPhase]
+            if (pCourante?.phase === 'travail') {
               vitessesTravailRef.current.push(vAffichee)
+            }
+            if (pCourante) {
+              if (!phaseSamplesRef.current[iPhase]) phaseSamplesRef.current[iPhase] = []
+              phaseSamplesRef.current[iPhase].push(vAffichee)
             }
           }
         }
@@ -214,6 +232,49 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
     // sinon (indisponible/refusé), repli sur le même calcul que le guidage minuteur.
     const gpsExploitable = gpsOk === true
 
+    // Réussite du bloc sur 4 critères indépendants (Distance / Allure / Récupération /
+    // Régularité), chacun exprimé en % — voir utils/calc.js pour la pondération finale.
+    // Allure et Régularité se basent sur la moyenne de vitesse RÉELLEMENT échantillonnée par
+    // phase de travail (pas l'agrégat global sur tout le bloc) ; Récupération sur les phases de
+    // récup de la structure Full Power (si la séance en a). Une phase sans échantillon (perte
+    // GPS ponctuelle) est simplement exclue du calcul plutôt que comptée comme un échec.
+    function calculerCriteres4() {
+      function ratioPhase(i, cible) {
+        const s = phaseSamplesRef.current[i]
+        if (!s || !s.length || !cible) return null
+        const moyenne = s.reduce((a, b) => a + b, 0) / s.length
+        return moyenne / cible
+      }
+      const ratiosTravail = phases
+        .map((p, i) => (p.phase === 'travail' ? ratioPhase(i, p.vitesse_kmh) : null))
+        .filter((r) => r != null)
+      const ratiosRecup = phases
+        .map((p, i) => (p.phase === 'recup' ? ratioPhase(i, p.vitesse_kmh) : null))
+        .filter((r) => r != null)
+
+      // Score d'un ratio individuel : 100% pile dans la cible, décroît linéairement jusqu'à 0
+      // à ±25% d'écart (travail) ou ±35% (récup, plus tolérant car l'allure de récup est
+      // naturellement moins précise à tenir qu'un effort).
+      const scoreRatio = (r, tolerance) => Math.max(0, 1 - Math.min(1, Math.abs(r - 1) / tolerance)) * 100
+
+      const pctAllure = ratiosTravail.length
+        ? Math.round(ratiosTravail.reduce((acc, r) => acc + scoreRatio(r, 0.25), 0) / ratiosTravail.length)
+        : null
+      const pctRecup = ratiosRecup.length
+        ? Math.round(ratiosRecup.reduce((acc, r) => acc + scoreRatio(r, 0.35), 0) / ratiosRecup.length)
+        : null
+      let pctRegularite = null
+      if (ratiosTravail.length >= 2) {
+        const moyR = ratiosTravail.reduce((a, b) => a + b, 0) / ratiosTravail.length
+        const variance = ratiosTravail.reduce((acc, r) => acc + (r - moyR) ** 2, 0) / ratiosTravail.length
+        pctRegularite = Math.round(Math.max(0, 100 - Math.sqrt(variance) * 400))
+      } else if (ratiosTravail.length === 1) {
+        pctRegularite = 100
+      }
+      const pctDistance = distanceCible ? Math.round(Math.min(100, (distance / distanceCible) * 100)) : null
+      return { pctDistance, pctAllure, pctRecup, pctRegularite }
+    }
+
     if (gpsExploitable) {
       termine = automatique || distance >= distanceCible * 0.95
       const vs = vitessesTravailRef.current
@@ -232,7 +293,8 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         distanceCible: Math.round(distanceCible || 0),
         dureeRealisee: dureeReelle,
         vitesseMoyenne: Math.round(vitesseMoyenne * 10) / 10,
-        vitesseCible: Math.round(vitesseCibleMoyenneTravail * 10) / 10
+        vitesseCible: Math.round(vitesseCibleMoyenneTravail * 10) / 10,
+        ...calculerCriteres4()
       })
     } else {
       termine = automatique || dureeReelle >= dureeCible * 0.9
@@ -246,7 +308,13 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         dureeRealisee: dureeReelle,
         dureeCible,
         vitesseMoyenne: null,
-        vitesseCible: null
+        vitesseCible: null,
+        // Sans GPS, seuls Distance et Allure sont mesurables (comme avant) ; Récupération et
+        // Régularité ne peuvent pas être évalués sans échantillons de vitesse.
+        pctDistance: termine ? 100 : Math.round(Math.min(100, (dureeReelle / dureeCible) * 100)),
+        pctAllure: respectAllure ? 100 : 40,
+        pctRecup: null,
+        pctRegularite: null
       })
     }
   }

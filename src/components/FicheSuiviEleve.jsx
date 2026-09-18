@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, KeyRound, UserX, Trash2, Check, X, ArrowRightLeft } from 'lucide-react'
 import VmaEleveLigne from './VmaEleveLigne'
 import ComportementAjustement from './ComportementAjustement'
+import ExclusionRealisation from './ExclusionRealisation'
+import NotificationsRealisation from './NotificationsRealisation'
 import { storage } from '../utils/storage'
-import { noteFinale, pourcentagesReussite, blocAvecGps } from '../utils/calc'
+import { noteFinale, tauxReussiteRealisation, blocAvecGps } from '../utils/calc'
 
 // Distance de glissement horizontal minimale (px) pour déclencher un changement de fiche,
 // et écart vertical maximal toléré pour ne pas confondre avec un scroll de la liste.
@@ -283,19 +285,17 @@ export default function FicheSuiviEleve({
                   blocsGpsDemandes.length === 0
                     ? null
                     : `${nbBlocsGpsMesures}/${blocsGpsDemandes.length} bloc${blocsGpsDemandes.length > 1 ? 's' : ''} mesuré${nbBlocsGpsMesures > 1 ? 's' : ''} par GPS`
-                const pct = pourcentagesReussite(r.blocsResultats)
+                const pctGlobal = tauxReussiteRealisation(r)
                 return (
-                  <div key={r.id} className="bg-piste-50 rounded-lg px-3 py-2.5">
+                  <div key={r.id} className={`rounded-lg px-3 py-2.5 ${r.exclureCycle ? 'bg-piste-50/60 opacity-70' : 'bg-piste-50'}`}>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-medium text-piste-900">{r.seanceTitre} · {r.niveauNom}</p>
                         <p className="text-[11px] text-piste-500">
                           {new Date(r.date).toLocaleDateString('fr-FR')} · {nbReussis}/{r.blocsResultats?.length ?? 0} blocs · Borg {r.borg}
                         </p>
-                        {pct.allure !== null && (
-                          <p className="text-[11px] text-piste-500">
-                            Allure {pct.allure}% · Distance/durée {pct.distanceDuree}%
-                          </p>
+                        {pctGlobal !== null && (
+                          <p className="text-[11px] text-piste-500">Réussite {pctGlobal}%</p>
                         )}
                         {labelGps && <p className="text-[11px] text-piste-500">{labelGps}</p>}
                       </div>
@@ -318,7 +318,11 @@ export default function FicheSuiviEleve({
                       </div>
                     </div>
                     {onModifierRealisation && (
-                      <ComportementAjustement realisation={r} onModifier={onModifierRealisation} />
+                      <>
+                        <ComportementAjustement realisation={r} onModifier={onModifierRealisation} />
+                        <NotificationsRealisation realisation={r} onModifier={onModifierRealisation} />
+                        <ExclusionRealisation realisation={r} onModifier={onModifierRealisation} />
+                      </>
                     )}
                   </div>
                 )

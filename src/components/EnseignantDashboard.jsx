@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, FileSpreadsheet } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import VmaEleveLigne, { LABEL_TEST, formatDateVma } from './VmaEleveLigne'
@@ -7,7 +8,7 @@ import FicheSuiviEleve from './FicheSuiviEleve'
 import VisibiliteClasses from './VisibiliteClasses'
 import EspaceAcces from './EspaceAcces'
 import { storage } from '../utils/storage'
-import { noteFinale, pourcentagesReussite } from '../utils/calc'
+import { noteFinale, pourcentagesReussite, syntheseCycle, criteresSeance } from '../utils/calc'
 import { genererSeancesTypesSecondes } from '../utils/seancesTypesSecondes'
 import { TESTS_CATALOGUE } from '../utils/testsCatalogue'
 
@@ -291,6 +292,87 @@ export default function EnseignantDashboard({
     URL.revokeObjectURL(url)
   }
 
+  // Fichier au format commun convenu avec EPS Pro (et destiné à toutes les futures applis
+  // sportives) : classeur Excel à 2 feuilles, "Séances" (une ligne par séance réalisée) et
+  // "Synthèse cycle" (une ligne par élève). EPS Pro les relit via son outil d'import dédié.
+  // Remarque : Course de Durée Pro n'a pas de notion de "groupe classe / sous-classe" comme EPS
+  // Pro — seule la classe actuelle de l'élève est exportée dans "Classe / Groupe classe" ; le
+  // champ "Classe d'origine" ici correspond à une éventuelle ancienne classe (déplacement d'un
+  // élève), pas à une sous-classe d'un groupe.
+  function exporterEpsProExcel() {
+    const cible = classeActive !== null ? realisations.filter((r) => r.eleve.classe === classeActive) : realisations
+    const anneeScolaire = (dateMs) => {
+      const d = new Date(dateMs)
+      const y = d.getFullYear()
+      return d.getMonth() >= 7 ? `${y}-${y + 1}` : `${y - 1}-${y}`
+    }
+    const sexeDe = (eleve) => {
+      if (!eleve.id) return ''
+      const trouve = storage.trouverEleveParId(eleve.id)
+      return trouve?.sexe || ''
+    }
+    const detailCriteres = (r) => {
+      const c = criteresSeance(r.blocsResultats)
+      const parts = []
+      if (c.distance != null) parts.push(`Distance ${c.distance}%`)
+      if (c.allure != null) parts.push(`Allure ${c.allure}%`)
+      if (c.recup != null) parts.push(`Récupération ${c.recup}%`)
+      if (c.regularite != null) parts.push(`Régularité ${c.regularite}%`)
+      return parts.join(' · ')
+    }
+
+    const lignesSeances = cible.map((r) => ({
+      Application: 'Course de Durée Pro',
+      Activité: 'Course de durée',
+      'Année scolaire': anneeScolaire(r.date),
+      'Classe / Groupe classe': r.eleve.classe,
+      'Classe d\'origine': r.eleve.classeOrigine || '',
+      Nom: r.eleve.nom,
+      Prénom: r.eleve.prenom,
+      Sexe: sexeDe(r.eleve),
+      Date: new Date(r.date).toISOString().slice(0, 10),
+      Type: 'séance',
+      Titre: `${r.seanceTitre} · ${r.niveauNom}`,
+      Note: noteFinale(r),
+      'Note sur': 20,
+      'Détail critères': detailCriteres(r),
+      'Exclue du cycle': r.exclureCycle ? 'oui' : 'non',
+      Observation: r.observationGenerale || r.commentaireComportement || ''
+    }))
+
+    const parEleve = {}
+    cible.forEach((r) => {
+      const cle = r.eleve.id || `${r.eleve.nom}__${r.eleve.prenom}__${r.eleve.classe}`
+      if (!parEleve[cle]) parEleve[cle] = { eleve: r.eleve, realisations: [] }
+      parEleve[cle].realisations.push(r)
+    })
+    const lignesCycle = Object.values(parEleve)
+      .sort((a, b) => a.eleve.nom.localeCompare(b.eleve.nom) || a.eleve.prenom.localeCompare(b.eleve.prenom))
+      .map(({ eleve, realisations: rs }) => {
+        const synth = syntheseCycle(rs)
+        return {
+          Application: 'Course de Durée Pro',
+          Activité: 'Course de durée',
+          'Année scolaire': anneeScolaire(rs[rs.length - 1]?.date || Date.now()),
+          'Classe / Groupe classe': eleve.classe,
+          'Classe d\'origine': eleve.classeOrigine || '',
+          Nom: eleve.nom,
+          Prénom: eleve.prenom,
+          Sexe: sexeDe(eleve),
+          'Séances comptées': synth?.nbSeances ?? 0,
+          'Séances exclues': synth?.nbSeancesExclues ?? 0,
+          'Moyenne de cycle /20': synth?.moyenne ?? '',
+          'Blocs réussis': synth ? `${synth.nbBlocsReussis}/${synth.nbBlocsTotal}` : '',
+          Progression: synth?.progression ?? ''
+        }
+      })
+
+    const classeur = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(classeur, XLSX.utils.json_to_sheet(lignesSeances), 'Séances')
+    XLSX.utils.book_append_sheet(classeur, XLSX.utils.json_to_sheet(lignesCycle), 'Synthèse cycle')
+    XLSX.writeFile(classeur, `course-duree-pro_eps-pro_${classeActive !== null ? (classeActive || 'sans-nom') : 'toutes'}.xlsx`)
+  }
+
   const nomCollegueConsulte = espaceActifId !== teacherIdEnseignant
     ? (accesConfig?.collegues || []).find((c) => c.id === espaceActifId)?.nom
     : null
@@ -550,6 +632,9 @@ export default function EnseignantDashboard({
               </button>
               <button onClick={exporterCSV} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
                 <Download size={14} /> Exporter CSV
+              </button>
+              <button onClick={exporterEpsProExcel} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
+                <FileSpreadsheet size={14} /> Exporter pour EPS Pro
               </button>
               {classeActive !== null && (
                 <>

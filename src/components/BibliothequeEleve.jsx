@@ -1,13 +1,13 @@
 import { CheckCircle2, ChevronRight, Timer, Gauge, MapPin, ListChecks } from 'lucide-react'
-import { syntheseCycle, seanceVisiblePourClasse } from '../utils/calc'
+import { seanceVisiblePourClasse } from '../utils/calc'
 import { storage } from '../utils/storage'
 import { TESTS_CATALOGUE } from '../utils/testsCatalogue'
 import { formatDuree } from '../utils/calc'
 import { LABEL_TEST } from './VmaEleveLigne'
+import ProgressionEleve from './ProgressionEleve'
 
 export default function BibliothequeEleve({ seances, realisations, eleve, onChoisirSeance, onLancerFartlek }) {
   const seancesVisibles = seances.filter((s) => seanceVisiblePourClasse(s, eleve?.classe))
-  const synthese = syntheseCycle(realisations)
   const historiqueTests = eleve ? storage.getHistoriqueTests(eleve) : []
   const historiqueFartlek = eleve ? storage.getHistoriqueFartlek(eleve) : []
 
@@ -95,13 +95,7 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
       )}
 
       <h3 className="text-xs font-semibold tracking-wide text-piste-500 uppercase mb-3">Mon historique</h3>
-      {synthese && (
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <StatCard label="Moyenne" valeur={`${synthese.moyenne}/20`} />
-          <StatCard label="Séances" valeur={synthese.nbSeances} />
-          <StatCard label="Progression" valeur={`${synthese.progression >= 0 ? '+' : ''}${synthese.progression}`} />
-        </div>
-      )}
+      <ProgressionEleve realisations={realisations} />
       {evenements.length === 0 && <p className="text-sm text-piste-500 text-center py-8">Tu n'as pas encore réalisé de séance ni de test.</p>}
       <div className="space-y-3">
         {evenements.map((ev) => {
@@ -155,15 +149,6 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
           )
         })}
       </div>
-    </div>
-  )
-}
-
-function StatCard({ label, valeur }) {
-  return (
-    <div className="bg-piste-50 rounded-xl p-3 text-center">
-      <p className="font-display text-xl text-piste-900">{valeur}</p>
-      <p className="text-[11px] text-piste-500 uppercase tracking-wide">{label}</p>
     </div>
   )
 }

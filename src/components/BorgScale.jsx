@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { NIVEAUX_BORG } from '../utils/borg'
 
-export default function BorgScale({ onValide }) {
+export default function BorgScale({ onValide, titre = 'Ton ressenti de séance' }) {
   const [selection, setSelection] = useState(null)
 
   return (
     <div className="max-w-md mx-auto px-6 py-8">
-      <h2 className="font-display text-2xl text-piste-900 mb-1 text-center">Ton ressenti de séance</h2>
+      <h2 className="font-display text-2xl text-piste-900 mb-1 text-center">{titre}</h2>
       <p className="text-sm text-piste-600 mb-6 text-center">Échelle de Borg — choisis le niveau d'effort ressenti.</p>
 
       <div className="space-y-1.5 mb-6">

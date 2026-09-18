@@ -1,19 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
 import { beepDepart, beepFin, annoncerVocal } from '../utils/audio'
 import { formatDuree } from '../utils/calc'
 import { useGpsSuivi } from '../utils/gps'
-import { ECHAUFFEMENT_FIXE } from '../utils/phasesFixes'
+import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 import IndicateurGps from './IndicateurGps'
 
-// Phase Échauffement structurée et identique pour toutes les séances du cycle : temps/distance
-// minimale annoncés, GPS actif (avec repli sur saisie manuelle s'il est indisponible), gammes de
-// courses affichées comme rappel, et % de réussite (temps + distance) transmis au parent pour
-// alimenter le bilan de fin de séance.
-export default function Echauffement({ onTermine }) {
-  const { duree_s, pctVmaMin, distanceMinM, gammes, gammesDistanceM, retourAuCalme } = ECHAUFFEMENT_FIXE
+// Phase Récupération de fin de séance, structurée et identique pour toutes les séances du cycle.
+// Peut être passée (temps de séance insuffisant) via onPasser : le parent (SeanceRunner) garde
+// alors la possibilité de revenir en arrière tant que le bilan final n'est pas validé, en cas
+// d'erreur de manipulation.
+export default function Recuperation({ onTermine, onPasser }) {
+  const { duree_s, pctVmaMin, distanceMinM, retourAuCalme } = RECUPERATION_FIXE
   const [elapsed, setElapsed] = useState(0)
-  const [gammesOuvertes, setGammesOuvertes] = useState(true)
   const [distanceManuelle, setDistanceManuelle] = useState('')
   const startRef = useRef(null)
   const intervalRef = useRef(null)
@@ -22,7 +20,7 @@ export default function Echauffement({ onTermine }) {
 
   useEffect(() => {
     beepDepart()
-    annoncerVocal('Départ échauffement !')
+    annoncerVocal('Récupération Fin de séance !')
     startRef.current = Date.now()
     intervalRef.current = setInterval(() => {
       const t = (Date.now() - startRef.current) / 1000
@@ -50,7 +48,8 @@ export default function Echauffement({ onTermine }) {
       distanceCible_m: distanceMinM,
       pctTemps: Math.round(Math.min(100, (dureeReelle / duree_s) * 100)),
       pctDistance: Math.round(Math.min(100, ((distanceFinale || 0) / distanceMinM) * 100)),
-      viaGPS
+      viaGPS,
+      sautee: false
     }
   }
 
@@ -58,7 +57,7 @@ export default function Echauffement({ onTermine }) {
     onTermine(construireResultat(duree_s, gpsOk === true ? distanceTotale : distanceMinM, gpsOk === true))
   }
 
-  function passer() {
+  function terminerMaintenant() {
     if (termineRef.current) return
     termineRef.current = true
     clearInterval(intervalRef.current)
@@ -70,12 +69,19 @@ export default function Echauffement({ onTermine }) {
     }
   }
 
+  function passer() {
+    if (termineRef.current) return
+    termineRef.current = true
+    clearInterval(intervalRef.current)
+    onPasser()
+  }
+
   return (
     <div className="max-w-md mx-auto px-6 py-10 text-center">
-      <p className="text-xs uppercase tracking-wide text-piste-500 mb-1">Échauffement</p>
-      <h2 className="font-display text-2xl text-piste-900 mb-4">Départ Échauffement !</h2>
+      <p className="text-xs uppercase tracking-wide text-piste-500 mb-1">Récupération</p>
+      <h2 className="font-display text-2xl text-piste-900 mb-4">Récupération Fin de séance</h2>
 
-      <div className="font-display text-6xl text-piste-900 mb-3 tabular-nums">{formatDuree(Math.max(0, duree_s - elapsed))}</div>
+      <div className="font-display text-6xl text-piste-900 mb-3 tabular-nums">-{formatDuree(Math.max(0, duree_s - elapsed))}</div>
 
       <div className="bg-piste-50 rounded-xl px-4 py-3 mb-4 text-left">
         <p className="text-sm text-piste-800">Temps de course prévu : <span className="font-medium">{formatDuree(duree_s)}</span> à minimum {pctVmaMin}% VMA</p>
@@ -104,25 +110,17 @@ export default function Echauffement({ onTermine }) {
         </div>
       )}
 
-      <div className="text-left bg-white border border-piste-100 rounded-xl mb-6">
-        <button
-          onClick={() => setGammesOuvertes((v) => !v)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <span className="text-sm font-medium text-piste-900">Gammes sur {gammesDistanceM}m en footing continu</span>
-          {gammesOuvertes ? <ChevronUp size={16} className="text-piste-400" /> : <ChevronDown size={16} className="text-piste-400" />}
-        </button>
-        {gammesOuvertes && (
-          <ul className="px-4 pb-3 space-y-1">
-            {gammes.map((g) => (
-              <li key={g} className="text-xs text-piste-600">• {g}</li>
-            ))}
-          </ul>
-        )}
-        <p className="text-xs text-piste-500 px-4 pb-3 pt-1 border-t border-piste-100">{retourAuCalme}</p>
-      </div>
+      <p className="text-xs text-piste-500 mb-6">{retourAuCalme}</p>
 
-      <button onClick={passer} className="text-xs text-piste-400 underline">Passer l'échauffement</button>
+      <button
+        onClick={terminerMaintenant}
+        className="w-full bg-piste-800 hover:bg-piste-700 text-white font-medium py-3 rounded-xl transition active:scale-[0.98] mb-3"
+      >
+        Terminer la récupération
+      </button>
+      <button onClick={passer} className="text-xs text-piste-400 underline">
+        Passer la récupération (temps insuffisant)
+      </button>
     </div>
   )
 }
