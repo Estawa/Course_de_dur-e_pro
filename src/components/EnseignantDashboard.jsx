@@ -321,7 +321,9 @@ export default function EnseignantDashboard({
       return parts.join(' · ')
     }
 
-    const lignesSeances = cible.map((r) => ({
+    // Les Runs en direct (course libre sans objectif prescrit, sans note) ne sont pas exportés
+    // vers EPS Pro pour l'instant : rien de comparable à une note à y placer.
+    const lignesSeances = cible.filter((r) => !r.runDirect).map((r) => ({
       Application: 'Course de Durée Pro',
       Activité: 'Course de durée',
       'Année scolaire': anneeScolaire(r.date),

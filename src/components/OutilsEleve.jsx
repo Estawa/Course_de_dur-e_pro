@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronRight, Gauge, ListChecks, Timer, Smile, TrendingUp, MapPin } from 'lucide-react'
+import { ChevronRight, Gauge, ListChecks, Timer, Smile, TrendingUp, MapPin, Navigation } from 'lucide-react'
 import VmaTests from './VmaTests'
 import Chronometre from './Chronometre'
 import BorgReference from './BorgReference'
@@ -13,7 +13,7 @@ function formatDate(ts) {
   return new Date(ts).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
 }
 
-export default function OutilsEleve({ eleve, onComposerSeance, onLancerFartlek, onActiviteEnCours }) {
+export default function OutilsEleve({ eleve, onComposerSeance, onLancerFartlek, onLancerRunDirect, onActiviteEnCours }) {
   const [ecran, setEcran] = useState('menu')
   const detail = storage.getVmaDetail(eleve)
   const retenue = storage.getVmaRetenue(eleve)
@@ -32,6 +32,7 @@ export default function OutilsEleve({ eleve, onComposerSeance, onLancerFartlek, 
 
   const items = [
     { id: 'compose', icone: TrendingUp, titre: 'Composer ma séance', description: 'Construire et réaliser une séance en solo' },
+    { id: 'runDirect', icone: Navigation, titre: 'Run en direct', description: 'Course libre suivie en GPS, enregistrée automatiquement' },
     { id: 'tests', icone: ListChecks, titre: 'Tests de VMA', description: 'Demi-Cooper, 4×3 min, Gacon, VAM-EVAL' },
     { id: 'fartlek', icone: MapPin, titre: 'Fartlek évaluatif', description: 'Zones intenses/récup sur piste, avec ton niveau' },
     { id: 'chrono', icone: Timer, titre: 'Chronomètre', description: 'Temps et vitesse moyenne' },
@@ -42,6 +43,7 @@ export default function OutilsEleve({ eleve, onComposerSeance, onLancerFartlek, 
   function handleClick(id) {
     if (id === 'compose') onComposerSeance()
     else if (id === 'fartlek') onLancerFartlek()
+    else if (id === 'runDirect') onLancerRunDirect()
     else setEcran(id)
   }
 

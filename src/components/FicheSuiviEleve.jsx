@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, KeyRound, UserX, Trash2, Check, X, ArrowRightLeft } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, KeyRound, UserX, Trash2, Check, X, ArrowRightLeft, Map } from 'lucide-react'
 import VmaEleveLigne from './VmaEleveLigne'
 import ComportementAjustement from './ComportementAjustement'
 import ExclusionRealisation from './ExclusionRealisation'
 import NotificationsRealisation from './NotificationsRealisation'
+import RunDirectCarteModal from './RunDirectCarteModal'
 import { storage } from '../utils/storage'
 import { noteFinale, tauxReussiteRealisation, blocAvecGps } from '../utils/calc'
 
@@ -26,6 +27,7 @@ export default function FicheSuiviEleve({
   onSupprimerRealisation
 }) {
   const [editionOuverte, setEditionOuverte] = useState(false)
+  const [runDirectOuvert, setRunDirectOuvert] = useState(null)
   const [editNom, setEditNom] = useState(eleve.nom)
   const [editPrenom, setEditPrenom] = useState(eleve.prenom)
   const [editSexe, setEditSexe] = useState(eleve.sexe || '')
@@ -272,6 +274,7 @@ export default function FicheSuiviEleve({
             {realisationsTriees.length === 0 && <p className="text-xs text-piste-500">Pas encore de séance réalisée.</p>}
             <div className="space-y-2">
               {realisationsTriees.map((r) => {
+                const estRunDirect = !!r.runDirect
                 const nbReussis = r.blocsResultats?.filter((b) => b.reussite === 'reussi').length ?? 0
                 const noteBase = r.noteReelle ?? r.note
                 const noteAvecComportement = noteFinale(r)
@@ -290,22 +293,38 @@ export default function FicheSuiviEleve({
                   <div key={r.id} className={`rounded-lg px-3 py-2.5 ${r.exclureCycle ? 'bg-piste-50/60 opacity-70' : 'bg-piste-50'}`}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-xs font-medium text-piste-900">{r.seanceTitre} · {r.niveauNom}</p>
-                        <p className="text-[11px] text-piste-500">
-                          {new Date(r.date).toLocaleDateString('fr-FR')} · {nbReussis}/{r.blocsResultats?.length ?? 0} blocs · Borg {r.borg}
-                        </p>
+                        <p className="text-xs font-medium text-piste-900">{r.seanceTitre}{r.niveauNom ? ` · ${r.niveauNom}` : ''}</p>
+                        {estRunDirect ? (
+                          <p className="text-[11px] text-piste-500">
+                            {new Date(r.date).toLocaleDateString('fr-FR')} · {Math.round(r.runDirect.dureeGlobaleMs / 60000)} min · {r.runDirect.distanceGlobaleM} m
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-piste-500">
+                            {new Date(r.date).toLocaleDateString('fr-FR')} · {nbReussis}/{r.blocsResultats?.length ?? 0} blocs · Borg {r.borg}
+                          </p>
+                        )}
+                        {estRunDirect && (
+                          <button
+                            onClick={() => setRunDirectOuvert(r)}
+                            className="flex items-center gap-1 text-[11px] font-medium text-piste-700 mt-0.5"
+                          >
+                            <Map size={12} /> Voir la carte
+                          </button>
+                        )}
                         {pctGlobal !== null && (
                           <p className="text-[11px] text-piste-500">Réussite {pctGlobal}%</p>
                         )}
                         {labelGps && <p className="text-[11px] text-piste-500">{labelGps}</p>}
                       </div>
                       <div className="flex items-start gap-2">
-                        <div className="text-right">
-                          <span className="font-display text-piste-900">{noteAvecComportement}/20</span>
-                          {ajustement !== 0 && (
-                            <p className="text-[10px] text-piste-500">{noteBase}/20 base {ajustement > 0 ? '+' : ''}{ajustement}</p>
-                          )}
-                        </div>
+                        {!estRunDirect && (
+                          <div className="text-right">
+                            <span className="font-display text-piste-900">{noteAvecComportement}/20</span>
+                            {ajustement !== 0 && (
+                              <p className="text-[10px] text-piste-500">{noteBase}/20 base {ajustement > 0 ? '+' : ''}{ajustement}</p>
+                            )}
+                          </div>
+                        )}
                         {onSupprimerRealisation && (
                           <button
                             onClick={() => supprimerUneRealisation(r)}
@@ -364,6 +383,15 @@ export default function FicheSuiviEleve({
           })()}
         </div>
       </div>
+
+      {runDirectOuvert && (
+        <RunDirectCarteModal
+          titre={runDirectOuvert.seanceTitre}
+          date={runDirectOuvert.date}
+          resultat={runDirectOuvert.runDirect}
+          onClose={() => setRunDirectOuvert(null)}
+        />
+      )}
     </div>
   )
 }

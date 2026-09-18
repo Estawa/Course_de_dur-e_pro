@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { CheckCircle2, ChevronRight, Timer, Gauge, MapPin, ListChecks } from 'lucide-react'
 import { seanceVisiblePourClasse } from '../utils/calc'
 import { storage } from '../utils/storage'
@@ -5,8 +6,10 @@ import { TESTS_CATALOGUE } from '../utils/testsCatalogue'
 import { formatDuree } from '../utils/calc'
 import { LABEL_TEST } from './VmaEleveLigne'
 import ProgressionEleve from './ProgressionEleve'
+import RunDirectCarteModal from './RunDirectCarteModal'
 
 export default function BibliothequeEleve({ seances, realisations, eleve, onChoisirSeance, onLancerFartlek }) {
+  const [runDirectOuvert, setRunDirectOuvert] = useState(null)
   const seancesVisibles = seances.filter((s) => seanceVisiblePourClasse(s, eleve?.classe))
   const historiqueTests = eleve ? storage.getHistoriqueTests(eleve) : []
   const historiqueFartlek = eleve ? storage.getHistoriqueFartlek(eleve) : []
@@ -99,6 +102,30 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
       {evenements.length === 0 && <p className="text-sm text-piste-500 text-center py-8">Tu n'as pas encore réalisé de séance ni de test.</p>}
       <div className="space-y-3">
         {evenements.map((ev) => {
+          if (ev.type === 'seance' && ev.data.runDirect) {
+            const r = ev.data
+            const rd = r.runDirect
+            return (
+              <button
+                key={`s-${r.id}`}
+                onClick={() => setRunDirectOuvert(r)}
+                className="w-full text-left bg-white border border-piste-100 rounded-xl p-4 flex items-center justify-between hover:border-piste-300 transition"
+              >
+                <div>
+                  <p className="font-medium text-piste-900 text-sm">{r.seanceTitre}</p>
+                  <p className="text-xs text-piste-500 mt-0.5">{new Date(r.date).toLocaleDateString('fr-FR')}</p>
+                  <div className="flex items-center gap-3 mt-1.5">
+                    <span className="flex items-center gap-1 text-xs text-piste-600">
+                      <MapPin size={13} className="text-piste-600" />
+                      {formatDuree(rd.dureeGlobaleMs / 1000)}
+                    </span>
+                    <span className="text-xs text-piste-600">{rd.distanceGlobaleM} m</span>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-piste-400 shrink-0" />
+              </button>
+            )
+          }
           if (ev.type === 'seance') {
             const r = ev.data
             const nbReussis = r.blocsResultats.filter((b) => b.reussite === 'reussi').length
@@ -149,6 +176,15 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
           )
         })}
       </div>
+
+      {runDirectOuvert && (
+        <RunDirectCarteModal
+          titre={runDirectOuvert.seanceTitre}
+          date={runDirectOuvert.date}
+          resultat={runDirectOuvert.runDirect}
+          onClose={() => setRunDirectOuvert(null)}
+        />
+      )}
     </div>
   )
 }
