@@ -389,7 +389,7 @@ export default function App() {
       {ecran === 'outils' && <OutilsEleve eleve={eleve} onComposerSeance={() => setEcran('vierge')} onLancerFartlek={() => setEcran('fartlek')} onLancerRunDirect={handleLancerRunDirect} onActiviteEnCours={setActiviteEnCours} />}
 
       {ecran === 'runDirect' && (
-        <RunDirect vmaRef={vmaRef} onTermine={handleTermineRunDirect} onAbandon={handleAbandonRunDirect} onActiviteEnCours={setActiviteEnCours} />
+        <RunDirect eleve={eleve} vmaRef={vmaRef} onTermine={handleTermineRunDirect} onAbandon={handleAbandonRunDirect} onActiviteEnCours={setActiviteEnCours} />
       )}
 
       {ecran === 'runDirectBilan' && dernierRunDirect && (
