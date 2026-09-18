@@ -1,3 +1,17 @@
+v1.42.1 — Revoir la carte d'un run passé
+- Nouveau composant RunDirectCarteModal : revoir depuis l'historique la carte et les stats complètes d'un Run en direct déjà réalisé (la trace GPS était déjà conservée depuis la v1.42.0, seule la consultation a posteriori manquait)
+- Côté élève (Bibliothèque → Mon historique) : chaque run direct passé est désormais cliquable et ouvre ce détail
+- Côté professeur (Élèves & suivi) : bouton « Voir la carte » sur chaque run direct d'un élève
+
+v1.42.0 — Run en direct (GPS continu, hors bibliothèque)
+- Nouvel outil « Run en direct » dans Outils : course libre suivie en GPS en continu, avec 2 modes — « Séance complète » (Échauffement → Course → Récupération) ou « Course immédiate » (course seule)
+- Le GPS est activé dès le choix du mode (décompte de départ identique aux séances de bibliothèque). Chaque phase affiche en direct : heure, temps de la phase, distance de la phase, allure instantanée, allure moyenne de la phase, %VMA moyen de la phase (si VMA connue) ; à partir de la phase Course (mode Séance complète), le temps de course total et la distance totale (cumul des 3 phases) s'ajoutent
+- Pause/reprise à tout moment ; passage à la phase suivante ou fin de run avec confirmation à chaque fois (évite un appui accidentel)
+- Bilan de fin de run : phrase de félicitation, récap par phase, %VMA moyen de l'entraînement, vitesse maximale atteinte, temps du kilomètre le plus rapide (estimé par fenêtre glissante sur la trace GPS), et une carte du trajet parcouru (fond OpenStreetMap via Leaflet, nouvelle dépendance) avec un tronçon de couleur différente par phase
+- Chaque run est enregistré automatiquement dans l'historique de l'élève, sous « Run direct séance complète » ou « Run direct course immédiate », avec la trace GPS complète conservée pour permettre de revoir la carte plus tard
+- Un Run en direct n'a pas d'objectif prescrit : pas de note, pas de % de réussite par critère, et il n'entre pas dans le calcul de la note de cycle (ni dans l'export vers EPS Pro, qui ne concerne que les séances notées)
+- Non traité dans cette version : revoir la carte d'un run passé depuis l'historique (la trace est bien enregistrée, mais seul le bilan affiché juste après le run montre la carte pour l'instant)
+
 v1.41.1 — Export au format commun EPS Pro
 - Onglet enseignant « Élèves & suivi » : nouveau bouton « Exporter pour EPS Pro », produisant un classeur Excel (.xlsx) à 2 feuilles (« Séances » : une ligne par séance réalisée ; « Synthèse cycle » : une ligne par élève) au format commun désormais partagé avec EPS Pro et destiné à toutes les futures applis sportives (VMA Pro, Muscu Pro, Gym Pro, Escalade Pro...)
 - Colonnes : Application, Activité, Année scolaire (déduite de la date), Classe / Groupe classe, Classe d'origine, Nom, Prénom, Sexe (récupéré du roster), puis selon la feuille : Date/Type/Titre/Note/Note sur/Détail critères/Exclue du cycle/Observation, ou Séances comptées/Séances exclues/Moyenne de cycle/Blocs réussis/Progression
