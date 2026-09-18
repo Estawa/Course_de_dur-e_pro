@@ -1,3 +1,11 @@
+v1.43.0 — Protection complète du Run en direct + restauration de la distance GPS après coupure (séance, tests VMA, Fartlek)
+- Run en direct : reprise complète après fermeture/mise en veille prolongée de l'appli, sur le même principe que la séance/les tests/le Fartlek — proposition de reprise à la réouverture (ReprisePrompt), avec restauration de la phase, du chrono, des distances, des échantillons de vitesse ET de la trace GPS point par point (donc de la carte finale, sans trou)
+- Chrono du Run en direct entièrement recalculé sur des horodatages réels (Date.now()) au lieu d'une simple incrémentation d'intervalle, pour ne perdre aucun temps même après une fermeture complète de l'appli (comme c'était déjà le cas pour la séance et les tests VMA)
+- Comme pour le Fartlek évaluatif, une reprise du Run en direct relance toujours en pause : c'est à l'élève de taper "Reprendre" pour relancer le chrono, afin que la durée de la coupure ne soit jamais comptée comme du temps de course effectif
+- Correctif de fond sur la séance (bloc de course), les 3 tests GPS par différence (Demi-Cooper, 4×3, Gacon) et le Fartlek évaluatif : la distance GPS déjà parcourue avant une coupure est désormais restaurée à la reprise au lieu de repartir de 0 — c'était la cause probable des écarts de distance GPS constatés par rapport à la piste (400 m) sur certaines séances/tests interrompus par une fermeture ou une mise en veille de l'appli
+- Le VAM-EVAL restaure de la même façon la distance déjà parcourue sur le palier en cours
+- Limite restante, propre aux 3 tests par différence (Demi-Cooper/4×3/Gacon) et à la séance : seuls la distance et le chronométrage sont restaurés à l'identique ; les échantillons de vitesse détaillés du segment interrompu (utilisés pour les critères Allure/Récupération/Régularité de la séance) ne le sont pas, sans incidence sur la distance elle-même
+
 v1.42.1 — Revoir la carte d'un run passé
 - Nouveau composant RunDirectCarteModal : revoir depuis l'historique la carte et les stats complètes d'un Run en direct déjà réalisé (la trace GPS était déjà conservée depuis la v1.42.0, seule la consultation a posteriori manquait)
 - Côté élève (Bibliothèque → Mon historique) : chaque run direct passé est désormais cliquable et ouvre ce détail
