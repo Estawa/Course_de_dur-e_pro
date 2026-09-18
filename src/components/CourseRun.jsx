@@ -14,11 +14,26 @@ const TOLERANCE_GPS = 0.09 // ±9%, même tolérance que Fractionné GPS Pro
 // reprise), pour que le parent puisse le sauvegarder en vue d'une éventuelle prochaine reprise.
 // Le GPS est toujours tenté automatiquement (recherche dès le montage, comme pour les tests VMA) :
 // s'il répond, l'écran d'allure GPS s'affiche ; sinon, repli invisible sur l'affichage minuteur.
-export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc, onTermineBloc, onAbandon, resumeStartTs, onDemarre }) {
+// resumeDistance : distance GPS (m) déjà parcourue sur ce bloc avant une éventuelle coupure
+// (fermeture/mise en veille de l'appli), à restaurer au lieu de repartir de 0 — voir
+// onDistanceProgress plus bas, qui remonte régulièrement la distance en cours au parent pour
+// qu'il puisse la sauvegarder.
+export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc, onTermineBloc, onAbandon, resumeStartTs, onDemarre, resumeDistance, onDistanceProgress }) {
   const [etat, setEtat] = useState(resumeStartTs ? 'course' : 'latence') // latence | course | fin
   const [compteALatence, setCompteALatence] = useState(4)
   const [elapsed, setElapsed] = useState(0)
-  const [distance, setDistance] = useState(0)
+  const [distance, setDistance] = useState(resumeDistance || 0)
+  const distanceRef = useRef(resumeDistance || 0)
+  useEffect(() => { distanceRef.current = distance }, [distance])
+
+  // Remonte la distance en cours au parent toutes les ~3s pendant la course, pour qu'elle
+  // puisse être sauvegardée et restaurée en cas de fermeture de l'appli (resumeDistance ci-dessus).
+  useEffect(() => {
+    if (etat !== 'course') return
+    const iv = setInterval(() => onDistanceProgress?.(distanceRef.current), 3000)
+    return () => clearInterval(iv)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etat])
   const [vitesseInstant, setVitesseInstant] = useState(0)
   // null = recherche en cours, true = GPS actif et exploité, false = indisponible/refusé →
   // repli automatique sur l'affichage minuteur.

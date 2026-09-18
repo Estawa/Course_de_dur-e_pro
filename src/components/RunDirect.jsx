@@ -3,13 +3,16 @@ import { Play, Pause, Square, ChevronRight } from 'lucide-react'
 import { beepDepart, beepFin, gongTransition, annoncerVocal } from '../utils/audio'
 import { formatDuree, vitesseVersAllure } from '../utils/calc'
 import { useWakeLock } from '../utils/wakeLock'
+import { storage } from '../utils/storage'
 import IndicateurGps from './IndicateurGps'
+import ReprisePrompt from './ReprisePrompt'
 import { haversine, formatDistance, LABEL_PHASE, COULEUR_PHASE } from '../utils/runDirect'
 
 const SEQUENCES = {
   complete: ['echauffement', 'course', 'recuperation'],
   immediate: ['course']
 }
+const TYPE_SESSION = 'run-direct'
 
 function Stat({ label, valeur }) {
   return (
@@ -23,16 +26,24 @@ function Stat({ label, valeur }) {
 // Run libre suivi en GPS continu, en une ou trois phases (Échauffement/Course/Récupération),
 // avec pause/reprise et confirmation à chaque changement de phase. À la fin, transmet à App.jsx
 // un résultat complet (trace GPS point par point + stats par phase) via onTermine.
-export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCours }) {
+//
+// Reprise après fermeture/mise en veille prolongée de l'appli (même principe que la séance, les
+// tests VMA et le Fartlek évaluatif) : la progression (phase, chrono, distances, échantillons de
+// vitesse et trace GPS point par point) est sauvegardée en continu pendant le run, et proposée à
+// la reprise via ReprisePrompt. Le chrono est calculé à partir d'horodatages réels (Date.now()),
+// jamais par simple incrémentation d'intervalle, pour ne perdre aucun temps même après une
+// fermeture complète de l'appli. Comme pour le Fartlek, une reprise relance toujours en pause :
+// c'est à l'élève de taper "Reprendre" pour relancer le chrono, afin que la durée de la coupure
+// ne soit jamais comptée comme du temps de course effectif.
+export default function RunDirect({ eleve, vmaRef, onTermine, onAbandon, onActiviteEnCours }) {
   useWakeLock(true)
 
+  const [repriseProposee, setRepriseProposee] = useState(() => (eleve ? storage.getSessionCours(eleve, TYPE_SESSION) : null))
   const [interne, setInterne] = useState('choix') // choix | latence | run
   const [mode, setMode] = useState(null)
   const [compteALatence, setCompteALatence] = useState(4)
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [pause, setPause] = useState(false)
-  const [elapsedPhaseMs, setElapsedPhaseMs] = useState(0)
-  const [elapsedGlobalMs, setElapsedGlobalMs] = useState(0)
   const [distancePhase, setDistancePhase] = useState(0)
   const [distanceGlobal, setDistanceGlobal] = useState(0)
   const [vitesseInstant, setVitesseInstant] = useState(0)
@@ -57,15 +68,100 @@ export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCo
   const phasesStatsRef = useRef([])
   const annonceTimeoutRef = useRef(null)
 
+  // Horodatages réels (jamais de simple compteur d'intervalle) : le chrono affiché se recalcule
+  // à chaque tick de `horloge` à partir de ces repères, donc reste exact même après une coupure.
+  const globalStartTsRef = useRef(null)
+  const phaseStartTsRef = useRef(null)
+  const pauseDebutRef = useRef(null) // timestamp de début de la pause en cours, ou null
+  const totalPauseMsRef = useRef(0) // cumul du temps en pause depuis le DÉBUT DU RUN (jamais réinitialisé entre phases)
+  const pauseAuDebutPhaseMsRef = useRef(0) // valeur de totalPauseMsRef au moment où la phase en cours a démarré
+
+  // Miroirs en ref des valeurs utiles à la sauvegarde périodique, pour que celle-ci lise
+  // toujours la valeur la plus fraîche même appelée depuis un intervalle à dépendances figées.
+  const modeRef = useRef(mode)
+  const phaseIndexRef = useRef(phaseIndex)
+  const distancePhaseRef = useRef(0)
+  const distanceGlobalRef = useRef(0)
+  useEffect(() => { modeRef.current = mode }, [mode])
+  useEffect(() => { phaseIndexRef.current = phaseIndex }, [phaseIndex])
+  useEffect(() => { distancePhaseRef.current = distancePhase }, [distancePhase])
+  useEffect(() => { distanceGlobalRef.current = distanceGlobal }, [distanceGlobal])
   useEffect(() => { pauseRef.current = pause }, [pause])
   useEffect(() => { phaseActuelleRef.current = phaseActuelle }, [phaseActuelle])
   useEffect(() => { onActiviteEnCours?.(interne === 'latence' || interne === 'run') }, [interne]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Horloge en direct
+  // Horloge en direct : fait avancer l'affichage du chrono (recalculé à chaque tick, voir
+  // calculerElapsed) et sert de base à la sauvegarde périodique.
   useEffect(() => {
-    const iv = setInterval(() => setHorloge(Date.now()), 1000)
+    const iv = setInterval(() => setHorloge(Date.now()), 250)
     return () => clearInterval(iv)
   }, [])
+
+  function calculerElapsed(now) {
+    if (!globalStartTsRef.current) return { elapsedGlobalMs: 0, elapsedPhaseMs: 0 }
+    const pauseEnCoursMs = pauseRef.current && pauseDebutRef.current ? now - pauseDebutRef.current : 0
+    const elapsedGlobalMs = Math.max(0, now - globalStartTsRef.current - totalPauseMsRef.current - pauseEnCoursMs)
+    const elapsedPhaseMs = Math.max(
+      0,
+      now - phaseStartTsRef.current - (totalPauseMsRef.current - pauseAuDebutPhaseMsRef.current) - pauseEnCoursMs
+    )
+    return { elapsedGlobalMs, elapsedPhaseMs }
+  }
+
+  function sauvegarderSession() {
+    if (!eleve || !globalStartTsRef.current) return
+    storage.sauvegarderSessionCours(eleve, TYPE_SESSION, {
+      mode: modeRef.current,
+      phaseIndex: phaseIndexRef.current,
+      distancePhase: distancePhaseRef.current,
+      distanceGlobal: distanceGlobalRef.current,
+      samplesPhase: samplesPhaseRef.current,
+      points: pointsRef.current,
+      phasesStats: phasesStatsRef.current,
+      globalStartTs: globalStartTsRef.current,
+      phaseStartTs: phaseStartTsRef.current,
+      totalPauseMs: totalPauseMsRef.current,
+      pauseAuDebutPhaseMs: pauseAuDebutPhaseMsRef.current
+    })
+  }
+
+  // Sauvegarde toutes les ~3s pendant le run, en plus de chaque changement d'état (pause,
+  // changement de phase) — voir les appels explicites dans les fonctions concernées plus bas.
+  useEffect(() => {
+    if (interne !== 'run') return
+    const iv = setInterval(sauvegarderSession, 3000)
+    return () => clearInterval(iv)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interne])
+
+  function handleReprendre() {
+    const s = repriseProposee
+    setMode(s.mode)
+    setPhaseIndex(s.phaseIndex)
+    setDistancePhase(s.distancePhase || 0)
+    setDistanceGlobal(s.distanceGlobal || 0)
+    samplesPhaseRef.current = s.samplesPhase || []
+    pointsRef.current = s.points || []
+    phasesStatsRef.current = s.phasesStats || []
+    phaseDemarreeRef.current = true
+    lastPosRef.current = null // évite un segment fantôme entre la position d'avant coupure et celle d'après
+    globalStartTsRef.current = s.globalStartTs
+    phaseStartTsRef.current = s.phaseStartTs
+    totalPauseMsRef.current = s.totalPauseMs || 0
+    pauseAuDebutPhaseMsRef.current = s.pauseAuDebutPhaseMs || 0
+    // Reprise toujours en pause, comme le Fartlek évaluatif : la durée de la coupure (fermeture
+    // ou mise en veille) est ainsi absorbée dans le temps de pause dès que l'élève tape
+    // "Reprendre", sans jamais être comptée comme du temps de course effectif.
+    pauseDebutRef.current = Date.now()
+    setPause(true)
+    setInterne('run')
+    setRepriseProposee(null)
+  }
+
+  function handleIgnorerReprise() {
+    if (eleve) storage.effacerSessionCours(eleve, TYPE_SESSION)
+    setRepriseProposee(null)
+  }
 
   // Décompte de départ (GPS déjà actif pendant ce temps, comme pour les séances de bibliothèque)
   useEffect(() => {
@@ -73,6 +169,11 @@ export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCo
     if (compteALatence <= 0) {
       beepDepart()
       annoncerVocal(`Départ ${LABEL_PHASE[phaseActuelle]} !`)
+      const now = Date.now()
+      globalStartTsRef.current = now
+      phaseStartTsRef.current = now
+      totalPauseMsRef.current = 0
+      pauseAuDebutPhaseMsRef.current = 0
       phaseDemarreeRef.current = true
       setInterne('run')
       return
@@ -80,17 +181,6 @@ export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCo
     const t = setTimeout(() => setCompteALatence((c) => c - 1), 800)
     return () => clearTimeout(t)
   }, [interne, compteALatence, phaseActuelle])
-
-  // Chrono (phase + global), suspendu pendant la pause
-  useEffect(() => {
-    if (interne !== 'run') return
-    const iv = setInterval(() => {
-      if (pauseRef.current) return
-      setElapsedPhaseMs((e) => e + 250)
-      setElapsedGlobalMs((e) => e + 250)
-    }, 250)
-    return () => clearInterval(iv)
-  }, [interne])
 
   // Recalcule l'allure moyenne de la phase à chaque nouvel échantillon
   useEffect(() => {
@@ -141,8 +231,24 @@ export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCo
     setInterne('latence')
   }
 
+  function togglePause() {
+    const now = Date.now()
+    if (!pause) {
+      pauseDebutRef.current = now
+      setPause(true)
+    } else {
+      if (pauseDebutRef.current) {
+        totalPauseMsRef.current += now - pauseDebutRef.current
+        pauseDebutRef.current = null
+      }
+      setPause(false)
+    }
+    sauvegarderSession()
+  }
+
   function snapshotPhase() {
     const s = samplesPhaseRef.current
+    const { elapsedPhaseMs } = calculerElapsed(Date.now())
     return {
       phase: phaseActuelle,
       dureeMs: elapsedPhaseMs,
@@ -154,8 +260,10 @@ export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCo
 
   function confirmerPhaseSuivante() {
     phasesStatsRef.current.push(snapshotPhase())
+    const now = Date.now()
+    phaseStartTsRef.current = now
+    pauseAuDebutPhaseMsRef.current = totalPauseMsRef.current
     setPhaseIndex((i) => i + 1)
-    setElapsedPhaseMs(0)
     setDistancePhase(0)
     samplesPhaseRef.current = []
     setVitesseMoyennePhaseLive(0)
@@ -167,12 +275,15 @@ export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCo
     annoncerVocal(texte)
     clearTimeout(annonceTimeoutRef.current)
     annonceTimeoutRef.current = setTimeout(() => setAnnonce(null), 1800)
+    sauvegarderSession()
   }
 
   function confirmerFinRun() {
     phasesStatsRef.current.push(snapshotPhase())
     beepFin()
     if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current)
+    if (eleve) storage.effacerSessionCours(eleve, TYPE_SESSION)
+    const { elapsedGlobalMs } = calculerElapsed(Date.now())
     onTermine({
       mode,
       dureeGlobaleMs: elapsedGlobalMs,
@@ -180,6 +291,16 @@ export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCo
       phases: phasesStatsRef.current,
       points: pointsRef.current
     })
+  }
+
+  function handleAnnulerChoix() {
+    if (eleve) storage.effacerSessionCours(eleve, TYPE_SESSION)
+    onAbandon?.()
+  }
+
+  // ---------- Écran de reprise (prioritaire sur tout le reste) ----------
+  if (repriseProposee) {
+    return <ReprisePrompt titre="Ton Run en direct" onReprendre={handleReprendre} onIgnorer={handleIgnorerReprise} />
   }
 
   // ---------- Écran 1 : choix du mode ----------
@@ -210,7 +331,7 @@ export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCo
             <ChevronRight size={18} className="text-piste-400 shrink-0" />
           </button>
         </div>
-        <button onClick={onAbandon} className="mt-8 text-xs text-piste-400 underline mx-auto block">Annuler</button>
+        <button onClick={handleAnnulerChoix} className="mt-8 text-xs text-piste-400 underline mx-auto block">Annuler</button>
       </div>
     )
   }
@@ -227,6 +348,7 @@ export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCo
   }
 
   // ---------- Écran 3 : run en cours ----------
+  const { elapsedGlobalMs, elapsedPhaseMs } = calculerElapsed(horloge)
   const pctVmaPhase = vmaRef ? Math.round((vitesseMoyennePhaseLive / vmaRef) * 100) : null
 
   return (
@@ -265,7 +387,7 @@ export default function RunDirect({ vmaRef, onTermine, onAbandon, onActiviteEnCo
       {confirmation === null && (
         <>
           <button
-            onClick={() => setPause((p) => !p)}
+            onClick={togglePause}
             className="w-full flex items-center justify-center gap-2 border-2 border-piste-200 text-piste-800 font-medium py-3.5 rounded-xl transition active:scale-[0.98] mb-3"
           >
             {pause ? <Play size={16} /> : <Pause size={16} />} {pause ? 'Reprendre' : 'Pause'}

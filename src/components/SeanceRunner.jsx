@@ -44,9 +44,14 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
   const [borgParPhase, setBorgParPhase] = useState(() => reprise?.borgParPhase ?? { echauffement: null, travail: null, recuperation: null })
   const courseStartTsRef = useRef(reprise?.courseEtat === 'course' ? reprise.courseStartTs : null)
   const [repriseConsommee, setRepriseConsommee] = useState(false)
+  // Distance GPS du bloc de course en cours, remontée en continu par CourseRun (voir
+  // handleDistanceProgress), pour pouvoir la restaurer si l'appli se ferme en pleine course.
+  const distanceBlocEnCoursRef = useRef(
+    reprise?.courseEtat === 'course' ? reprise.distanceBlocEnCours || 0 : 0
+  )
 
-  useEffect(() => {
-    onProgress?.({
+  function snapshotProgress() {
+    return {
       indexBloc,
       phase,
       blocsResultats,
@@ -56,8 +61,13 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
       borgParPhase,
       resultatsCourseBloc,
       courseStartTs: courseStartTsRef.current,
-      courseEtat: phase === 'course' ? 'course' : null
-    })
+      courseEtat: phase === 'course' ? 'course' : null,
+      distanceBlocEnCours: phase === 'course' ? distanceBlocEnCoursRef.current : 0
+    }
+  }
+
+  useEffect(() => {
+    onProgress?.(snapshotProgress())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [indexBloc, phase, blocsResultats, echauffementResultat, recuperationResultat, recuperationSautee, borgParPhase, resultatsCourseBloc])
 
@@ -66,10 +76,21 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
     setRepriseConsommee(true)
   }
 
+  // Remontée régulière (toutes les ~3s, via CourseRun) de la distance du bloc en cours, pour
+  // que la sauvegarde de session reste à jour même sans changement de phase entre-temps.
+  function handleDistanceProgress(distance) {
+    distanceBlocEnCoursRef.current = distance
+    onProgress?.(snapshotProgress())
+  }
+
   const resumeStartTs =
     !repriseConsommee && phase === 'course' && reprise?.courseEtat === 'course' && reprise.indexBloc === indexBloc
       ? reprise.courseStartTs
       : null
+  const resumeDistance =
+    !repriseConsommee && phase === 'course' && reprise?.courseEtat === 'course' && reprise.indexBloc === indexBloc
+      ? reprise.distanceBlocEnCours || 0
+      : 0
 
   const bloc = niveau.blocs[indexBloc]
   const dernierBloc = indexBloc === niveau.blocs.length - 1
@@ -169,6 +190,8 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
         onAbandon={onAbandon}
         resumeStartTs={resumeStartTs}
         onDemarre={handleCourseDemarre}
+        resumeDistance={resumeDistance}
+        onDistanceProgress={handleDistanceProgress}
       />
     )
   }

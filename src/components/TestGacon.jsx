@@ -49,17 +49,22 @@ export default function TestGacon({ eleve, onRetour, onActiviteEnCours }) {
 
   // Sauvegarde/efface la progression pour permettre une reprise si l'appli est fermée pendant le
   // test. Ne touche pas au stockage tant que la proposition de reprise initiale n'a pas été
-  // tranchée. Note : la distance déjà parcourue sur le palier interrompu n'est pas récupérable
-  // (le suivi GPS continu repart de zéro) ; le palier et le chronométrage sont restaurés.
+  // tranchée. La distance déjà parcourue sur le palier d'effort en cours est sauvegardée en
+  // continu (distancePalierEnCours) et restaurée à la reprise.
   useEffect(() => {
     if (repriseProposee) return
     if (phase === 'effort' || phase === 'recup') {
-      storage.sauvegarderSessionCours(eleve, TYPE_SESSION, { palier, phase, startTs: startRef.current })
+      storage.sauvegarderSessionCours(eleve, TYPE_SESSION, {
+        palier,
+        phase,
+        startTs: startRef.current,
+        distancePalierEnCours: phase === 'effort' ? Math.max(0, distanceTotale - departEffortRef.current) : 0
+      })
     } else {
       storage.effacerSessionCours(eleve, TYPE_SESSION)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, palier, repriseProposee])
+  }, [phase, palier, repriseProposee, distanceTotale])
 
   useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
 
@@ -73,7 +78,10 @@ export default function TestGacon({ eleve, onRetour, onActiviteEnCours }) {
     setPalier(repriseProposee.palier)
     setPhase(repriseProposee.phase)
     startRef.current = repriseProposee.startTs
-    departEffortRef.current = checkpoint()
+    // Recale le point de départ du compteur GPS pour que la distance déjà parcourue sur le
+    // palier avant la coupure s'ajoute à ce qui sera mesuré après la reprise (seulement
+    // pertinent si la coupure a eu lieu pendant la phase 'effort').
+    departEffortRef.current = checkpoint() - (repriseProposee.phase === 'effort' ? (repriseProposee.distancePalierEnCours || 0) : 0)
     setRepriseProposee(null)
   }
 

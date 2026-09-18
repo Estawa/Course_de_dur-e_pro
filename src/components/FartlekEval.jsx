@@ -73,7 +73,12 @@ function ApercuFartlek({ niveauNom, onDemarrer }) {
 // effectif ni continuer à accumuler un malus d'arrêt hors zone pendant que le téléphone était éteint.
 function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
   const cfg = NIVEAUX_FARTLEK[niveauNom]
-  const { gpsOk, distanceTotale, vitesseInstant } = useGpsSuivi()
+  // En cas de reprise, on réamorce le compteur GPS avec la distance déjà parcourue avant la
+  // coupure (sauvegardée en continu, voir snapshot()) au lieu de repartir de 0 — sinon toute la
+  // distance courue avant la fermeture de l'appli disparaissait du calcul de la note finale.
+  const { gpsOk, distanceTotale, vitesseInstant } = useGpsSuivi(reprise?.distanceTotaleSauvegardee || 0)
+  const distanceTotaleRef = useRef(reprise?.distanceTotaleSauvegardee || 0)
+  useEffect(() => { distanceTotaleRef.current = distanceTotale }, [distanceTotale])
 
   // 'normal' | 'pauseRepos' | 'arretHorsZone'
   const [etat, setEtat] = useState(reprise ? 'pauseRepos' : 'normal')
@@ -99,7 +104,10 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
       malus: malusRef.current,
       nbArretsRepos: nbArretsReposRef.current,
       nbArretsHorsZone: nbArretsHorsZoneRef.current,
-      etat: etatActuel
+      etat: etatActuel,
+      // Distance GPS cumulée au moment du snapshot, pour pouvoir la restaurer si l'appli se
+      // ferme et que l'élève reprend le Fartlek plus tard (voir useGpsSuivi ci-dessus).
+      distanceTotaleSauvegardee: distanceTotaleRef.current
     }
   }
 
@@ -107,6 +115,7 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
     if (!reprise) beepDepart()
     annoncerVocal(reprise ? 'Reprise Fartlek' : 'Départ Fartlek !')
     onProgress?.(snapshot(etat))
+    let tickCount = 0
     const id = setInterval(() => {
       if (etatRef.current === 'arretHorsZone' && arretDebutRef.current) {
         const elapsed = (Date.now() - arretDebutRef.current) / 1000
@@ -117,6 +126,11 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
           beep({ freq: 300, duration: 0.15, volume: 0.25 })
         }
       }
+      // Re-sauvegarde la session toutes les ~3s (en plus de chaque changement d'état) pour que
+      // la distance GPS parcourue soit récupérable en cas de fermeture de l'appli en pleine
+      // course, et pas seulement au moment d'une pause/arrêt.
+      tickCount += 1
+      if (tickCount % 12 === 0) onProgress?.(snapshot(etatRef.current))
       forceRender((v) => v + 1)
     }, 250)
     return () => clearInterval(id)

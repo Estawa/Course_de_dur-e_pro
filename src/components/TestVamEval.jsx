@@ -60,28 +60,31 @@ export default function TestVamEval({ eleve, onRetour, onActiviteEnCours }) {
 
   // Sauvegarde/efface la progression pour permettre une reprise si l'appli est fermée pendant le
   // test. Ne touche pas au stockage tant que la proposition de reprise initiale n'a pas été
-  // tranchée. Note : la distance déjà parcourue sur le palier interrompu n'est pas récupérable ;
-  // le palier et le chronométrage sont restaurés.
+  // tranchée. La distance déjà parcourue sur le palier en cours est sauvegardée en continu
+  // (distancePalierEnCours) et restaurée à la reprise.
   useEffect(() => {
     if (repriseProposee) return
     if (phase === 'effort') {
       storage.sauvegarderSessionCours(eleve, TYPE_SESSION, {
         palier,
         startTs: startRef.current,
-        dernierPalierValide: dernierPalierValideRef.current
+        dernierPalierValide: dernierPalierValideRef.current,
+        distancePalierEnCours: distancePalierRef.current
       })
     } else {
       storage.effacerSessionCours(eleve, TYPE_SESSION)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, palier, repriseProposee])
+  }, [phase, palier, repriseProposee, distancePalier])
 
   function handleReprendre() {
     setPalier(repriseProposee.palier)
     dernierPalierValideRef.current = repriseProposee.dernierPalierValide || 0
     startRef.current = repriseProposee.startTs
     lastPosRef.current = null
-    setDistancePalier(0)
+    // Reprend la distance du palier là où elle en était avant la coupure, au lieu de repartir
+    // de 0 — sans quoi la distance du palier interrompu était perdue.
+    setDistancePalier(repriseProposee.distancePalierEnCours || 0)
     setPhase('effort')
     setRepriseProposee(null)
   }

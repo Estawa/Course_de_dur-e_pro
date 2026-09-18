@@ -40,10 +40,18 @@ export default function TestDemiCooper({ eleve, onRetour, onActiviteEnCours }) {
   // tranchée par l'élève, pour ne pas écraser la session sauvegardée avant qu'il ait choisi.
   useEffect(() => {
     if (repriseProposee) return
-    if (etat === 'course') storage.sauvegarderSessionCours(eleve, TYPE_SESSION, { startTs: startRef.current })
-    else storage.effacerSessionCours(eleve, TYPE_SESSION)
+    if (etat === 'course') {
+      storage.sauvegarderSessionCours(eleve, TYPE_SESSION, {
+        startTs: startRef.current,
+        // Distance déjà parcourue au moment du dernier relevé, pour pouvoir reprendre la course
+        // sans perdre la distance courue avant une éventuelle fermeture de l'appli.
+        distanceEnCours: Math.max(0, distanceTotale - departRef.current)
+      })
+    } else {
+      storage.effacerSessionCours(eleve, TYPE_SESSION)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [etat, repriseProposee])
+  }, [etat, repriseProposee, distanceTotale])
 
   useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
 
@@ -56,6 +64,10 @@ export default function TestDemiCooper({ eleve, onRetour, onActiviteEnCours }) {
 
   function handleReprendre() {
     startRef.current = repriseProposee.startTs
+    // Recale le point de départ du compteur GPS pour que la distance déjà parcourue avant la
+    // coupure (sauvegardée en continu) s'ajoute à ce qui sera mesuré après la reprise, au lieu
+    // de repartir de 0.
+    departRef.current = checkpoint() - (repriseProposee.distanceEnCours || 0)
     setEtat('course')
     setRepriseProposee(null)
   }

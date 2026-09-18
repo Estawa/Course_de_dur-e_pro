@@ -82,18 +82,27 @@ export default function Test4x3({ eleve, onRetour, onActiviteEnCours }) {
 
   // Sauvegarde/efface la progression pour permettre une reprise si l'appli est fermée pendant le
   // test. Ne touche pas au stockage tant que la proposition de reprise initiale n'a pas été
-  // tranchée par l'élève. Note : en cas de reprise, la distance déjà parcourue sur la répétition
-  // interrompue n'est pas récupérable (le suivi GPS continu repart de zéro) ; seules les
-  // répétitions déjà terminées et le chronométrage sont restaurés.
+  // tranchée par l'élève. La distance déjà parcourue sur la répétition en cours au moment de la
+  // coupure est sauvegardée en continu (distanceRepEnCours) et restaurée à la reprise.
   useEffect(() => {
     if (repriseProposee) return
     if (phase === 'effort' || phase === 'recup') {
-      storage.sauvegarderSessionCours(eleve, TYPE_SESSION, { rep, phase, distances, validees, viaGPS, startTs: startRef.current })
+      storage.sauvegarderSessionCours(eleve, TYPE_SESSION, {
+        rep,
+        phase,
+        distances,
+        validees,
+        viaGPS,
+        startTs: startRef.current,
+        // Distance déjà parcourue sur la répétition en cours (phase 'effort'), pour pouvoir
+        // reprendre sans la perdre en cas de fermeture de l'appli pendant l'effort.
+        distanceRepEnCours: phase === 'effort' ? Math.max(0, distanceTotale - departRepRef.current) : 0
+      })
     } else {
       storage.effacerSessionCours(eleve, TYPE_SESSION)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, rep, distances, validees, viaGPS, repriseProposee])
+  }, [phase, rep, distances, validees, viaGPS, repriseProposee, distanceTotale])
 
   useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
 
@@ -110,7 +119,10 @@ export default function Test4x3({ eleve, onRetour, onActiviteEnCours }) {
     setValidees(repriseProposee.validees)
     setViaGPS(repriseProposee.viaGPS)
     startRef.current = repriseProposee.startTs
-    departRepRef.current = checkpoint()
+    // Recale le point de départ du compteur GPS pour que la distance déjà parcourue sur cette
+    // répétition avant la coupure s'ajoute à ce qui sera mesuré après la reprise, au lieu de
+    // repartir de 0 (ne concerne que la phase 'effort' ; en 'recup' rien n'est en cours).
+    departRepRef.current = checkpoint() - (repriseProposee.phase === 'effort' ? (repriseProposee.distanceRepEnCours || 0) : 0)
     setRepriseProposee(null)
   }
 
