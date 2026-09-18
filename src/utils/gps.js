@@ -18,13 +18,17 @@ export function haversine(a, b) {
 // palier), on relève la distance totale au début et à la fin du segment via checkpoint() et
 // on fait la différence — sans jamais couper le suivi, donc sans jamais perdre une mesure au
 // moment d'un changement de phase.
-export function useGpsSuivi() {
+// distanceInitiale : permet de reprendre le compteur là où il en était plutôt qu'à 0, quand ce
+// hook est remonté après une reprise de session (fermeture/mise en veille de l'appli en cours de
+// test/course). N'a d'effet qu'au tout premier rendu de cette instance du hook (comme useRef) —
+// passer la valeur sauvegardée uniquement quand une reprise est effectivement en cours.
+export function useGpsSuivi(distanceInitiale = 0) {
   const [gpsOk, setGpsOk] = useState(null)
-  const [distanceTotale, setDistanceTotale] = useState(0)
+  const [distanceTotale, setDistanceTotale] = useState(distanceInitiale)
   const [vitesseInstant, setVitesseInstant] = useState(0)
   const watchIdRef = useRef(null)
   const lastPosRef = useRef(null)
-  const distanceTotaleRef = useRef(0) // toujours à jour, y compris dans une fermeture figée
+  const distanceTotaleRef = useRef(distanceInitiale) // toujours à jour, y compris dans une fermeture figée
 
   useEffect(() => {
     if (!('geolocation' in navigator)) {
