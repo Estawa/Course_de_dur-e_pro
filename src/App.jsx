@@ -293,6 +293,11 @@ export default function App() {
     : []
   const vmaRef = eleve ? storage.getVmaRetenue(eleve) : null
 
+  function handleAjouterRealisationProf(realisation) {
+    storage.ajouterRealisation(realisation)
+    setRealisations((prev) => [...prev, realisation])
+  }
+
   function handleModifierRealisation(id, patch) {
     const nouvelles = storage.modifierRealisation(id, patch)
     setRealisations(nouvelles)
@@ -443,6 +448,7 @@ export default function App() {
             seances={seances}
             setSeances={setSeances}
             realisations={realisations}
+            onAjouterRealisation={handleAjouterRealisationProf}
             onModifierRealisation={handleModifierRealisation}
             onSupprimerRealisation={handleSupprimerRealisation}
             onSupprimerRealisationsEleve={handleSupprimerRealisationsEleve}
