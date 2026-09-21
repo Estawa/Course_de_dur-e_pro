@@ -8,6 +8,7 @@ import FicheSuiviEleve from './FicheSuiviEleve'
 import SuiviSansTelephone from './SuiviSansTelephone'
 import VisibiliteClasses from './VisibiliteClasses'
 import EspaceAcces from './EspaceAcces'
+import BaremeNotation from './BaremeNotation'
 import { storage } from '../utils/storage'
 import { noteFinale, pourcentagesReussite, syntheseCycle, criteresSeance } from '../utils/calc'
 import { genererSeancesTypesSecondes } from '../utils/seancesTypesSecondes'
@@ -22,10 +23,10 @@ const GROUPES_SCOLAIRES = [
 export default function EnseignantDashboard({
   role, nomCollegue, teacherIdEnseignant, accesConfig, onChangerEspace, onMigrer,
   onChangerPinAdmin, onChangerNomAdmin, onAjouterCollegue, onSupprimerCollegue, onReinitialiserPinCollegue,
-  seances, setSeances, realisations, onAjouterRealisation, onModifierRealisation, onSupprimerRealisation, onSupprimerRealisationsEleve, onSupprimerRealisationsClasse
+  seances, setSeances, realisations, onAjouterRealisation, onModifierRealisation, onSupprimerRealisation, onSupprimerRealisationsEleve, onSupprimerRealisationsClasse, onRealisationsRecalculees
 }) {
   const estAdmin = role === 'admin'
-  const [onglet, setOnglet] = useState('seances') // seances | tests | suivi | vma | global | acces
+  const [onglet, setOnglet] = useState('seances') // seances | tests | suivi | vma | bareme | global | acces
   const [espaceActifId, setEspaceActifId] = useState(teacherIdEnseignant)
   const [chargementEspace, setChargementEspace] = useState(false)
   const [editeurOuvert, setEditeurOuvert] = useState(false)
@@ -441,6 +442,7 @@ export default function EnseignantDashboard({
           { id: 'tests', label: 'Tests' },
           { id: 'suivi', label: 'Élèves & suivi' },
           { id: 'vma', label: 'VMA' },
+          { id: 'bareme', label: 'Barème' },
           ...(estAdmin ? [{ id: 'global', label: 'Vue globale' }, { id: 'acces', label: 'Accès' }] : [])
         ].map((o) => (
           <button
@@ -843,6 +845,8 @@ export default function EnseignantDashboard({
           )}
         </section>
       )}
+
+      {onglet === 'bareme' && <BaremeNotation key={espaceActifId} onRealisationsRecalculees={onRealisationsRecalculees} />}
 
       {seancePourVisibilite && (
         <VisibiliteClasses

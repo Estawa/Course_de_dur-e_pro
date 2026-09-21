@@ -148,7 +148,13 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
 
     const blocsPourNote = blocsResultats.filter((b) => !b.nonRealise || b.inclureDansNote)
     const note = calculerNoteSeance(blocsPourNote)
-    const { note: noteReelle, avecGps: noteReelleAvecGps } = calculerNoteReelle(blocsPourNote)
+    const { note: noteReelle, avecGps: noteReelleAvecGps } = calculerNoteReelle({
+      blocsResultats: blocsPourNote,
+      borg: donneesCourantes.borg,
+      observationGenerale: donneesCourantes.observation
+      // pas de poulsParPhase ici : le mode "Sans téléphone" ne recueille jamais le pouls, donc
+      // aucune pénalité de pouls manquant ne doit s'appliquer à ces séances.
+    }, storage.getBareme())
 
     const idExistant = enregistres[cleCourante]
     const contenu = {
