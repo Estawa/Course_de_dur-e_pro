@@ -1,5 +1,7 @@
 import * as cloud from './cloud'
 import { rosterOps } from './rosterOps'
+import { BAREME as BAREME_DEFAUT } from './bareme'
+import { calculerNoteReelle } from './calc'
 
 const KEYS = {
   ELEVE_ACTIF: 'cdp_eleve_actif_v2', // { teacherId, id }
@@ -29,7 +31,7 @@ function write(key, value) {
 // depuis Firestore via storage.chargerEspace(teacherId), puis tenues à jour en mémoire au fil
 // des actions (avec écriture "best effort" vers Firestore à chaque changement). Changer
 // d'espace (autre professeur, "Vue globale"...) recharge entièrement ce cache.
-let cache = { teacherId: null, roster: {}, seances: [], realisations: [], vma: {}, testsVisibilite: {} }
+let cache = { teacherId: null, roster: {}, seances: [], realisations: [], vma: {}, testsVisibilite: {}, bareme: null }
 
 function idEleve() {
   return crypto.randomUUID ? crypto.randomUUID() : `e_${Date.now()}_${Math.random().toString(36).slice(2)}`
@@ -78,14 +80,15 @@ export const storage = {
   // --- Chargement / état de l'espace actif ---
   espaceCharge: () => cache.teacherId,
   chargerEspace: async (teacherId) => {
-    const [roster, seances, realisations, vma, testsVisibilite] = await Promise.all([
+    const [roster, seances, realisations, vma, testsVisibilite, bareme] = await Promise.all([
       cloud.loadRosterTeacher(teacherId),
       cloud.loadSeancesTeacher(teacherId),
       cloud.loadRealisationsTeacher(teacherId),
       cloud.loadVmaTeacher(teacherId),
-      cloud.loadTestsVisibiliteTeacher(teacherId)
+      cloud.loadTestsVisibiliteTeacher(teacherId),
+      cloud.loadBaremeTeacher(teacherId)
     ])
-    cache = { teacherId, roster, seances, realisations, vma, testsVisibilite }
+    cache = { teacherId, roster, seances, realisations, vma, testsVisibilite, bareme }
     return cache
   },
 
@@ -452,6 +455,43 @@ export const storage = {
   setTestVisibilite: (testId, classesVisibles) => {
     cache.testsVisibilite = { ...cache.testsVisibilite, [testId]: { classesVisibles } }
     cloud.cloudEcrireTestsVisibilite(cache.teacherId, cache.testsVisibilite)
+  },
+
+  // --- Barème de la note réelle (pondérations + pénalités), réglable côté enseignant, jamais
+  // montré aux élèves. getBareme() retombe sur les valeurs par défaut (bareme.js) tant que rien
+  // n'a été personnalisé, et complète un barème personnalisé partiel (ex. enregistré avant
+  // l'ajout d'un nouveau réglage) avec les valeurs par défaut manquantes. ---
+  getBareme: () => {
+    const perso = cache.bareme
+    if (!perso || !Object.keys(perso).length) return BAREME_DEFAUT
+    return {
+      ...BAREME_DEFAUT,
+      ...perso,
+      poidsQualiteBloc: { ...BAREME_DEFAUT.poidsQualiteBloc, ...(perso.poidsQualiteBloc || {}) }
+    }
+  },
+  // Enregistre le barème personnalisé, puis recalcule immédiatement la note réelle de toutes les
+  // réalisations déjà enregistrées dans l'espace actif (toutes classes confondues), pour que
+  // l'ajustement s'applique aussi à l'historique et pas seulement aux prochaines séances.
+  // Renvoie le nombre de réalisations dont la note réelle a effectivement changé.
+  setBareme: (nouveauBareme) => {
+    cache.bareme = nouveauBareme
+    cloud.cloudEcrireBareme(cache.teacherId, nouveauBareme)
+    return storage.recalculerNotesReelles()
+  },
+  recalculerNotesReelles: () => {
+    const bareme = storage.getBareme()
+    let nbModifiees = 0
+    cache.realisations = cache.realisations.map((r) => {
+      if (r.runDirect || !r.blocsResultats || !r.blocsResultats.length) return r
+      const { note: noteReelle, avecGps: noteReelleAvecGps } = calculerNoteReelle(r, bareme)
+      if (noteReelle === r.noteReelle && noteReelleAvecGps === r.noteReelleAvecGps) return r
+      nbModifiees++
+      const maj = { ...r, noteReelle, noteReelleAvecGps }
+      cloud.cloudEcrireRealisation(cache.teacherId, maj)
+      return maj
+    })
+    return nbModifiees
   },
 
   // --- Reprise d'activité en cours : purement locale à l'appareil, jamais synchronisée. ---

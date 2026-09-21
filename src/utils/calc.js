@@ -1,3 +1,5 @@
+import { BAREME } from './bareme'
+
 export function formatDuree(totalSec) {
   const s = Math.round(totalSec)
   const h = Math.floor(s / 3600)
@@ -162,17 +164,75 @@ export function pourcentageGlobalSeance(blocsResultats) {
   return Math.round(valeurs.reduce((a, b) => a + b, 0) / valeurs.length)
 }
 
-// Note "réelle" de la séance, sur les 4 critères pondérés quand ils sont mesurables (GPS +
-// structure Full Power), avec repli automatique sur les 2 anciens critères sinon.
-export function calculerNoteReelle(blocsResultats) {
-  if (!blocsResultats || !blocsResultats.length) return { note: 0, avecGps: false }
+// Note "réelle" d'un bloc (sur 20, avant pénalités de séance) : plafonnée par la distance/durée
+// réellement parcourue (jamais plus que la moyenne si l'élève n'a fait que la moitié du chemin),
+// puis par la qualité d'exécution (allure/régularité/récup), puis réduite des pénalités de pause
+// propres à ce bloc. Jamais montrée à l'élève. Voir bareme.js pour le détail des poids.
+export function noteBlocReelle(bloc, bareme = BAREME) {
+  const c = criteresBloc(bloc)
+
+  // 1) Plafond lié à la distance/durée réellement parcourue.
+  const plafondDistance = c.distance != null ? (c.distance / 100) * 20 : 20
+
+  // 2) Qualité d'exécution (hors distance), sur les seuls critères mesurables pour ce bloc.
+  const poids = bareme.poidsQualiteBloc
+  const dispo = Object.keys(poids).filter((cle) => c[cle] != null)
+  const poidsTotal = dispo.reduce((acc, cle) => acc + poids[cle], 0)
+  const qualite = poidsTotal
+    ? (dispo.reduce((acc, cle) => acc + poids[cle] * c[cle], 0) / poidsTotal / 100) * 20
+    : 20
+
+  // 3) Note avant pénalités = la plus pénalisante des deux.
+  let note = Math.min(plafondDistance, qualite)
+
+  // 4) Pénalité de pauses (propre à ce bloc).
+  const nbPauses = bloc.nbPauses || 0
+  const pausesPenalisables = Math.max(0, nbPauses - bareme.pausesTolereesParBloc)
+  const penalitePause = Math.min(bareme.plafondPenalitePauseBloc, pausesPenalisables * bareme.penalitePauseParUnite)
+
+  return { note: Math.max(0, note - penalitePause), plafondDistance, qualite, penalitePause }
+}
+
+// Note "réelle" de la séance : moyenne des notes de bloc (voir noteBlocReelle), puis pénalités
+// appliquées une seule fois pour l'ensemble de la séance (pouls manquants, Borg manquant,
+// observation manquante), plafonnées globalement — voir bareme.js. Prend en paramètre l'objet
+// complet de la réalisation (blocsResultats + poulsParPhase + borg + observationGenerale), pas
+// seulement les blocs, pour pouvoir appliquer ces pénalités de séance. Le paramètre poulsParPhase
+// est optionnel : quand il est absent (ex. saisie prof en mode "Sans téléphone", qui ne recueille
+// jamais le pouls), aucune pénalité de pouls n'est appliquée plutôt que de pénaliser
+// systématiquement un mode qui ne collecte pas cette donnée. Le barème utilisé est celui passé en
+// second paramètre (typiquement storage.getBareme(), personnalisable côté enseignant), avec les
+// valeurs par défaut de bareme.js en repli.
+export function calculerNoteReelle(realisation, bareme = BAREME) {
+  const blocsResultats = Array.isArray(realisation) ? realisation : realisation?.blocsResultats || []
+  if (!blocsResultats.length) return { note: 0, avecGps: false }
+
   let somme = 0
   let tousAvecGps = true
   blocsResultats.forEach((b) => {
-    somme += noteBlocPondere(b)
+    somme += noteBlocReelle(b, bareme).note
     if (!blocAvecGps(b)) tousAvecGps = false
   })
-  const note = Math.round((somme / blocsResultats.length) * 2) / 2
+  const moyenneBlocs = somme / blocsResultats.length
+
+  // Pénalités de séance : ignorées si on a reçu un simple tableau de blocs (compatibilité avec
+  // les appels historiques) plutôt que l'objet complet de la réalisation.
+  let penaliteSeance = 0
+  if (!Array.isArray(realisation) && realisation) {
+    const pouls = realisation.poulsParPhase
+    if (pouls) {
+      ;['repos', 'avantTravail', 'apresTravail', 'final'].forEach((cle) => {
+        if (pouls[cle] == null) penaliteSeance += bareme.penalitePoulsManquant
+      })
+    }
+    if (realisation.borg == null) penaliteSeance += bareme.penaliteBorgManquant
+    if (!realisation.observationGenerale || !String(realisation.observationGenerale).trim()) {
+      penaliteSeance += bareme.penaliteObservationManquante
+    }
+  }
+  penaliteSeance = Math.min(bareme.plafondPenaliteSeance, penaliteSeance)
+
+  const note = Math.max(0, Math.round((moyenneBlocs - penaliteSeance) * 2) / 2)
   return { note, avecGps: tousAvecGps }
 }
 

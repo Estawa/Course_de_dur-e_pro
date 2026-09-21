@@ -175,6 +175,25 @@ export function cloudEcrireTestsVisibilite(teacherId, visibilite) {
   return setDoc(doc(db, 'profs', teacherId, 'meta', 'testsVisibilite'), { data: visibilite }).catch(() => {})
 }
 
+// --- Barème de la note réelle (pondérations + pénalités, réglables côté enseignant) : un seul
+// document, comme testsVisibilite ci-dessus. ---
+
+export async function loadBaremeTeacher(teacherId) {
+  if (!db) return null
+  try {
+    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'bareme'))
+    return snap.exists() ? snap.data().data || null : null
+  } catch (e) {
+    console.warn('Chargement barème impossible', e)
+    return null
+  }
+}
+
+export function cloudEcrireBareme(teacherId, bareme) {
+  if (!db) return Promise.resolve()
+  return setDoc(doc(db, 'profs', teacherId, 'meta', 'bareme'), { data: bareme }).catch(() => {})
+}
+
 // --- Migration depuis l'ancienne version (un seul professeur, "code de synchro" au lieu d'un
 // teacherId) : lit l'espace tel qu'il existait sous profs/{ancienCode}/... et le renvoie dans
 // le même format que loadRosterTeacher/loadRealisationsTeacher/etc., pour qu'il puisse être
