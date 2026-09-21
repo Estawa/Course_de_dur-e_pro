@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, ChevronRight, Timer, Gauge, MapPin, ListChecks } from 'lucide-react'
+import { CheckCircle2, ChevronRight, Timer, Gauge, MapPin, ListChecks, Trash2 } from 'lucide-react'
 import { seanceVisiblePourClasse } from '../utils/calc'
 import { storage } from '../utils/storage'
 import { TESTS_CATALOGUE } from '../utils/testsCatalogue'
@@ -8,9 +8,11 @@ import { libelleNiveau } from '../utils/niveauLabels'
 import { LABEL_TEST } from './VmaEleveLigne'
 import ProgressionEleve from './ProgressionEleve'
 import RunDirectCarteModal from './RunDirectCarteModal'
+import Bilan from './Bilan'
 
-export default function BibliothequeEleve({ seances, realisations, eleve, onChoisirSeance, onLancerFartlek }) {
+export default function BibliothequeEleve({ seances, realisations, eleve, onChoisirSeance, onLancerFartlek, onSupprimerRealisation }) {
   const [runDirectOuvert, setRunDirectOuvert] = useState(null)
+  const [bilanOuvert, setBilanOuvert] = useState(null)
   const seancesVisibles = seances.filter((s) => seanceVisiblePourClasse(s, eleve?.classe))
   const historiqueTests = eleve ? storage.getHistoriqueTests(eleve) : []
   const historiqueFartlek = eleve ? storage.getHistoriqueFartlek(eleve) : []
@@ -28,6 +30,13 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
     ...historiqueTests.map((h) => ({ type: 'test', date: h.date, data: h })),
     ...historiqueFartlek.map((h) => ({ type: 'fartlek', date: h.date, data: h }))
   ].sort((a, b) => b.date - a.date)
+
+  function supprimerRealisation(e, r) {
+    e.stopPropagation()
+    if (!onSupprimerRealisation) return
+    if (!confirm('Supprimer cette séance de ton historique ? Cette action est irréversible.')) return
+    onSupprimerRealisation(r.id)
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -131,7 +140,11 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
             const r = ev.data
             const nbReussis = r.blocsResultats.filter((b) => b.reussite === 'reussi').length
             return (
-              <div key={`s-${r.id}`} className="bg-white border border-piste-100 rounded-xl p-4 flex items-center justify-between">
+              <button
+                key={`s-${r.id}`}
+                onClick={() => setBilanOuvert(r)}
+                className="w-full text-left bg-white border border-piste-100 rounded-xl p-4 flex items-center justify-between hover:border-piste-300 transition"
+              >
                 <div>
                   <p className="font-medium text-piste-900 text-sm">{r.seanceTitre} · {libelleNiveau(r.niveauNom)}</p>
                   <p className="text-xs text-piste-500 mt-0.5">{new Date(r.date).toLocaleDateString('fr-FR')}</p>
@@ -143,8 +156,19 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
                     <span className="text-xs text-piste-600">Borg {r.borg}/10</span>
                   </div>
                 </div>
-                <span className="font-display text-xl text-piste-900">{r.note}</span>
-              </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-display text-xl text-piste-900">{r.note}</span>
+                  {onSupprimerRealisation && (
+                    <button
+                      onClick={(e) => supprimerRealisation(e, r)}
+                      title="Supprimer cette séance"
+                      className="p-1.5 rounded-full hover:bg-[#fbeeea] text-alerte"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </button>
             )
           }
           if (ev.type === 'fartlek') {
@@ -185,6 +209,17 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
           resultat={runDirectOuvert.runDirect}
           onClose={() => setRunDirectOuvert(null)}
         />
+      )}
+
+      {bilanOuvert && (
+        <div className="fixed inset-0 bg-white z-40 overflow-y-auto">
+          <Bilan
+            resultat={bilanOuvert}
+            niveauNom={bilanOuvert.niveauNom}
+            labelRetour="Fermer"
+            onRetourAccueil={() => setBilanOuvert(null)}
+          />
+        </div>
       )}
     </div>
   )

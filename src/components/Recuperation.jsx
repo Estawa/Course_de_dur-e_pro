@@ -6,25 +6,30 @@ import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 import IndicateurGps from './IndicateurGps'
 
 // Phase Récupération de fin de séance, structurée et identique pour toutes les séances du cycle
-// par défaut, mais réglable par niveau (voir SeanceEditor "Récupération finale").
-// dureeS : durée réglée pour ce niveau, remplace la durée fixe par défaut de phasesFixes.js ; la
-// distance minimale est recalculée proportionnellement pour garder un objectif d'allure cohérent.
+// par défaut. dureeS : durée dérivée du dernier bloc du niveau quand il a sa propre récupération
+// Full Power active (voir utils/fullpower.js dureeRecuperationFinale), sinon repli sur la durée
+// fixe par défaut de phasesFixes.js ; la distance minimale est recalculée proportionnellement
+// pour garder un objectif d'allure cohérent.
 // dejaEcouleS : temps (s) déjà passé avant l'arrivée sur cet écran (saisie pouls/distance/Borg
 // juste après la dernière répétition de travail, voir SaisieFinTravail) — le décompte en tient
 // compte dès le départ, pour que cette saisie fasse partie intégrante de la récupération plutôt
 // que de s'y ajouter (une seule phase continue, sans temps de récup fantôme en double).
 // Peut être passée (temps de séance insuffisant) via onPasser : le parent (SeanceRunner) garde
 // alors la possibilité de revenir en arrière tant que le bilan final n'est pas validé, en cas
-// d'erreur de manipulation.
+// d'erreur de manipulation. "Terminer la récupération" demande une confirmation (un premier appui
+// affiche le bouton de confirmation, qui disparaît de lui-même après 3s s'il n'est pas validé),
+// pour éviter qu'un appui accidentel ne coupe la récupération avant l'heure.
 export default function Recuperation({ onTermine, onPasser, dejaEcouleS = 0, dureeS }) {
   const { pctVmaMin, distanceMinM: distanceMinMFixe, duree_s: dureeSFixe, retourAuCalme } = RECUPERATION_FIXE
   const duree_s = dureeS > 0 ? dureeS : dureeSFixe
   const distanceMinM = Math.round(distanceMinMFixe * (duree_s / dureeSFixe))
   const [elapsed, setElapsed] = useState(Math.min(dejaEcouleS, duree_s))
   const [distanceManuelle, setDistanceManuelle] = useState('')
+  const [confirmationTerminer, setConfirmationTerminer] = useState(false)
   const startRef = useRef(null)
   const intervalRef = useRef(null)
   const termineRef = useRef(false)
+  const confirmationTimeoutRef = useRef(null)
   const { gpsOk, distanceTotale } = useGpsSuivi()
 
   useEffect(() => {
@@ -69,6 +74,7 @@ export default function Recuperation({ onTermine, onPasser, dejaEcouleS = 0, dur
   function terminerMaintenant() {
     if (termineRef.current) return
     termineRef.current = true
+    clearTimeout(confirmationTimeoutRef.current)
     clearInterval(intervalRef.current)
     if (gpsOk === true) {
       onTermine(construireResultat(elapsed, distanceTotale, true))
@@ -77,6 +83,19 @@ export default function Recuperation({ onTermine, onPasser, dejaEcouleS = 0, dur
       onTermine(construireResultat(elapsed, d, false))
     }
   }
+
+  function demanderConfirmationTerminer() {
+    setConfirmationTerminer(true)
+    clearTimeout(confirmationTimeoutRef.current)
+    confirmationTimeoutRef.current = setTimeout(() => setConfirmationTerminer(false), 3000)
+  }
+
+  function annulerConfirmationTerminer() {
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmationTerminer(false)
+  }
+
+  useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
 
   function passer() {
     if (termineRef.current) return
@@ -121,12 +140,24 @@ export default function Recuperation({ onTermine, onPasser, dejaEcouleS = 0, dur
 
       <p className="text-xs text-piste-500 mb-6">{retourAuCalme}</p>
 
-      <button
-        onClick={terminerMaintenant}
-        className="w-full bg-piste-800 hover:bg-piste-700 text-white font-medium py-3 rounded-xl transition active:scale-[0.98] mb-3"
-      >
-        Terminer la récupération
-      </button>
+      {confirmationTerminer ? (
+        <div className="rounded-xl border-2 border-alerte/40 bg-[#fbeeea] p-4 mb-3">
+          <p className="text-xs text-piste-700 mb-3">Confirme pour terminer la récupération maintenant</p>
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={terminerMaintenant} className="bg-alerte text-white px-5 py-3 rounded-xl font-medium">
+              Confirmer
+            </button>
+            <button onClick={annulerConfirmationTerminer} className="text-xs text-piste-500 underline px-2">Annuler</button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={demanderConfirmationTerminer}
+          className="w-full bg-piste-800 hover:bg-piste-700 text-white font-medium py-3 rounded-xl transition active:scale-[0.98] mb-3"
+        >
+          Terminer la récupération
+        </button>
+      )}
       <button onClick={passer} className="text-xs text-piste-400 underline">
         Passer la récupération (temps insuffisant)
       </button>

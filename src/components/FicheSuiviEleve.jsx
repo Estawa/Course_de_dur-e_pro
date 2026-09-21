@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, KeyRound, UserX, Trash2, Check, X, ArrowRightLeft, Map } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, KeyRound, UserX, Trash2, Check, X, ArrowRightLeft, Map, FileText } from 'lucide-react'
 import VmaEleveLigne from './VmaEleveLigne'
 import ComportementAjustement from './ComportementAjustement'
 import ExclusionRealisation from './ExclusionRealisation'
 import NotificationsRealisation from './NotificationsRealisation'
 import RunDirectCarteModal from './RunDirectCarteModal'
+import Bilan from './Bilan'
 import { storage } from '../utils/storage'
 import { noteFinale, tauxReussiteRealisation, blocAvecGps } from '../utils/calc'
 import { libelleNiveau } from '../utils/niveauLabels'
@@ -29,6 +30,7 @@ export default function FicheSuiviEleve({
 }) {
   const [editionOuverte, setEditionOuverte] = useState(false)
   const [runDirectOuvert, setRunDirectOuvert] = useState(null)
+  const [bilanOuvert, setBilanOuvert] = useState(null)
   const [editNom, setEditNom] = useState(eleve.nom)
   const [editPrenom, setEditPrenom] = useState(eleve.prenom)
   const [editSexe, setEditSexe] = useState(eleve.sexe || '')
@@ -315,6 +317,14 @@ export default function FicheSuiviEleve({
                             <Map size={12} /> Voir la carte
                           </button>
                         )}
+                        {!estRunDirect && r.blocsResultats?.length > 0 && (
+                          <button
+                            onClick={() => setBilanOuvert(r)}
+                            className="flex items-center gap-1 text-[11px] font-medium text-piste-700 mt-0.5"
+                          >
+                            <FileText size={12} /> Voir le bilan
+                          </button>
+                        )}
                         {pctGlobal !== null && (
                           <p className="text-[11px] text-piste-500">Réussite {pctGlobal}%</p>
                         )}
@@ -395,6 +405,17 @@ export default function FicheSuiviEleve({
           resultat={runDirectOuvert.runDirect}
           onClose={() => setRunDirectOuvert(null)}
         />
+      )}
+
+      {bilanOuvert && (
+        <div className="fixed inset-0 bg-white z-40 overflow-y-auto">
+          <Bilan
+            resultat={bilanOuvert}
+            niveauNom={bilanOuvert.niveauNom}
+            labelRetour="Fermer"
+            onRetourAccueil={() => setBilanOuvert(null)}
+          />
+        </div>
       )}
     </div>
   )

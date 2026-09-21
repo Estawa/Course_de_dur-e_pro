@@ -51,7 +51,7 @@ function PhaseRecap({ titre, resultat, sautee }) {
   )
 }
 
-export default function Bilan({ resultat, niveau, onRetourAccueil }) {
+export default function Bilan({ resultat, niveauNom, onRetourAccueil, labelRetour = "Retour à l'accueil" }) {
   const {
     blocsResultats, borgParPhase, observationGenerale, note, echauffementResultat,
     echauffementChoisi, recuperationResultat, recuperationSautee, poulsParPhase, observationTravail
@@ -71,7 +71,7 @@ export default function Bilan({ resultat, niveau, onRetourAccueil }) {
       </div>
 
       <h2 className="font-display text-2xl text-piste-900 mb-1">Séance terminée</h2>
-      <p className="text-sm text-piste-600 mb-6">{libelleNiveau(niveau.nom)} · {blocsResultats.length} bloc{blocsResultats.length > 1 ? 's' : ''}</p>
+      <p className="text-sm text-piste-600 mb-6">{libelleNiveau(niveauNom)} · {blocsResultats.length} bloc{blocsResultats.length > 1 ? 's' : ''}</p>
 
       {echauffementChoisi === false && (
         <div className="bg-piste-50 rounded-xl px-4 py-3 text-left mb-3">
@@ -168,7 +168,7 @@ export default function Bilan({ resultat, niveau, onRetourAccueil }) {
         onClick={onRetourAccueil}
         className="w-full bg-piste-800 hover:bg-piste-700 text-white font-medium py-3.5 rounded-xl transition active:scale-[0.98] mt-2"
       >
-        Retour à l'accueil
+        {labelRetour}
       </button>
     </div>
   )
