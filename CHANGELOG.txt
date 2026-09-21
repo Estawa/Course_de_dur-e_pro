@@ -1,3 +1,8 @@
+v1.54.0 — Confirmation, revoir un bilan, suppression élève et prof
+- "Terminer la récupération" (fin de séance) demande désormais une confirmation avant de valider, comme "Terminer le bloc"/"Pause"/"Abandonner" pendant la course, pour éviter une mauvaise manipulation
+- Côté élève : cliquer sur une séance dans "Mon historique" rouvre désormais son bilan complet (même écran qu'à la fin de la séance) ; un bouton permet aussi de supprimer cette séance de son historique, avec confirmation
+- Côté enseignant : dans la fiche de suivi d'un élève, un bouton "Voir le bilan" ouvre le même écran de bilan pour toute séance passée (la suppression avec confirmation existait déjà via l'icône corbeille sur chaque séance)
+
 v1.53.0 — Récupération de fin de séance réglable, sans doublon
 - La durée de la récupération de fin de séance (écran dédié après le dernier bloc) est désormais dérivée automatiquement du réglage "Récupération / retour au calme final" du DERNIER bloc du niveau, quand ce bloc est en Full Power et que cette récupération y est active — un seul endroit où la régler, plus de champ séparé
 - Ce même bloc ne joue plus sa propre récupération finale en interne (elle ne serait sinon jouée deux fois de suite : une fois dans le bloc, une fois sur l'écran dédié) ; les récupérations finales des autres blocs (non-derniers), elles, restent inchangées
