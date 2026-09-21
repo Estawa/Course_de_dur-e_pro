@@ -258,7 +258,7 @@ export default function App() {
   }
 
   function handleFinSeance(resultat) {
-    const { note: noteReelle, avecGps: noteReelleAvecGps } = calculerNoteReelle(resultat.blocsResultats)
+    const { note: noteReelle, avecGps: noteReelleAvecGps } = calculerNoteReelle(resultat, storage.getBareme())
     const realisation = {
       id: crypto.randomUUID(),
       eleve,
@@ -296,6 +296,10 @@ export default function App() {
   function handleAjouterRealisationProf(realisation) {
     storage.ajouterRealisation(realisation)
     setRealisations((prev) => [...prev, realisation])
+  }
+
+  function handleRealisationsRecalculees() {
+    setRealisations(storage.getRealisations())
   }
 
   function handleModifierRealisation(id, patch) {
@@ -453,6 +457,7 @@ export default function App() {
             onSupprimerRealisation={handleSupprimerRealisation}
             onSupprimerRealisationsEleve={handleSupprimerRealisationsEleve}
             onSupprimerRealisationsClasse={handleSupprimerRealisationsClasse}
+            onRealisationsRecalculees={handleRealisationsRecalculees}
           />
         )
       )}
