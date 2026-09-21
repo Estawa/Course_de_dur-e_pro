@@ -3,6 +3,7 @@ import { MapPin, Pause, Play, AlertTriangle, Timer as TimerIcon, Square } from '
 import { useGpsSuivi } from '../utils/gps'
 import { NIVEAUX_FARTLEK, TRANCHE_MALUS_S, distanceAttendueM, calculerNoteFartlek } from '../utils/fartlekCalc'
 import { formatDuree } from '../utils/calc'
+import { libelleNiveau } from '../utils/niveauLabels'
 import { beep, beepDepart, beepFin, annoncerVocal } from '../utils/audio'
 import BorgScale from './BorgScale'
 import ObservationFinale from './ObservationFinale'
@@ -40,7 +41,7 @@ function ApercuFartlek({ niveauNom, onDemarrer }) {
   return (
     <div className="max-w-md mx-auto px-6 py-6">
       <p className="text-xs uppercase tracking-wide text-piste-500 mb-1 text-center">Fartlek sur piste</p>
-      <h2 className="font-display text-2xl text-piste-900 mb-4 text-center">{niveauNom}</h2>
+      <h2 className="font-display text-2xl text-piste-900 mb-4 text-center">{libelleNiveau(niveauNom)}</h2>
 
       <div className="bg-piste-50 rounded-xl p-4 mb-3 space-y-1.5">
         <p className="text-sm text-piste-800">Tour de 400m : {cfg.intenseM}m intense / {cfg.recupM}m récup, ×2</p>
@@ -214,7 +215,7 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
 
   return (
     <div className="max-w-md mx-auto px-6 py-6 text-center">
-      <p className="text-xs uppercase tracking-wide text-piste-500 mb-1">{niveauNom} · Fartlek</p>
+      <p className="text-xs uppercase tracking-wide text-piste-500 mb-1">{libelleNiveau(niveauNom)} · Fartlek</p>
 
       <div className="font-display text-6xl text-piste-900 mb-1 tabular-nums">
         {formatDuree(Math.max(0, effectifS))}

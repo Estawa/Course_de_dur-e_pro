@@ -1,9 +1,14 @@
 import { Flame, Info, Layers, MapPin, Timer as TimerIcon } from 'lucide-react'
-import { formatDuree, vitesseVersAllure } from '../utils/calc'
+import { formatDuree, vitesseVersAllure, vitesseVersTemps50m } from '../utils/calc'
 import { totauxNiveau } from '../utils/fullpower'
+import { libelleNiveau } from '../utils/niveauLabels'
+
+function allureEtRepere(kmh) {
+  return `${vitesseVersAllure(kmh)} · ${vitesseVersTemps50m(kmh)}`
+}
 
 function detailBlocSimple(b) {
-  return [`${b.distance_m} m en ${formatDuree(b.duree_s)} (${vitesseVersAllure(b.allure_kmh)})`]
+  return [`${b.distance_m} m en ${formatDuree(b.duree_s)} (${allureEtRepere(b.allure_kmh)})`]
 }
 
 function detailBlocFullPower(b, vmaRef) {
@@ -14,10 +19,10 @@ function detailBlocFullPower(b, vmaRef) {
     if (!type) return null
     const vTravail = vmaRef ? Math.round((type.pct_vma_travail / 100) * vmaRef * 100) / 100 : null
     const vRecup = vmaRef ? Math.round((type.pct_vma_recup / 100) * vmaRef * 100) / 100 : null
-    const travail = `${formatDuree(type.duree_travail_s)} à ${type.pct_vma_travail}% VMA${vTravail ? ` (${vitesseVersAllure(vTravail)})` : ''}`
+    const travail = `${formatDuree(type.duree_travail_s)} à ${type.pct_vma_travail}% VMA${vTravail ? ` (${allureEtRepere(vTravail)})` : ''}`
     const recup =
       type.duree_recup_s > 0
-        ? ` + ${formatDuree(type.duree_recup_s)} récup à ${type.pct_vma_recup}% VMA${vRecup ? ` (${vitesseVersAllure(vRecup)})` : ''}`
+        ? ` + ${formatDuree(type.duree_recup_s)} récup à ${type.pct_vma_recup}% VMA${vRecup ? ` (${allureEtRepere(vRecup)})` : ''}`
         : ''
     return `Type ${type.lettre} × ${item.repetitions} : ${travail}${recup}`
   }).filter(Boolean)
@@ -33,7 +38,7 @@ export default function ApercuSeance({ niveau, seanceTitre, vmaRef, regleParticu
   return (
     <div className="max-w-md mx-auto px-6 py-6">
       <p className="text-xs uppercase tracking-wide text-piste-500 mb-1 text-center">{seanceTitre}</p>
-      <h2 className="font-display text-2xl text-piste-900 mb-4 text-center">{niveau.nom}</h2>
+      <h2 className="font-display text-2xl text-piste-900 mb-4 text-center">{libelleNiveau(niveau.nom)}</h2>
 
       {regleParticuliere && (
         <div className="flex items-start gap-2 bg-[#eef4f1] rounded-xl px-4 py-3 mb-3">

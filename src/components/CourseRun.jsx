@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Square, TrendingDown, TrendingUp, CheckCircle2, LogOut } from 'lucide-react'
+import { Square, TrendingDown, TrendingUp, CheckCircle2, LogOut, Pause, Play } from 'lucide-react'
 import { beepDepart, beepFin, planifierBipRegulation, gongTransition, annoncerVocal } from '../utils/audio'
-import { formatDuree, vitesseVersAllure } from '../utils/calc'
+import { formatDuree, vitesseVersAllure, vitesseVersTemps50m } from '../utils/calc'
 import { libellePhase } from '../utils/fullpower'
 import IndicateurGps from './IndicateurGps'
 
@@ -41,8 +41,17 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
   const [annonce, setAnnonce] = useState(null)
   // Empêche d'arrêter le bloc par un appui accidentel (téléphone tenu/rangé en courant) : un
   // premier appui affiche une confirmation qui disparaît d'elle-même après 3s si elle n'est pas
-  // validée. null | 'terminer' | 'abandonner'.
+  // validée. null | 'terminer' | 'abandonner' | 'pause'.
   const [confirmation, setConfirmation] = useState(null)
+
+  // Pause manuelle (générique, séances classiques uniquement) : chrono et distance GPS figés
+  // pendant la pause, comptée par phase + au total sur le bloc.
+  const [enPause, setEnPause] = useState(false)
+  const [pausesParPhase, setPausesParPhase] = useState({})
+  const [dureePauseTotaleS, setDureePauseTotaleS] = useState(0)
+  const pauseStartRef = useRef(null)
+  const enPauseRef = useRef(false)
+  useEffect(() => { enPauseRef.current = enPause }, [enPause])
 
   const startRef = useRef(resumeStartTs || null)
   const watchIdRef = useRef(null)
@@ -123,12 +132,12 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
   }, [])
 
   useEffect(() => {
-    if (etat !== 'course') return
+    if (etat !== 'course' || enPause) return
     intervalRef.current = setInterval(() => {
       setElapsed((Date.now() - startRef.current) / 1000)
     }, 250)
     return () => clearInterval(intervalRef.current)
-  }, [etat])
+  }, [etat, enPause])
 
   // Annonce (visuelle + vocale) et gong à chaque changement de phase : "Départ !", "Récupération
   // type Répétition/Série", etc. Le gong ne joue pas sur la toute première phase (départ du bloc).
@@ -170,7 +179,7 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setGpsOk(true)
-        if (etat !== 'course') return
+        if (etat !== 'course' || enPauseRef.current) return
         const { latitude, longitude, speed } = pos.coords
         const now = Date.now()
         if (lastPosRef.current) {
@@ -231,6 +240,26 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
     setConfirmation(null)
     if (action === 'terminer') arreter(false)
     else if (action === 'abandonner') onAbandon()
+    else if (action === 'pause') demarrerPause()
+  }
+
+  function demarrerPause() {
+    clearTimeout(bipTimeoutRef.current)
+    // Évite qu'un bond de distance factice soit compté au retour du GPS après la pause (le
+    // premier point reçu à la reprise redémarre le calcul de distance depuis zéro, sans delta).
+    lastPosRef.current = null
+    pauseStartRef.current = Date.now()
+    setPausesParPhase((p) => ({ ...p, [indexPhase]: (p[indexPhase] || 0) + 1 }))
+    setEnPause(true)
+  }
+
+  function reprendreCourse() {
+    const dureePauseMs = Date.now() - (pauseStartRef.current || Date.now())
+    // Décale le départ du chrono du temps passé en pause, pour que le temps de course reprenne
+    // exactement où il en était (la pause ne compte pas comme du temps de course effectif).
+    startRef.current += dureePauseMs
+    setDureePauseTotaleS((s) => s + dureePauseMs / 1000)
+    setEnPause(false)
   }
 
   useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
@@ -290,6 +319,12 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
       return { pctDistance, pctAllure, pctRecup, pctRegularite }
     }
 
+    const statsPause = {
+      nbPauses: Object.values(pausesParPhase).reduce((a, b) => a + b, 0),
+      pausesParPhase,
+      dureePauseS: Math.round(dureePauseTotaleS)
+    }
+
     if (gpsExploitable) {
       termine = automatique || distance >= distanceCible * 0.95
       const vs = vitessesTravailRef.current
@@ -309,7 +344,8 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         dureeRealisee: dureeReelle,
         vitesseMoyenne: Math.round(vitesseMoyenne * 10) / 10,
         vitesseCible: Math.round(vitesseCibleMoyenneTravail * 10) / 10,
-        ...calculerCriteres4()
+        ...calculerCriteres4(),
+        ...statsPause
       })
     } else {
       termine = automatique || dureeReelle >= dureeCible * 0.9
@@ -329,7 +365,8 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         pctDistance: termine ? 100 : Math.round(Math.min(100, (dureeReelle / dureeCible) * 100)),
         pctAllure: respectAllure ? 100 : 40,
         pctRecup: null,
-        pctRegularite: null
+        pctRegularite: null,
+        ...statsPause
       })
     }
   }
@@ -378,7 +415,7 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
       <div className="font-display text-6xl text-piste-900 mb-2 tabular-nums">
         {enRecup && '-'}{formatDuree(tempsAfficheGrandChrono)}
       </div>
-      <p className="text-sm text-piste-500 mb-1">Objectif phase {formatDuree(phaseCourante?.duree_s || 0)} · {vitesseVersAllure(vitesseCible)}</p>
+      <p className="text-sm text-piste-500 mb-1">Objectif phase {formatDuree(phaseCourante?.duree_s || 0)} · {vitesseVersAllure(vitesseCible)} · {vitesseVersTemps50m(vitesseCible)}</p>
       {repTotal > 0 && finIndexRep > indexPhase && (
         <p className="text-xs text-piste-400 mb-8">Reste {formatDuree(repetitionRestante)} pour finir cette répétition (travail + récup)</p>
       )}
@@ -419,7 +456,18 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         </div>
       )}
 
-      {confirmation === null && (
+      {enPause ? (
+        <div className="rounded-xl border-2 border-piste-300 bg-piste-50 p-5 text-center">
+          <p className="text-sm font-medium text-piste-800 mb-1">Pause en cours</p>
+          <p className="text-xs text-piste-500 mb-4">Le chrono et la distance sont figés tant que tu n'as pas repris.</p>
+          <button
+            onClick={reprendreCourse}
+            className="w-full flex items-center justify-center gap-2 bg-piste-800 hover:bg-piste-700 text-white font-medium py-4 rounded-xl transition active:scale-[0.98]"
+          >
+            <Play size={16} fill="white" /> Reprendre la course
+          </button>
+        </div>
+      ) : confirmation === null ? (
         <>
           <button
             onClick={() => demanderConfirmation('terminer')}
@@ -427,13 +475,17 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
           >
             <Square size={16} fill="white" /> Terminer le bloc
           </button>
+          <button
+            onClick={() => demanderConfirmation('pause')}
+            className="mt-3 w-full flex items-center justify-center gap-2 border-2 border-piste-300 text-piste-700 font-medium py-3 rounded-xl transition active:scale-[0.98]"
+          >
+            <Pause size={16} /> Pause
+          </button>
           <button onClick={() => demanderConfirmation('abandonner')} className="mt-3 text-xs text-piste-400 underline">
             Abandonner sans enregistrer
           </button>
         </>
-      )}
-
-      {confirmation === 'terminer' && (
+      ) : confirmation === 'terminer' ? (
         <div className="rounded-xl border-2 border-alerte/40 bg-[#fbeeea] p-4">
           <p className="text-xs text-piste-700 mb-3">Confirme pour terminer ce bloc maintenant</p>
           <div className="flex items-center justify-center gap-3">
@@ -443,9 +495,17 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
             <button onClick={annulerConfirmation} className="text-xs text-piste-500 underline px-2">Annuler</button>
           </div>
         </div>
-      )}
-
-      {confirmation === 'abandonner' && (
+      ) : confirmation === 'pause' ? (
+        <div className="rounded-xl border-2 border-piste-300 bg-piste-50 p-4">
+          <p className="text-xs text-piste-700 mb-3">Confirme pour mettre la course en pause</p>
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={confirmerAction} className="flex items-center gap-2 bg-piste-800 text-white px-5 py-3 rounded-xl font-medium">
+              <Pause size={16} /> Confirmer la pause
+            </button>
+            <button onClick={annulerConfirmation} className="text-xs text-piste-500 underline px-2">Annuler</button>
+          </div>
+        </div>
+      ) : (
         <div className="rounded-xl border-2 border-alerte/40 bg-[#fbeeea] p-4">
           <p className="text-xs text-piste-700 mb-3">Confirme pour abandonner ce bloc sans l'enregistrer</p>
           <div className="flex items-center justify-center gap-3">

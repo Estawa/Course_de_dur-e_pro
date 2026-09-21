@@ -1,5 +1,6 @@
 import { CheckCircle2, MinusCircle, XCircle } from 'lucide-react'
 import { formatDuree, criteresSeance } from '../utils/calc'
+import { libelleNiveau } from '../utils/niveauLabels'
 
 const STYLE_REUSSITE = {
   reussi: { icone: CheckCircle2, couleur: 'text-piste-600', label: 'Réussi' },
@@ -51,11 +52,17 @@ function PhaseRecap({ titre, resultat, sautee }) {
 }
 
 export default function Bilan({ resultat, niveau, onRetourAccueil }) {
-  const { blocsResultats, borgParPhase, observationGenerale, note, echauffementResultat, recuperationResultat, recuperationSautee } = resultat
+  const {
+    blocsResultats, borgParPhase, observationGenerale, note, echauffementResultat,
+    echauffementChoisi, recuperationResultat, recuperationSautee, poulsParPhase, observationTravail
+  } = resultat
   const criteres = criteresSeance(blocsResultats)
   const distanceTotale = blocsResultats.reduce((acc, b) => acc + (b.distanceRealisee || 0), 0)
   const dureeTotale = blocsResultats.reduce((acc, b) => acc + (b.dureeRealisee || 0), 0)
+  const nbPausesTotal = blocsResultats.reduce((acc, b) => acc + (b.nbPauses || 0), 0)
+  const dureePauseTotal = blocsResultats.reduce((acc, b) => acc + (b.dureePauseS || 0), 0)
   const borg = borgParPhase || {}
+  const pouls = poulsParPhase || {}
 
   return (
     <div className="max-w-md mx-auto px-6 py-10 text-center">
@@ -64,8 +71,14 @@ export default function Bilan({ resultat, niveau, onRetourAccueil }) {
       </div>
 
       <h2 className="font-display text-2xl text-piste-900 mb-1">Séance terminée</h2>
-      <p className="text-sm text-piste-600 mb-6">{niveau.nom} · {blocsResultats.length} bloc{blocsResultats.length > 1 ? 's' : ''}</p>
+      <p className="text-sm text-piste-600 mb-6">{libelleNiveau(niveau.nom)} · {blocsResultats.length} bloc{blocsResultats.length > 1 ? 's' : ''}</p>
 
+      {echauffementChoisi === false && (
+        <div className="bg-piste-50 rounded-xl px-4 py-3 text-left mb-3">
+          <p className="text-sm font-medium text-piste-900">Échauffement</p>
+          <p className="text-xs text-piste-500 mt-0.5">Passé par choix de l'élève</p>
+        </div>
+      )}
       {echauffementResultat && (
         <PhaseRecap titre="Échauffement" resultat={echauffementResultat} />
       )}
@@ -78,6 +91,15 @@ export default function Bilan({ resultat, niveau, onRetourAccueil }) {
         <p className="text-sm font-medium text-piste-900">{distanceTotale} m · {formatDuree(dureeTotale)}</p>
       </div>
 
+      {nbPausesTotal > 0 && (
+        <div className="bg-piste-50 rounded-xl px-3 py-2.5 text-left mb-6">
+          <p className="text-[11px] text-piste-500">Pauses (temps supplémentaire non décompté)</p>
+          <p className="text-sm font-medium text-piste-900">
+            {nbPausesTotal} pause{nbPausesTotal > 1 ? 's' : ''} · {formatDuree(dureePauseTotal)} au total
+          </p>
+        </div>
+      )}
+
       <div className="space-y-3 text-left mb-6">
         {blocsResultats.map((b, i) => {
           const { icone: Icone, couleur, label } = STYLE_REUSSITE[b.reussite]
@@ -88,6 +110,14 @@ export default function Bilan({ resultat, niveau, onRetourAccueil }) {
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-piste-900">Bloc {i + 1} · {label}</p>
                   {b.note && <p className="text-xs text-piste-500 mt-0.5">{b.note}</p>}
+                  {b.distanceCorrigeeManuellement && (
+                    <p className="text-xs text-piste-400 mt-0.5">Distance corrigée manuellement (GPS indisponible)</p>
+                  )}
+                  {b.nbPauses > 0 && (
+                    <p className="text-xs text-piste-400 mt-0.5">
+                      {b.nbPauses} pause{b.nbPauses > 1 ? 's' : ''} · {formatDuree(b.dureePauseS || 0)}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -96,6 +126,27 @@ export default function Bilan({ resultat, niveau, onRetourAccueil }) {
       </div>
 
       <PhaseRecap titre="Récupération" resultat={recuperationResultat} sautee={recuperationSautee} />
+
+      {(pouls.repos != null || pouls.avantTravail != null || pouls.apresTravail != null || pouls.final != null) && (
+        <>
+          <div className="grid grid-cols-4 gap-1.5 mb-2">
+            {[['repos', 'Repos'], ['avantTravail', 'Avant travail'], ['apresTravail', 'Après effort'], ['final', 'Final']].map(([cle, label]) => (
+              <div key={cle} className="bg-piste-50 rounded-xl px-1.5 py-2.5 text-center">
+                <p className="text-[9px] text-piste-500">{label}</p>
+                <p className="text-sm font-medium text-piste-900">{pouls[cle] != null ? pouls[cle] : '—'}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-piste-400 mb-6">Pouls (bpm/min) par moment de la séance</p>
+        </>
+      )}
+
+      {observationTravail && (
+        <div className="bg-piste-50 rounded-xl px-4 py-3 text-left mb-6">
+          <p className="text-[11px] text-piste-500 mb-0.5">Observation à la fin du travail</p>
+          <p className="text-xs text-piste-600">{observationTravail}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-2 mb-2">
         {['echauffement', 'travail', 'recuperation'].map((cle) => (

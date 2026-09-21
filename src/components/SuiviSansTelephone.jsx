@@ -3,6 +3,7 @@ import { X, ChevronLeft, ChevronRight, WifiOff, Check, CheckCircle2 } from 'luci
 import { preparerBloc } from './SeanceRunner'
 import { storage } from '../utils/storage'
 import { calculerNoteSeance, calculerNoteReelle, formatDuree, vitesseVersAllure } from '../utils/calc'
+import { libelleNiveau } from '../utils/niveauLabels'
 import { construireResultatBlocSaisieProf, resultatBlocNonRealise, repetitionsInitiales } from '../utils/saisieProf'
 import { NIVEAUX_BORG } from '../utils/borg'
 
@@ -12,16 +13,29 @@ function cleEleve(e) {
 
 // État de saisie initial pour un niveau donné : une entrée par bloc, avec une répétition par
 // phase de travail du bloc, pré-remplie à la valeur cible.
+function phasesTravailEtRecup(prepPhases) {
+  const phasesTravail = []
+  const phasesRecup = []
+  prepPhases.forEach((p, i) => {
+    if (p.phase !== 'travail') return
+    phasesTravail.push(p)
+    const suivante = prepPhases[i + 1]
+    phasesRecup.push(suivante && suivante.phase === 'recup' ? suivante : null)
+  })
+  return { phasesTravail, phasesRecup }
+}
+
 function donneesInitiales(niveau, vmaRef) {
   const blocs = {}
   niveau.blocs.forEach((bloc) => {
     const prep = preparerBloc(bloc, niveau, vmaRef)
-    const phasesTravail = prep.phases.filter((p) => p.phase === 'travail')
+    const { phasesTravail, phasesRecup } = phasesTravailEtRecup(prep.phases)
     blocs[bloc.id] = {
       phasesTravail,
+      phasesRecup,
       nonRealise: false,
       inclureDansNote: false,
-      repetitions: repetitionsInitiales(phasesTravail)
+      repetitions: repetitionsInitiales(phasesTravail, phasesRecup)
     }
   })
   return { blocs, borg: null, observation: '' }
@@ -90,6 +104,24 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
     setDonneesParEleve((prev) => {
       const bloc = prev[cleCourante].blocs[blocId]
       const repetitions = bloc.repetitions.map((r, i) => (i === index ? { ...r, [champ]: valeur } : r))
+      return {
+        ...prev,
+        [cleCourante]: { ...prev[cleCourante], blocs: { ...prev[cleCourante].blocs, [blocId]: { ...bloc, repetitions } } }
+      }
+    })
+  }
+
+  // Copie les valeurs de la première répétition sur toutes les suivantes du bloc — utile pour
+  // un rythme régulier (ex. 8 répétitions de 30/30 quasiment identiques), le prof n'ayant plus
+  // qu'à corriger les lignes qui font exception après coup.
+  function dupliquerPremiereLigne(blocId) {
+    setDonneesParEleve((prev) => {
+      const bloc = prev[cleCourante].blocs[blocId]
+      const modele = bloc.repetitions[0]
+      if (!modele) return prev
+      const repetitions = bloc.repetitions.map((r, i) =>
+        i === 0 ? r : { ...r, distanceM: modele.distanceM, dureeS: modele.dureeS, recupDureeS: modele.recupDureeS }
+      )
       return {
         ...prev,
         [cleCourante]: { ...prev[cleCourante], blocs: { ...prev[cleCourante].blocs, [blocId]: { ...bloc, repetitions } } }
@@ -202,7 +234,7 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
                             className="mt-2 w-full rounded-lg border border-piste-200 px-2.5 py-1.5 text-xs bg-white"
                           >
                             {seance.niveaux.filter((n) => n.visible !== false).map((n) => (
-                              <option key={n.id} value={n.id}>{n.nom}</option>
+                              <option key={n.id} value={n.id}>{libelleNiveau(n.nom)}</option>
                             ))}
                           </select>
                         )}
@@ -244,7 +276,7 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
             <h3 className="font-display text-base text-piste-900 truncate">
               {eleveCourant.prenom} {eleveCourant.nom} {estEnregistre && <CheckCircle2 size={14} className="inline text-piste-700 -mt-0.5 ml-1" />}
             </h3>
-            <p className="text-[11px] text-piste-500">{niveauCourant.nom} · élève {indexCourant + 1}/{elevesChoisis.length}</p>
+            <p className="text-[11px] text-piste-500">{libelleNiveau(niveauCourant.nom)} · élève {indexCourant + 1}/{elevesChoisis.length}</p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => allerA(indexCourant - 1)} disabled={indexCourant === 0} className="p-1.5 rounded-full hover:bg-piste-100 disabled:opacity-30">
@@ -286,32 +318,79 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
                     Compter quand même comme non réussi dans le calcul de la note
                   </label>
                 ) : (
-                  <div className="space-y-2">
-                    {info.phasesTravail.map((p, j) => (
-                      <div key={j} className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] text-piste-500 w-full sm:w-auto">
-                          Répétition {j + 1}/{info.phasesTravail.length} — objectif {formatDuree(p.duree_s)} à {vitesseVersAllure(p.vitesse_kmh)}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            min="0"
-                            value={info.repetitions[j]?.distanceM ?? ''}
-                            onChange={(e) => majRepetition(bloc.id, j, 'distanceM', e.target.value)}
-                            className="w-20 rounded-lg border border-piste-200 px-2 py-1.5 text-sm"
-                          />
-                          <span className="text-xs text-piste-500">m en</span>
-                          <input
-                            type="number"
-                            min="0"
-                            value={info.repetitions[j]?.dureeS ?? ''}
-                            onChange={(e) => majRepetition(bloc.id, j, 'dureeS', e.target.value)}
-                            className="w-16 rounded-lg border border-piste-200 px-2 py-1.5 text-sm"
-                          />
-                          <span className="text-xs text-piste-500">s</span>
-                        </div>
-                      </div>
-                    ))}
+                  <div>
+                    {info.phasesTravail.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => dupliquerPremiereLigne(bloc.id)}
+                        className="mb-2 text-[11px] font-medium text-piste-600 underline"
+                      >
+                        Copier la 1ʳᵉ ligne sur toutes les répétitions
+                      </button>
+                    )}
+                    <div className="overflow-x-auto -mx-1">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="text-[10px] text-piste-500 uppercase tracking-wide">
+                            <th className="px-1 py-1 text-left font-medium">#</th>
+                            <th className="px-1 py-1 text-left font-medium">Dist. (m)</th>
+                            <th className="px-1 py-1 text-left font-medium">Travail (s)</th>
+                            <th className="px-1 py-1 text-left font-medium">Récup (s)</th>
+                            <th className="px-1 py-1 text-left font-medium">Dist. récup (m)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {info.phasesTravail.map((p, j) => (
+                            <tr key={j} className="border-t border-piste-100">
+                              <td className="px-1 py-1 text-piste-500">{j + 1}</td>
+                              <td className="px-1 py-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={info.repetitions[j]?.distanceM ?? ''}
+                                  onChange={(e) => majRepetition(bloc.id, j, 'distanceM', e.target.value)}
+                                  className="w-16 rounded-lg border border-piste-200 px-1.5 py-1 text-xs"
+                                />
+                              </td>
+                              <td className="px-1 py-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={info.repetitions[j]?.dureeS ?? ''}
+                                  onChange={(e) => majRepetition(bloc.id, j, 'dureeS', e.target.value)}
+                                  className="w-14 rounded-lg border border-piste-200 px-1.5 py-1 text-xs"
+                                />
+                              </td>
+                              <td className="px-1 py-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="—"
+                                  value={info.repetitions[j]?.recupDureeS ?? ''}
+                                  onChange={(e) => majRepetition(bloc.id, j, 'recupDureeS', e.target.value)}
+                                  className="w-14 rounded-lg border border-piste-200 px-1.5 py-1 text-xs"
+                                />
+                              </td>
+                              <td className="px-1 py-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="—"
+                                  value={info.repetitions[j]?.recupDistanceM ?? ''}
+                                  onChange={(e) => majRepetition(bloc.id, j, 'recupDistanceM', e.target.value)}
+                                  className="w-16 rounded-lg border border-piste-200 px-1.5 py-1 text-xs"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-piste-400 mt-1.5">
+                      Objectif : {formatDuree(info.phasesTravail[0]?.duree_s || 0)} à {vitesseVersAllure(info.phasesTravail[0]?.vitesse_kmh)}
+                      {info.phasesTravail.length > 1 ? ' par répétition (voir aperçu de séance pour le détail complet)' : ''}
+                      . Les colonnes récupération sont facultatives.
+                    </p>
                   </div>
                 )}
               </div>

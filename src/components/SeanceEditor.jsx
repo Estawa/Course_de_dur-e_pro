@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import FullPowerBuilder from './FullPowerBuilder'
 import SelecteurDuree from './SelecteurDuree'
+import { libelleNiveau } from '../utils/niveauLabels'
 
 const NOMS_NIVEAUX = ['Facile', 'Moyen', 'Difficile']
 
@@ -157,7 +158,7 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
           {niveaux.map((n) => (
             <div key={n.id} className="border border-piste-100 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
-                <p className="font-display text-base text-piste-900">{n.nom}</p>
+                <p className="font-display text-base text-piste-900">{libelleNiveau(n.nom)}</p>
                 <label className="flex items-center gap-2 text-xs font-medium text-piste-700">
                   <input
                     type="checkbox"

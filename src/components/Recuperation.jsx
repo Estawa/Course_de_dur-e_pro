@@ -6,12 +6,16 @@ import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 import IndicateurGps from './IndicateurGps'
 
 // Phase Récupération de fin de séance, structurée et identique pour toutes les séances du cycle.
+// dejaEcouleS : temps (s) déjà passé avant l'arrivée sur cet écran (saisie pouls/distance/Borg
+// juste après la dernière répétition de travail, voir SaisieFinTravail) — le décompte en tient
+// compte dès le départ, pour que cette saisie fasse partie intégrante de la récupération plutôt
+// que de s'y ajouter (une seule phase continue, sans temps de récup fantôme en double).
 // Peut être passée (temps de séance insuffisant) via onPasser : le parent (SeanceRunner) garde
 // alors la possibilité de revenir en arrière tant que le bilan final n'est pas validé, en cas
 // d'erreur de manipulation.
-export default function Recuperation({ onTermine, onPasser }) {
+export default function Recuperation({ onTermine, onPasser, dejaEcouleS = 0 }) {
   const { duree_s, pctVmaMin, distanceMinM, retourAuCalme } = RECUPERATION_FIXE
-  const [elapsed, setElapsed] = useState(0)
+  const [elapsed, setElapsed] = useState(Math.min(dejaEcouleS, duree_s))
   const [distanceManuelle, setDistanceManuelle] = useState('')
   const startRef = useRef(null)
   const intervalRef = useRef(null)
@@ -21,7 +25,7 @@ export default function Recuperation({ onTermine, onPasser }) {
   useEffect(() => {
     beepDepart()
     annoncerVocal('Récupération Fin de séance !')
-    startRef.current = Date.now()
+    startRef.current = Date.now() - dejaEcouleS * 1000
     intervalRef.current = setInterval(() => {
       const t = (Date.now() - startRef.current) / 1000
       if (t >= duree_s) {

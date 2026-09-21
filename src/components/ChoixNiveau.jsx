@@ -1,6 +1,7 @@
 import { MapPin, Timer as TimerIcon, Layers } from 'lucide-react'
 import { formatDuree } from '../utils/calc'
 import { totauxNiveau } from '../utils/fullpower'
+import { libelleNiveau } from '../utils/niveauLabels'
 
 const COULEURS = {
   Facile: 'border-piste-300 bg-piste-50',
@@ -30,7 +31,7 @@ export default function ChoixNiveau({ seance, vmaRef, onChoisirNiveau }) {
               className={`w-full text-left rounded-2xl border-2 p-5 transition hover:shadow-md active:scale-[0.99] ${COULEURS[niveau.nom] || 'border-piste-200 bg-white'}`}
             >
               <div className="flex items-center justify-between mb-3">
-                <span className="font-display text-xl text-piste-900">{niveau.nom}</span>
+                <span className="font-display text-xl text-piste-900">{libelleNiveau(niveau.nom)}</span>
               </div>
               <div className="grid grid-cols-3 gap-3 text-sm text-piste-700">
                 <div className="flex items-center gap-1.5">

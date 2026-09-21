@@ -7,6 +7,7 @@ import NotificationsRealisation from './NotificationsRealisation'
 import RunDirectCarteModal from './RunDirectCarteModal'
 import { storage } from '../utils/storage'
 import { noteFinale, tauxReussiteRealisation, blocAvecGps } from '../utils/calc'
+import { libelleNiveau } from '../utils/niveauLabels'
 
 // Distance de glissement horizontal minimale (px) pour déclencher un changement de fiche,
 // et écart vertical maximal toléré pour ne pas confondre avec un scroll de la liste.
@@ -105,7 +106,7 @@ export default function FicheSuiviEleve({
 
   function supprimerUneRealisation(r) {
     if (!onSupprimerRealisation) return
-    if (!confirm(`Effacer la séance "${r.seanceTitre} · ${r.niveauNom}" du ${new Date(r.date).toLocaleDateString('fr-FR')} ?`)) return
+    if (!confirm(`Effacer la séance "${r.seanceTitre} · ${libelleNiveau(r.niveauNom)}" du ${new Date(r.date).toLocaleDateString('fr-FR')} ?`)) return
     onSupprimerRealisation(r.id)
   }
 
@@ -294,7 +295,7 @@ export default function FicheSuiviEleve({
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-medium text-piste-900">
-                          {r.seanceTitre}{r.niveauNom ? ` · ${r.niveauNom}` : ''}
+                          {r.seanceTitre}{r.niveauNom ? ` · ${libelleNiveau(r.niveauNom)}` : ''}
                           {r.saisieProf && <span className="text-piste-500 font-normal"> · saisie prof</span>}
                         </p>
                         {estRunDirect ? (
@@ -365,7 +366,7 @@ export default function FicheSuiviEleve({
                     <div key={h.id} className="bg-piste-50 rounded-lg px-3 py-2.5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-medium text-piste-900">Fartlek · {h.niveauNom}</p>
+                          <p className="text-xs font-medium text-piste-900">Fartlek · {libelleNiveau(h.niveauNom)}</p>
                           <p className="text-[11px] text-piste-500">
                             {new Date(h.date).toLocaleDateString('fr-FR')} · {h.distanceReelleM}m / {h.distanceAttendueM}m attendus ({h.pctDistance}%)
                           </p>

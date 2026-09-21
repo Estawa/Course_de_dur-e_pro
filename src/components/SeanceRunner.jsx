@@ -6,9 +6,14 @@ import ObservationFinale from './ObservationFinale'
 import Echauffement from './Echauffement'
 import Recuperation from './Recuperation'
 import FinSeanceAnnonce from './FinSeanceAnnonce'
+import CorrectionDistance from './CorrectionDistance'
+import PriseDePouls from './PriseDePouls'
+import ChoixEchauffement from './ChoixEchauffement'
+import SaisieFinTravail from './SaisieFinTravail'
 import { calculerNoteSeance } from '../utils/calc'
 import { expanserStructure, dureeTotaleStructure, distanceTotaleStructure } from '../utils/fullpower'
 import { useWakeLock } from '../utils/wakeLock'
+import { libelleNiveau } from '../utils/niveauLabels'
 
 export function preparerBloc(bloc, niveau, vmaRef) {
   if (bloc.mode === 'fullpower' && bloc.structure) {
@@ -25,23 +30,31 @@ export function preparerBloc(bloc, niveau, vmaRef) {
   }
 }
 
-// Déroulement complet d'une séance : Échauffement (si activé pour ce niveau) → Borg → blocs de
-// Travail (boucle course/bilan existante, inchangée) → Borg → Récupération de fin de séance
-// (skippable, avec retour arrière possible en cas d'erreur de manipulation, tant que le bilan
-// final n'est pas validé) → Borg (sauf récup sautée) → annonce de fin → observation générale.
+// Déroulement complet d'une séance : Pouls de repos → (choix Échauffement, si activé pour ce
+// niveau → Échauffement → Borg) → Pouls avant travail → blocs de Travail (boucle course/bilan
+// inchangée) → à la dernière répétition, saisie groupée Pouls/Distance-Temps/Observation/Borg
+// (2min30, voir SaisieFinTravail) qui enchaîne directement sur la Récupération de fin de séance
+// (une seule phase continue : le temps de cette saisie fait partie de la récupération, ne s'y
+// ajoute pas — voir Recuperation/dejaEcouleS) → Borg récup (sauf récup sautée, avec retour arrière
+// possible tant que le bilan final n'est pas validé) → Pouls final → annonce de fin → observation
+// générale → fiche récapitulative.
 export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFinSeance, onAbandon }) {
   useWakeLock(true)
 
   const echauffementActif = !!niveau.echauffement?.active
 
   const [indexBloc, setIndexBloc] = useState(() => reprise?.indexBloc ?? 0)
-  const [phase, setPhase] = useState(() => reprise?.phase ?? (echauffementActif ? 'echauffement' : 'course'))
+  const [phase, setPhase] = useState(() => reprise?.phase ?? 'poulsRepos')
   const [resultatsCourseBloc, setResultatsCourseBloc] = useState(() => reprise?.resultatsCourseBloc ?? null)
   const [blocsResultats, setBlocsResultats] = useState(() => reprise?.blocsResultats ?? [])
+  const [echauffementChoisi, setEchauffementChoisi] = useState(() => reprise?.echauffementChoisi ?? null)
   const [echauffementResultat, setEchauffementResultat] = useState(() => reprise?.echauffementResultat ?? null)
   const [recuperationResultat, setRecuperationResultat] = useState(() => reprise?.recuperationResultat ?? null)
   const [recuperationSautee, setRecuperationSautee] = useState(() => reprise?.recuperationSautee ?? false)
   const [borgParPhase, setBorgParPhase] = useState(() => reprise?.borgParPhase ?? { echauffement: null, travail: null, recuperation: null })
+  const [poulsParPhase, setPoulsParPhase] = useState(() => reprise?.poulsParPhase ?? { repos: null, avantTravail: null, apresTravail: null, final: null })
+  const [observationTravail, setObservationTravail] = useState(() => reprise?.observationTravail ?? '')
+  const [dejaEcouleRecupS, setDejaEcouleRecupS] = useState(() => reprise?.dejaEcouleRecupS ?? 0)
   const courseStartTsRef = useRef(reprise?.courseEtat === 'course' ? reprise.courseStartTs : null)
   const [repriseConsommee, setRepriseConsommee] = useState(false)
   // Distance GPS du bloc de course en cours, remontée en continu par CourseRun (voir
@@ -55,10 +68,14 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
       indexBloc,
       phase,
       blocsResultats,
+      echauffementChoisi,
       echauffementResultat,
       recuperationResultat,
       recuperationSautee,
       borgParPhase,
+      poulsParPhase,
+      observationTravail,
+      dejaEcouleRecupS,
       resultatsCourseBloc,
       courseStartTs: courseStartTsRef.current,
       courseEtat: phase === 'course' ? 'course' : null,
@@ -69,7 +86,7 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
   useEffect(() => {
     onProgress?.(snapshotProgress())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indexBloc, phase, blocsResultats, echauffementResultat, recuperationResultat, recuperationSautee, borgParPhase, resultatsCourseBloc])
+  }, [indexBloc, phase, blocsResultats, echauffementChoisi, echauffementResultat, recuperationResultat, recuperationSautee, borgParPhase, poulsParPhase, observationTravail, dejaEcouleRecupS, resultatsCourseBloc])
 
   function handleCourseDemarre(ts) {
     courseStartTsRef.current = ts
@@ -94,8 +111,18 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
 
   const bloc = niveau.blocs[indexBloc]
   const dernierBloc = indexBloc === niveau.blocs.length - 1
-  const labelBloc = bloc ? `Bloc ${indexBloc + 1}/${niveau.blocs.length} · ${niveau.nom}` : niveau.nom
+  const labelBloc = bloc ? `Bloc ${indexBloc + 1}/${niveau.blocs.length} · ${libelleNiveau(niveau.nom)}` : libelleNiveau(niveau.nom)
   const preparation = bloc ? preparerBloc(bloc, niveau, vmaRef) : null
+
+  function handlePoulsRepos(valeur) {
+    setPoulsParPhase((p) => ({ ...p, repos: valeur }))
+    setPhase(echauffementActif ? 'choixEchauffement' : 'poulsAvantTravail')
+  }
+
+  function handleChoixEchauffement(choix) {
+    setEchauffementChoisi(choix)
+    setPhase(choix ? 'echauffement' : 'poulsAvantTravail')
+  }
 
   function handleTermineEchauffement(resultat) {
     setEchauffementResultat(resultat)
@@ -104,11 +131,32 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
 
   function handleValideBorgEchauffement(valeur) {
     setBorgParPhase((p) => ({ ...p, echauffement: valeur }))
+    setPhase('poulsAvantTravail')
+  }
+
+  function handlePoulsAvantTravail(valeur) {
+    setPoulsParPhase((p) => ({ ...p, avantTravail: valeur }))
     setPhase('course')
   }
 
   function handleTermineBloc(resultatCourse) {
     setResultatsCourseBloc(resultatCourse)
+    // Sans GPS exploitable, on ne connaît pas réellement la distance parcourue (jusqu'ici
+    // l'appli supposait silencieusement que la distance prévue avait été atteinte) : on demande
+    // une estimation à l'élève avant de passer au bilan du bloc.
+    setPhase(resultatCourse.viaGPS ? 'bilanBloc' : 'correctionDistance')
+  }
+
+  function handleValideCorrectionDistance(distanceCorrigee) {
+    setResultatsCourseBloc((r) => {
+      const distanceCible = r.distanceCible || 0
+      return {
+        ...r,
+        distanceRealisee: distanceCorrigee,
+        distanceCorrigeeManuellement: distanceCorrigee !== distanceCible,
+        pctDistance: distanceCible ? Math.round(Math.min(100, (distanceCorrigee / distanceCible) * 100)) : null
+      }
+    })
     setPhase('bilanBloc')
   }
 
@@ -118,7 +166,7 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
     setBlocsResultats(nouveauxResultats)
 
     if (dernierBloc) {
-      setPhase('borgTravail')
+      setPhase('finTravail')
     } else {
       setIndexBloc((i) => i + 1)
       setPhase('course')
@@ -126,8 +174,15 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
     }
   }
 
-  function handleValideBorgTravail(valeur) {
-    setBorgParPhase((p) => ({ ...p, travail: valeur }))
+  // Saisie groupée juste après la dernière répétition de travail (pouls, récap distance/temps
+  // déjà mesurés, observation, Borg) — voir SaisieFinTravail. Enchaîne directement sur la
+  // récupération de fin de séance, en lui transmettant le temps déjà passé sur cette saisie
+  // (dureeEcouleeS) pour qu'elle en fasse partie plutôt que de s'y ajouter.
+  function handleValideFinTravail({ pouls, observation, borg, dureeEcouleeS }) {
+    setPoulsParPhase((p) => ({ ...p, apresTravail: pouls }))
+    setObservationTravail(observation)
+    setBorgParPhase((p) => ({ ...p, travail: borg }))
+    setDejaEcouleRecupS(dureeEcouleeS)
     setPhase('recuperation')
   }
 
@@ -139,18 +194,24 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
 
   function handlePasserRecuperation() {
     setRecuperationSautee(true)
-    setPhase('finAnnonce')
+    setPhase('poulsFinal')
   }
 
   function handleValideBorgRecuperation(valeur) {
     setBorgParPhase((p) => ({ ...p, recuperation: valeur }))
-    setPhase('finAnnonce')
+    setPhase('poulsFinal')
   }
 
   function handleReprendreRecuperation() {
     setRecuperationSautee(false)
     setRecuperationResultat(null)
+    setDejaEcouleRecupS(0)
     setPhase('recuperation')
+  }
+
+  function handlePoulsFinal(valeur) {
+    setPoulsParPhase((p) => ({ ...p, final: valeur }))
+    setPhase('finAnnonce')
   }
 
   function handleFinAnnonceTerminee() {
@@ -161,14 +222,31 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
     const note = calculerNoteSeance(blocsResultats)
     onFinSeance({
       blocsResultats,
+      echauffementChoisi,
       echauffementResultat,
       recuperationResultat,
       recuperationSautee,
       borgParPhase,
+      poulsParPhase,
+      observationTravail,
       borg: borgParPhase.recuperation ?? borgParPhase.travail ?? borgParPhase.echauffement ?? null,
       observationGenerale,
       note
     })
+  }
+
+  if (phase === 'poulsRepos') {
+    return (
+      <PriseDePouls
+        titre="Pouls de repos"
+        sousTitre="Avant de commencer la séance."
+        onValide={handlePoulsRepos}
+      />
+    )
+  }
+
+  if (phase === 'choixEchauffement') {
+    return <ChoixEchauffement onChoix={handleChoixEchauffement} />
   }
 
   if (phase === 'echauffement') {
@@ -177,6 +255,16 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
 
   if (phase === 'borgEchauffement') {
     return <BorgScale titre="Ton ressenti après l'échauffement" onValide={handleValideBorgEchauffement} />
+  }
+
+  if (phase === 'poulsAvantTravail') {
+    return (
+      <PriseDePouls
+        titre="Pouls avant le travail"
+        sousTitre="Juste avant de démarrer la phase de travail."
+        onValide={handlePoulsAvantTravail}
+      />
+    )
   }
 
   if (phase === 'course') {
@@ -200,16 +288,41 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
     return <BilanBloc labelBloc={labelBloc} onValide={handleValideBilanBloc} />
   }
 
-  if (phase === 'borgTravail') {
-    return <BorgScale titre="Ton ressenti après le travail" onValide={handleValideBorgTravail} />
+  if (phase === 'correctionDistance') {
+    return (
+      <CorrectionDistance
+        distanceCible={resultatsCourseBloc?.distanceCible}
+        onValide={handleValideCorrectionDistance}
+      />
+    )
+  }
+
+  if (phase === 'finTravail') {
+    return (
+      <SaisieFinTravail
+        distanceRealisee={resultatsCourseBloc?.distanceRealisee ?? 0}
+        dureeRealisee={resultatsCourseBloc?.dureeRealisee ?? 0}
+        onValide={handleValideFinTravail}
+      />
+    )
   }
 
   if (phase === 'recuperation') {
-    return <Recuperation onTermine={handleTermineRecuperation} onPasser={handlePasserRecuperation} />
+    return <Recuperation onTermine={handleTermineRecuperation} onPasser={handlePasserRecuperation} dejaEcouleS={dejaEcouleRecupS} />
   }
 
   if (phase === 'borgRecuperation') {
     return <BorgScale titre="Ton ressenti après la récupération" onValide={handleValideBorgRecuperation} />
+  }
+
+  if (phase === 'poulsFinal') {
+    return (
+      <PriseDePouls
+        titre="Pouls final"
+        sousTitre="Pour clore la séance."
+        onValide={handlePoulsFinal}
+      />
+    )
   }
 
   if (phase === 'finAnnonce') {

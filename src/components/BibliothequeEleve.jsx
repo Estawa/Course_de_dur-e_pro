@@ -4,6 +4,7 @@ import { seanceVisiblePourClasse } from '../utils/calc'
 import { storage } from '../utils/storage'
 import { TESTS_CATALOGUE } from '../utils/testsCatalogue'
 import { formatDuree } from '../utils/calc'
+import { libelleNiveau } from '../utils/niveauLabels'
 import { LABEL_TEST } from './VmaEleveLigne'
 import ProgressionEleve from './ProgressionEleve'
 import RunDirectCarteModal from './RunDirectCarteModal'
@@ -75,7 +76,7 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
                     <ul className="space-y-0.5 mb-2">
                       {t.niveaux.map((n) => (
                         <li key={n.nom} className="text-xs text-piste-600">
-                          <span className="font-medium">{n.nom}</span> — {n.description}
+                          <span className="font-medium">{libelleNiveau(n.nom)}</span> — {n.description}
                         </li>
                       ))}
                     </ul>
@@ -132,7 +133,7 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
             return (
               <div key={`s-${r.id}`} className="bg-white border border-piste-100 rounded-xl p-4 flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-piste-900 text-sm">{r.seanceTitre} · {r.niveauNom}</p>
+                  <p className="font-medium text-piste-900 text-sm">{r.seanceTitre} · {libelleNiveau(r.niveauNom)}</p>
                   <p className="text-xs text-piste-500 mt-0.5">{new Date(r.date).toLocaleDateString('fr-FR')}</p>
                   <div className="flex items-center gap-3 mt-1.5">
                     <span className="flex items-center gap-1 text-xs text-piste-600">
@@ -150,7 +151,7 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
             const h = ev.data
             return (
               <div key={`f-${h.id}`} className="bg-white border border-piste-100 rounded-xl p-4">
-                <p className="font-medium text-piste-900 text-sm">Fartlek sur piste · {h.niveauNom}</p>
+                <p className="font-medium text-piste-900 text-sm">Fartlek sur piste · {libelleNiveau(h.niveauNom)}</p>
                 <p className="text-xs text-piste-500 mt-0.5">{new Date(h.date).toLocaleDateString('fr-FR')}</p>
                 <div className="flex items-center gap-3 mt-1.5 text-xs text-piste-600 flex-wrap">
                   <span className="flex items-center gap-1"><MapPin size={13} /> {h.distanceReelleM} m</span>

@@ -12,6 +12,7 @@ import { storage } from '../utils/storage'
 import { noteFinale, pourcentagesReussite, syntheseCycle, criteresSeance } from '../utils/calc'
 import { genererSeancesTypesSecondes } from '../utils/seancesTypesSecondes'
 import { TESTS_CATALOGUE } from '../utils/testsCatalogue'
+import { libelleNiveau } from '../utils/niveauLabels'
 
 const GROUPES_SCOLAIRES = [
   { id: 'seconde', label: 'Secondes' },
@@ -269,7 +270,7 @@ export default function EnseignantDashboard({
         r.eleve.nom,
         r.eleve.prenom,
         r.seanceTitre,
-        r.niveauNom,
+        libelleNiveau(r.niveauNom),
         new Date(r.date).toLocaleDateString('fr-FR'),
         `${nbReussis}/${r.blocsResultats.length}`,
         r.borg,
@@ -336,7 +337,7 @@ export default function EnseignantDashboard({
       Sexe: sexeDe(r.eleve),
       Date: new Date(r.date).toISOString().slice(0, 10),
       Type: 'séance',
-      Titre: `${r.seanceTitre} · ${r.niveauNom}`,
+      Titre: `${r.seanceTitre} · ${libelleNiveau(r.niveauNom)}`,
       Note: noteFinale(r),
       'Note sur': 20,
       'Détail critères': detailCriteres(r),
