@@ -1,3 +1,10 @@
+v1.44.0 — Suivi sans téléphone
+- Nouveau mode côté enseignant (onglet "Élèves & suivi" → bouton "Sans téléphone") pour les élèves n'ayant pas leur téléphone en séance : le prof choisit la séance du jour et les élèves concernés, puis saisit pour chacun distance et temps réalisés répétition par répétition, bloc par bloc
+- Calcul identique à celui d'un élève autonome sans GPS : allure réelle déduite de la saisie, note réelle (4 critères pondérés) et note déclarée calculées de la même façon, pour produire une fiche de suivi en tout point comparable
+- Un bloc non réalisé (séance écourtée) peut être marqué comme tel, avec choix au cas par cas de le compter ou non comme un échec dans le calcul de la note
+- Échelle de Borg et observation générale en fin de saisie, facultatives, sur le même principe que côté élève autonome
+- La séance saisie apparaît dans l'historique et la fiche de suivi de l'élève avec le repère "saisie prof"
+
 v1.43.0 — Protection complète du Run en direct + restauration de la distance GPS après coupure (séance, tests VMA, Fartlek)
 - Run en direct : reprise complète après fermeture/mise en veille prolongée de l'appli, sur le même principe que la séance/les tests/le Fartlek — proposition de reprise à la réouverture (ReprisePrompt), avec restauration de la phase, du chrono, des distances, des échantillons de vitesse ET de la trace GPS point par point (donc de la carte finale, sans trou)
 - Chrono du Run en direct entièrement recalculé sur des horodatages réels (Date.now()) au lieu d'une simple incrémentation d'intervalle, pour ne perdre aucun temps même après une fermeture complète de l'appli (comme c'était déjà le cas pour la séance et les tests VMA)
