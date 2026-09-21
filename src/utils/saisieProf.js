@@ -26,7 +26,8 @@ function vitesseCibleMoyenne(phasesTravail) {
 
 // Construit le résultat d'un bloc réalisé, à partir des répétitions saisies par le prof.
 // phasesTravail : [{ duree_s, vitesse_kmh }] cibles, dans l'ordre. repetitions : [{ distanceM,
-// dureeS }] saisies, même longueur/ordre.
+// dureeS, recupDureeS, recupDistanceM }] saisies, même longueur/ordre (recupDureeS/recupDistanceM
+// facultatifs, notés pour la fiche récap mais non pris en compte dans la notation).
 export function construireResultatBlocSaisieProf(blocId, phasesTravail, repetitions) {
   const distanceCible = distanceCibleTotale(phasesTravail)
   const dureeCible = dureeCibleTotale(phasesTravail)
@@ -93,7 +94,9 @@ export function construireResultatBlocSaisieProf(blocId, phasesTravail, repetiti
       dureeCibleS: phasesTravail[i]?.duree_s ?? null,
       vitesseCibleKmh: phasesTravail[i]?.vitesse_kmh ?? null,
       distanceM: Number(r.distanceM) || 0,
-      dureeS: Number(r.dureeS) || 0
+      dureeS: Number(r.dureeS) || 0,
+      recupDureeS: r.recupDureeS !== '' && r.recupDureeS != null ? Number(r.recupDureeS) : null,
+      recupDistanceM: r.recupDistanceM !== '' && r.recupDistanceM != null ? Number(r.recupDistanceM) : null
     }))
   }
 }
@@ -127,10 +130,17 @@ export function resultatBlocNonRealise(blocId, phasesTravail, inclureDansNote) {
 }
 
 // Valeurs de départ pour la saisie d'un bloc : une répétition par phase de travail, pré-remplie
-// à la valeur cible (le prof n'a plus qu'à corriger ce qui diffère du prévu).
-export function repetitionsInitiales(phasesTravail) {
-  return phasesTravail.map((p) => ({
-    distanceM: Math.round((p.vitesse_kmh / 3.6) * p.duree_s),
-    dureeS: p.duree_s
-  }))
+// à la valeur cible (le prof n'a plus qu'à corriger ce qui diffère du prévu). phasesRecup, de
+// même longueur que phasesTravail, donne la phase de récupération qui suit chaque répétition
+// (ou null si aucune) — ses champs restent facultatifs, à remplir seulement si besoin.
+export function repetitionsInitiales(phasesTravail, phasesRecup = []) {
+  return phasesTravail.map((p, i) => {
+    const recup = phasesRecup[i]
+    return {
+      distanceM: Math.round((p.vitesse_kmh / 3.6) * p.duree_s),
+      dureeS: p.duree_s,
+      recupDureeS: recup ? recup.duree_s : '',
+      recupDistanceM: ''
+    }
+  })
 }

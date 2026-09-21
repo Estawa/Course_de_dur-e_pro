@@ -15,6 +15,16 @@ export function vitesseVersAllure(kmh) {
   return `${m}'${String(s).padStart(2, '0')}"/km`
 }
 
+// Temps de passage au 50m (repère "plots" sur la piste, un plot tous les 50m) pour une
+// vitesse donnée — utile à l'élève sans téléphone qui veut chronométrer lui-même son allure
+// entre deux plots plutôt que de suivre un GPS.
+export function vitesseVersTemps50m(kmh) {
+  if (!kmh) return '--'
+  const vitesseMs = (kmh * 1000) / 3600
+  const secPour50m = 50 / vitesseMs
+  return `${secPour50m.toFixed(1)}s/50m`
+}
+
 // Détermine la vitesse cible (km/h) d'un niveau : soit directement renseignée,
 // soit déduite d'un %VMA si une VMA de référence est fournie.
 export function vitesseCible(niveau, vmaRef) {
