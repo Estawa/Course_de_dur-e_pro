@@ -1,3 +1,15 @@
+v1.53.0 — Récupération de fin de séance réglable, sans doublon
+- La durée de la récupération de fin de séance (écran dédié après le dernier bloc) est désormais dérivée automatiquement du réglage "Récupération / retour au calme final" du DERNIER bloc du niveau, quand ce bloc est en Full Power et que cette récupération y est active — un seul endroit où la régler, plus de champ séparé
+- Ce même bloc ne joue plus sa propre récupération finale en interne (elle ne serait sinon jouée deux fois de suite : une fois dans le bloc, une fois sur l'écran dédié) ; les récupérations finales des autres blocs (non-derniers), elles, restent inchangées
+- Si le dernier bloc est en mode Simple, ou que sa récupération finale n'est pas activée, la récupération de fin de séance repasse sur sa durée fixe historique (5 min)
+- Les totaux affichés (distance/durée "au total" en aperçu et sur les cartes de niveau) intègrent maintenant cette récupération de fin de séance, pour rester exacts
+- L'aperçu de séance côté élève affiche la durée réellement appliquée pour la récupération finale, sans la répéter dans le détail du bloc concerné
+
+v1.52.0 — Retrait du réglage "Récupération finale" par niveau (doublon)
+- Retiré le champ "Récupération finale" ajouté en v1.51.0 au niveau de chaque niveau : il faisait doublon avec "Récupération / retour au calme final" déjà présent en fin de chaque bloc Full Power, source de confusion
+- La récupération de fin de séance repasse sur sa durée fixe (5 min), comme avant la v1.51.0
+- La durée d'échauffement réglable par niveau (aussi introduite en v1.51.0) reste fonctionnelle, inchangée
+
 v1.51.0 — Durées d'échauffement et de récupération finale enfin fonctionnelles
 - La durée d'échauffement réglée par niveau dans l'éditeur était jusqu'ici ignorée à l'exécution : le décompte réel utilisait toujours une durée fixe de 8 min, quoi que le professeur ait réglé (le champ était trompeur). Corrigé : la durée réglée par niveau est maintenant celle qui s'applique vraiment
 - Nouveau : la récupération de fin de séance (fixée à 5 min pour toutes les séances jusqu'ici) est désormais réglable par niveau dans l'éditeur, au même endroit que l'échauffement
