@@ -3,7 +3,6 @@ import { Plus, Trash2, X } from 'lucide-react'
 import FullPowerBuilder from './FullPowerBuilder'
 import SelecteurDuree from './SelecteurDuree'
 import { libelleNiveau } from '../utils/niveauLabels'
-import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 
 const NOMS_NIVEAUX = ['Facile', 'Moyen', 'Difficile']
 
@@ -19,15 +18,8 @@ function echauffementVide() {
   return { active: false, duree_s: 300 }
 }
 
-// Durée de la récupération de fin de séance : réglable par niveau depuis v1.51.0, remplace la
-// durée fixe (phasesFixes.js) — voir Recuperation.jsx. Toujours active (pas de case à cocher,
-// comme c'était déjà le cas avant que cette durée soit réglable).
-function recuperationVide() {
-  return { duree_s: RECUPERATION_FIXE.duree_s }
-}
-
 function niveauVide(nom) {
-  return { id: crypto.randomUUID(), nom, visible: true, echauffement: echauffementVide(), recuperation: recuperationVide(), blocs: [blocSimpleVide(), blocSimpleVide(), blocSimpleVide()] }
+  return { id: crypto.randomUUID(), nom, visible: true, echauffement: echauffementVide(), blocs: [blocSimpleVide(), blocSimpleVide(), blocSimpleVide()] }
 }
 
 // Reconstruit l'état éditable d'un niveau déjà enregistré.
@@ -37,9 +29,6 @@ function niveauDepuisSeance(n) {
     nom: n.nom,
     visible: n.visible !== false,
     echauffement: n.echauffement ? { ...n.echauffement } : echauffementVide(),
-    // Séances enregistrées avant v1.51.0 : pas de champ recuperation, on retombe sur la durée
-    // fixe historique (5 min) pour que rien ne change pour elles tant qu'on n'y touche pas.
-    recuperation: n.recuperation ? { ...n.recuperation } : recuperationVide(),
     blocs: n.blocs.map((b) =>
       b.mode === 'fullpower'
         ? { id: b.id, mode: 'fullpower', structure: b.structure }
@@ -121,7 +110,6 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
       nom: n.nom,
       visible: n.visible !== false,
       echauffement: { active: !!n.echauffement?.active, duree_s: Number(n.echauffement?.duree_s) || 0 },
-      recuperation: { duree_s: Number(n.recuperation?.duree_s) || RECUPERATION_FIXE.duree_s },
       blocs: n.blocs.map((b) => {
         if (b.mode === 'fullpower') {
           return { id: b.id, mode: 'fullpower', structure: b.structure }
@@ -218,14 +206,6 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
                     onChange={(v) => majNiveau(n.id, 'echauffement', { ...n.echauffement, duree_s: v })}
                   />
                 )}
-              </div>
-
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-xs font-medium text-piste-700">Récupération finale</span>
-                <SelecteurDuree
-                  valeurSec={n.recuperation?.duree_s ?? RECUPERATION_FIXE.duree_s}
-                  onChange={(v) => majNiveau(n.id, 'recuperation', { duree_s: v })}
-                />
               </div>
 
               <div className="space-y-4 mb-2">

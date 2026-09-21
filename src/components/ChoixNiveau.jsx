@@ -1,6 +1,7 @@
 import { MapPin, Timer as TimerIcon, Layers } from 'lucide-react'
 import { formatDuree } from '../utils/calc'
 import { totauxNiveau } from '../utils/fullpower'
+import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 import { libelleNiveau } from '../utils/niveauLabels'
 
 const COULEURS = {
@@ -23,7 +24,7 @@ export default function ChoixNiveau({ seance, vmaRef, onChoisirNiveau }) {
 
       <div className="space-y-4">
         {niveauxVisibles.map((niveau) => {
-          const { distance, duree } = totauxNiveau(niveau, vmaRef)
+          const { distance, duree } = totauxNiveau(niveau, vmaRef, RECUPERATION_FIXE.duree_s)
           return (
             <button
               key={niveau.id}

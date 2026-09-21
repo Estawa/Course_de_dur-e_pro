@@ -1,6 +1,6 @@
 import { Flame, Info, Layers, MapPin, Timer as TimerIcon } from 'lucide-react'
 import { formatDuree, vitesseVersAllure, vitesseVersTemps50m } from '../utils/calc'
-import { totauxNiveau } from '../utils/fullpower'
+import { totauxNiveau, dureeRecuperationFinale } from '../utils/fullpower'
 import { libelleNiveau } from '../utils/niveauLabels'
 import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 
@@ -12,7 +12,7 @@ function detailBlocSimple(b) {
   return [`${b.distance_m} m en ${formatDuree(b.duree_s)} (${allureEtRepere(b.allure_kmh)})`]
 }
 
-function detailBlocFullPower(b, vmaRef) {
+function detailBlocFullPower(b, vmaRef, masquerRecupFinale) {
   const s = b.structure
   if (!s) return []
   const lignes = s.sequence.map((item) => {
@@ -29,12 +29,16 @@ function detailBlocFullPower(b, vmaRef) {
   }).filter(Boolean)
   if (s.nbTours > 1) lignes.push(`Séquence répétée ${s.nbTours} fois (séries)`)
   if (s.recupSerie?.active && s.nbTours > 1) lignes.push(`Récupération entre séries : ${formatDuree(s.recupSerie.duree_s)} à ${s.recupSerie.pct_vma}% VMA`)
-  if (s.recupFinale?.active) lignes.push(`Récupération / retour au calme final : ${formatDuree(s.recupFinale.duree_s)} à ${s.recupFinale.pct_vma}% VMA`)
+  // La récupération finale de ce bloc, si c'est le dernier du niveau, est déjà annoncée par la
+  // ligne "Récupération finale" séance-level ci-dessus (voir dureeRecuperationFinale) — pas
+  // besoin de la répéter ici, ce serait justement le doublon qu'on a supprimé.
+  if (s.recupFinale?.active && !masquerRecupFinale) lignes.push(`Récupération / retour au calme final : ${formatDuree(s.recupFinale.duree_s)} à ${s.recupFinale.pct_vma}% VMA`)
   return lignes
 }
 
 export default function ApercuSeance({ niveau, seanceTitre, vmaRef, regleParticuliere, onDemarrer }) {
-  const { distance, duree } = totauxNiveau(niveau, vmaRef)
+  const { distance, duree } = totauxNiveau(niveau, vmaRef, RECUPERATION_FIXE.duree_s)
+  const dureeRecupFinale = dureeRecuperationFinale(niveau, RECUPERATION_FIXE.duree_s)
 
   return (
     <div className="max-w-md mx-auto px-6 py-6">
@@ -68,9 +72,7 @@ export default function ApercuSeance({ niveau, seanceTitre, vmaRef, regleParticu
 
       <div className="flex items-start gap-2 bg-[#eef4f1] rounded-xl px-4 py-3 mb-3">
         <TimerIcon size={16} className="text-piste-600 shrink-0 mt-0.5" />
-        <p className="text-sm text-piste-800">
-          Récupération finale : {formatDuree(niveau.recuperation?.duree_s ?? RECUPERATION_FIXE.duree_s)}
-        </p>
+        <p className="text-sm text-piste-800">Récupération finale : {formatDuree(dureeRecupFinale)}</p>
       </div>
 
       <div className="space-y-3 mb-8">
@@ -81,7 +83,7 @@ export default function ApercuSeance({ niveau, seanceTitre, vmaRef, regleParticu
               <p className="text-xs font-semibold uppercase tracking-wide text-piste-500">Bloc {i + 1}</p>
             </div>
             <ul className="space-y-1">
-              {(b.mode === 'fullpower' ? detailBlocFullPower(b, vmaRef) : detailBlocSimple(b)).map((ligne, j) => (
+              {(b.mode === 'fullpower' ? detailBlocFullPower(b, vmaRef, i === niveau.blocs.length - 1) : detailBlocSimple(b)).map((ligne, j) => (
                 <li key={j} className="text-sm text-piste-800">{ligne}</li>
               ))}
             </ul>

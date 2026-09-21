@@ -11,16 +11,21 @@ import PriseDePouls from './PriseDePouls'
 import ChoixEchauffement from './ChoixEchauffement'
 import SaisieFinTravail from './SaisieFinTravail'
 import { calculerNoteSeance } from '../utils/calc'
-import { expanserStructure, dureeTotaleStructure, distanceTotaleStructure } from '../utils/fullpower'
+import { expanserStructure, dureeTotaleStructure, distanceTotaleStructure, dureeRecuperationFinale, estDernierBlocAvecRecupDelegue } from '../utils/fullpower'
+import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 import { useWakeLock } from '../utils/wakeLock'
 import { libelleNiveau } from '../utils/niveauLabels'
 
 export function preparerBloc(bloc, niveau, vmaRef) {
   if (bloc.mode === 'fullpower' && bloc.structure) {
+    // Le dernier bloc du niveau, s'il a sa propre "Récupération / retour au calme final" active,
+    // ne la joue pas lui-même : elle sert uniquement à régler la durée de l'écran séance-level
+    // dédié (Recuperation, voir plus bas) — sinon elle serait jouée deux fois de suite.
+    const opts = estDernierBlocAvecRecupDelegue(niveau, bloc.id) ? { inclureRecupFinale: false } : undefined
     return {
-      phases: expanserStructure(bloc.structure, vmaRef),
-      distanceCible: distanceTotaleStructure(bloc.structure, vmaRef),
-      dureeCible: dureeTotaleStructure(bloc.structure)
+      phases: expanserStructure(bloc.structure, vmaRef, opts),
+      distanceCible: distanceTotaleStructure(bloc.structure, vmaRef, opts),
+      dureeCible: dureeTotaleStructure(bloc.structure, opts)
     }
   }
   return {
@@ -308,7 +313,7 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
   }
 
   if (phase === 'recuperation') {
-    return <Recuperation onTermine={handleTermineRecuperation} onPasser={handlePasserRecuperation} dejaEcouleS={dejaEcouleRecupS} dureeS={niveau.recuperation?.duree_s} />
+    return <Recuperation onTermine={handleTermineRecuperation} onPasser={handlePasserRecuperation} dejaEcouleS={dejaEcouleRecupS} dureeS={dureeRecuperationFinale(niveau, RECUPERATION_FIXE.duree_s)} />
   }
 
   if (phase === 'borgRecuperation') {
