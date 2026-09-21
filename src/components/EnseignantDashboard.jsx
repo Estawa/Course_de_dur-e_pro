@@ -45,6 +45,16 @@ export default function EnseignantDashboard({
   const [draggedId, setDraggedId] = useState(null)
   const [testPourVisibilite, setTestPourVisibilite] = useState(null)
   const [sansTelephoneOuvert, setSansTelephoneOuvert] = useState(false)
+  // Confirmation/erreur d'enregistrement (séance créée/éditée ou visibilité changée), affichée
+  // brièvement en haut de la liste des séances — l'écriture cloud peut échouer en silence côté
+  // réseau, il faut donc que l'enseignant voie explicitement si ça a marché ou non.
+  const [messageSeance, setMessageSeance] = useState(null)
+
+  useEffect(() => {
+    if (!messageSeance) return
+    const t = setTimeout(() => setMessageSeance(null), 5000)
+    return () => clearTimeout(t)
+  }, [messageSeance])
 
   // Groupe + trie les séances par espace (Secondes / Premières-Terminales), en traitant
   // toute séance sans niveauScolaire (créée avant cette fonctionnalité) comme "seconde".
@@ -168,11 +178,20 @@ export default function EnseignantDashboard({
     return lignes.sort((a, b) => (a.classeOrigine || '').localeCompare(b.classeOrigine || '', 'fr') || a.nom.localeCompare(b.nom, 'fr'))
   }, [classeActive, elevesDeLaClasse, realisations, realisationsParEleveId])
 
-  function enregistrerSeance(seance) {
+  async function enregistrerSeance(seance) {
     const existe = seances.some((s) => s.id === seance.id)
-    setSeances(existe ? seances.map((s) => (s.id === seance.id ? seance : s)) : [...seances, seance])
-    setEditeurOuvert(false)
-    setSeanceEnEdition(null)
+    const nouvellesSeances = existe ? seances.map((s) => (s.id === seance.id ? seance : s)) : [...seances, seance]
+    const ok = await setSeances(nouvellesSeances)
+    if (ok) {
+      setEditeurOuvert(false)
+      setSeanceEnEdition(null)
+      setMessageSeance({ type: 'ok', texte: 'Séance enregistrée ✓' })
+    } else {
+      // On laisse l'éditeur ouvert (le brouillon de la séance n'est pas perdu) plutôt que de
+      // fermer comme si ça avait marché — l'écriture cloud a échoué, l'enseignant doit le savoir
+      // et pouvoir réessayer.
+      setMessageSeance({ type: 'erreur', texte: "Échec de l'enregistrement (connexion réseau ?) — réessaie." })
+    }
   }
 
   function ouvrirEditionSeance(seance) {
@@ -185,15 +204,19 @@ export default function EnseignantDashboard({
     setEditeurOuvert(true)
   }
 
-  function validerVisibilite(classesSelectionnees) {
-    setSeances(
-      seances.map((sv) =>
-        sv.id === seancePourVisibilite.id
-          ? { ...sv, classesVisibles: classesSelectionnees, visible: classesSelectionnees.length > 0 }
-          : sv
-      )
+  async function validerVisibilite(classesSelectionnees) {
+    const nouvellesSeances = seances.map((sv) =>
+      sv.id === seancePourVisibilite.id
+        ? { ...sv, classesVisibles: classesSelectionnees, visible: classesSelectionnees.length > 0 }
+        : sv
     )
-    setSeancePourVisibilite(null)
+    const ok = await setSeances(nouvellesSeances)
+    if (ok) {
+      setSeancePourVisibilite(null)
+      setMessageSeance({ type: 'ok', texte: 'Visibilité mise à jour ✓' })
+    } else {
+      setMessageSeance({ type: 'erreur', texte: "Échec de l'enregistrement de la visibilité (connexion réseau ?) — réessaie." })
+    }
   }
 
   function validerVisibiliteTest(classesSelectionnees) {
@@ -500,6 +523,15 @@ export default function EnseignantDashboard({
 
       {onglet === 'seances' && (
         <section>
+          {messageSeance && (
+            <div className={`text-xs rounded-xl px-4 py-2.5 mb-3 border ${
+              messageSeance.type === 'ok'
+                ? 'bg-piste-50 border-piste-200 text-piste-700'
+                : 'bg-[#fbeeea] border-alerte/40 text-piste-800'
+            }`}>
+              {messageSeance.texte}
+            </div>
+          )}
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold tracking-wide text-piste-500 uppercase">Bibliothèque de séances</h3>
             <div className="flex items-center gap-2">
