@@ -109,7 +109,7 @@ export default function App() {
 
   function setSeances(nouvelles) {
     setSeancesState(nouvelles)
-    storage.setSeances(nouvelles)
+    return storage.setSeances(nouvelles)
   }
 
   function handleConnecte(e) {
