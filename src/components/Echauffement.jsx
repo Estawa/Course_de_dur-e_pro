@@ -10,8 +10,14 @@ import IndicateurGps from './IndicateurGps'
 // minimale annoncés, GPS actif (avec repli sur saisie manuelle s'il est indisponible), gammes de
 // courses affichées comme rappel, et % de réussite (temps + distance) transmis au parent pour
 // alimenter le bilan de fin de séance.
-export default function Echauffement({ onTermine }) {
-  const { duree_s, pctVmaMin, distanceMinM, gammes, gammesDistanceM, retourAuCalme } = ECHAUFFEMENT_FIXE
+// dureeS : durée réglée pour ce niveau (utils/bareme n'y touche pas — c'est un réglage de séance,
+// voir SeanceEditor "Échauffement"), remplace la durée fixe par défaut de phasesFixes.js. La
+// distance minimale est recalculée proportionnellement, pour que l'objectif d'allure (%VMA min)
+// reste cohérent quelle que soit la durée choisie.
+export default function Echauffement({ onTermine, dureeS }) {
+  const { pctVmaMin, distanceMinM: distanceMinMFixe, duree_s: dureeSFixe, gammes, gammesDistanceM, retourAuCalme } = ECHAUFFEMENT_FIXE
+  const duree_s = dureeS > 0 ? dureeS : dureeSFixe
+  const distanceMinM = Math.round(distanceMinMFixe * (duree_s / dureeSFixe))
   const [elapsed, setElapsed] = useState(0)
   const [gammesOuvertes, setGammesOuvertes] = useState(true)
   const [distanceManuelle, setDistanceManuelle] = useState('')

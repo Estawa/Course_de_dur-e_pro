@@ -5,7 +5,10 @@ import { useGpsSuivi } from '../utils/gps'
 import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 import IndicateurGps from './IndicateurGps'
 
-// Phase Récupération de fin de séance, structurée et identique pour toutes les séances du cycle.
+// Phase Récupération de fin de séance, structurée et identique pour toutes les séances du cycle
+// par défaut, mais réglable par niveau (voir SeanceEditor "Récupération finale").
+// dureeS : durée réglée pour ce niveau, remplace la durée fixe par défaut de phasesFixes.js ; la
+// distance minimale est recalculée proportionnellement pour garder un objectif d'allure cohérent.
 // dejaEcouleS : temps (s) déjà passé avant l'arrivée sur cet écran (saisie pouls/distance/Borg
 // juste après la dernière répétition de travail, voir SaisieFinTravail) — le décompte en tient
 // compte dès le départ, pour que cette saisie fasse partie intégrante de la récupération plutôt
@@ -13,8 +16,10 @@ import IndicateurGps from './IndicateurGps'
 // Peut être passée (temps de séance insuffisant) via onPasser : le parent (SeanceRunner) garde
 // alors la possibilité de revenir en arrière tant que le bilan final n'est pas validé, en cas
 // d'erreur de manipulation.
-export default function Recuperation({ onTermine, onPasser, dejaEcouleS = 0 }) {
-  const { duree_s, pctVmaMin, distanceMinM, retourAuCalme } = RECUPERATION_FIXE
+export default function Recuperation({ onTermine, onPasser, dejaEcouleS = 0, dureeS }) {
+  const { pctVmaMin, distanceMinM: distanceMinMFixe, duree_s: dureeSFixe, retourAuCalme } = RECUPERATION_FIXE
+  const duree_s = dureeS > 0 ? dureeS : dureeSFixe
+  const distanceMinM = Math.round(distanceMinMFixe * (duree_s / dureeSFixe))
   const [elapsed, setElapsed] = useState(Math.min(dejaEcouleS, duree_s))
   const [distanceManuelle, setDistanceManuelle] = useState('')
   const startRef = useRef(null)

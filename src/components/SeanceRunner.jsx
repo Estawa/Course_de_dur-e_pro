@@ -250,7 +250,7 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
   }
 
   if (phase === 'echauffement') {
-    return <Echauffement onTermine={handleTermineEchauffement} />
+    return <Echauffement onTermine={handleTermineEchauffement} dureeS={niveau.echauffement?.duree_s} />
   }
 
   if (phase === 'borgEchauffement') {
@@ -308,7 +308,7 @@ export default function SeanceRunner({ niveau, vmaRef, reprise, onProgress, onFi
   }
 
   if (phase === 'recuperation') {
-    return <Recuperation onTermine={handleTermineRecuperation} onPasser={handlePasserRecuperation} dejaEcouleS={dejaEcouleRecupS} />
+    return <Recuperation onTermine={handleTermineRecuperation} onPasser={handlePasserRecuperation} dejaEcouleS={dejaEcouleRecupS} dureeS={niveau.recuperation?.duree_s} />
   }
 
   if (phase === 'borgRecuperation') {

@@ -2,6 +2,7 @@ import { Flame, Info, Layers, MapPin, Timer as TimerIcon } from 'lucide-react'
 import { formatDuree, vitesseVersAllure, vitesseVersTemps50m } from '../utils/calc'
 import { totauxNiveau } from '../utils/fullpower'
 import { libelleNiveau } from '../utils/niveauLabels'
+import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 
 function allureEtRepere(kmh) {
   return `${vitesseVersAllure(kmh)} · ${vitesseVersTemps50m(kmh)}`
@@ -64,6 +65,13 @@ export default function ApercuSeance({ niveau, seanceTitre, vmaRef, regleParticu
           <p className="text-sm text-piste-800">Échauffement : {formatDuree(niveau.echauffement.duree_s)}</p>
         </div>
       )}
+
+      <div className="flex items-start gap-2 bg-[#eef4f1] rounded-xl px-4 py-3 mb-3">
+        <TimerIcon size={16} className="text-piste-600 shrink-0 mt-0.5" />
+        <p className="text-sm text-piste-800">
+          Récupération finale : {formatDuree(niveau.recuperation?.duree_s ?? RECUPERATION_FIXE.duree_s)}
+        </p>
+      </div>
 
       <div className="space-y-3 mb-8">
         {niveau.blocs.map((b, i) => (
