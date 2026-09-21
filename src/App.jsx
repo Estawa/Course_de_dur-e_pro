@@ -298,6 +298,13 @@ export default function App() {
     setRealisations((prev) => [...prev, realisation])
   }
 
+  // Suppression par l'élève lui-même d'une séance de son propre historique (mauvaise
+  // manipulation, test...) — confirmation demandée côté BibliothequeEleve avant l'appel.
+  function handleSupprimerRealisationEleve(id) {
+    storage.supprimerRealisation(id)
+    setRealisations((prev) => prev.filter((r) => r.id !== id))
+  }
+
   function handleRealisationsRecalculees() {
     setRealisations(storage.getRealisations())
   }
@@ -390,7 +397,7 @@ export default function App() {
       )}
 
       {ecran === 'bibliotheque' && (
-        <BibliothequeEleve seances={seances} realisations={mesRealisations} eleve={eleve} onChoisirSeance={handleChoisirSeanceBibliotheque} onLancerFartlek={() => setEcran('fartlek')} />
+        <BibliothequeEleve seances={seances} realisations={mesRealisations} eleve={eleve} onChoisirSeance={handleChoisirSeanceBibliotheque} onLancerFartlek={() => setEcran('fartlek')} onSupprimerRealisation={handleSupprimerRealisationEleve} />
       )}
 
       {ecran === 'vierge' && <SeanceVierge onLancer={handleLancerSeanceVierge} />}
@@ -429,7 +436,7 @@ export default function App() {
       )}
 
       {ecran === 'bilan' && dernierResultat && (
-        <Bilan resultat={dernierResultat} niveau={niveauActif} onRetourAccueil={() => setEcran('tuiles')} />
+        <Bilan resultat={dernierResultat} niveauNom={niveauActif?.nom} onRetourAccueil={() => setEcran('tuiles')} />
       )}
 
       {ecran === 'enseignantPin' && <EnseignantPin accesConfig={accesConfig} onValide={handlePinValide} />}
