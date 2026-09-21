@@ -20,7 +20,11 @@ export function recupVide(duree_s = 120, pct_vma = 50) {
 // Chaque phase de récupération est étiquetée (recupType) pour permettre l'annonce
 // appropriée pendant la course : 'repetition' (entre deux répétitions d'un même passage),
 // 'serie' (entre deux tours de la séquence) ou 'fin' (récupération/retour au calme final).
-export function expanserStructure(structure, vmaRef) {
+// inclureRecupFinale : à false pour le DERNIER bloc d'un niveau — la "Récupération / retour au
+// calme final" de ce bloc sert alors uniquement à régler la durée de l'écran séance-level dédié
+// (Recuperation.jsx, voir dureeRecuperationFinale ci-dessous), pour éviter de la jouer deux fois
+// de suite (une fois dans ce bloc, une fois juste après).
+export function expanserStructure(structure, vmaRef, { inclureRecupFinale = true } = {}) {
   const phases = []
   const vma = vmaRef || 15
   const nbTours = structure.nbTours || 1
@@ -80,7 +84,7 @@ export function expanserStructure(structure, vmaRef) {
       })
     }
   }
-  if (structure.recupFinale?.active) {
+  if (structure.recupFinale?.active && inclureRecupFinale) {
     phases.push({
       phase: 'recup',
       recupType: 'fin',
@@ -96,7 +100,7 @@ export function expanserStructure(structure, vmaRef) {
   return phases
 }
 
-export function dureeTotaleStructure(structure) {
+export function dureeTotaleStructure(structure, { inclureRecupFinale = true } = {}) {
   let total = 0
   const nbTours = structure.nbTours || 1
   for (let tour = 0; tour < nbTours; tour++) {
@@ -114,13 +118,34 @@ export function dureeTotaleStructure(structure) {
     })
     if (tour < nbTours - 1 && structure.recupSerie?.active) total += structure.recupSerie.duree_s
   }
-  if (structure.recupFinale?.active) total += structure.recupFinale.duree_s
+  if (structure.recupFinale?.active && inclureRecupFinale) total += structure.recupFinale.duree_s
   return total
 }
 
-export function distanceTotaleStructure(structure, vmaRef) {
-  const phases = expanserStructure(structure, vmaRef)
+export function distanceTotaleStructure(structure, vmaRef, opts) {
+  const phases = expanserStructure(structure, vmaRef, opts)
   return Math.round(phases.reduce((acc, p) => acc + (p.vitesse_kmh / 3.6) * p.duree_s, 0))
+}
+
+// Durée de la récupération de fin de séance (écran séance-level dédié, Recuperation.jsx) : au
+// lieu d'un réglage séparé (retiré en v1.52.0 car redondant), elle est dérivée directement de la
+// "Récupération / retour au calme final" du DERNIER bloc du niveau, quand ce bloc est en mode
+// Full Power et que cette récupération y est activée — un seul champ à régler, pas de doublon.
+// Ce même bloc exclut alors cette phase de son propre déroulé (voir inclureRecupFinale ci-dessus)
+// pour qu'elle ne soit jouée qu'une fois, sur l'écran dédié. Repli sur la durée fixe historique
+// (phasesFixes.js) si le dernier bloc est en mode Simple ou n'a pas cette récupération active.
+export function dureeRecuperationFinale(niveau, dureeFixeDefaut) {
+  const dernierBloc = niveau?.blocs?.[niveau.blocs.length - 1]
+  const recup = dernierBloc?.mode === 'fullpower' ? dernierBloc.structure?.recupFinale : null
+  return recup?.active && recup.duree_s > 0 ? recup.duree_s : dureeFixeDefaut
+}
+
+// Un bloc doit-il exclure sa propre "Récupération / retour au calme final" de son déroulé (parce
+// qu'elle est déjà représentée par l'écran séance-level dédié) ? Vrai uniquement pour le dernier
+// bloc d'un niveau, actif, en mode Full Power — voir dureeRecuperationFinale ci-dessus.
+export function estDernierBlocAvecRecupDelegue(niveau, blocId) {
+  const dernierBloc = niveau?.blocs?.[niveau.blocs.length - 1]
+  return !!dernierBloc && dernierBloc.id === blocId && dernierBloc.mode === 'fullpower' && !!dernierBloc.structure?.recupFinale?.active
 }
 
 // Libellé d'annonce affiché (et énoncé à voix haute) à chaque changement de phase pendant la course.
@@ -132,19 +157,24 @@ export function libellePhase(p) {
   return 'Récupération type Répétition'
 }
 
-// Distance et durée totales d'un niveau (échauffement inclus s'il est activé), pour l'aperçu
-// avant de démarrer et pour les cartes de choix de niveau.
-export function totauxNiveau(niveau, vmaRef) {
+// Distance et durée totales d'un niveau (échauffement + récupération finale de séance inclus),
+// pour l'aperçu avant de démarrer et pour les cartes de choix de niveau. La récupération finale
+// du dernier bloc (si Full Power et active) n'est comptée qu'une fois, via dureeRecuperationFinale
+// — voir plus haut — puisqu'elle n'est plus jouée dans le déroulé du bloc lui-même.
+export function totauxNiveau(niveau, vmaRef, dureeRecupFixeDefaut) {
   let distance = 0
   let duree = niveau.echauffement?.active ? niveau.echauffement.duree_s : 0
-  niveau.blocs.forEach((b) => {
+  niveau.blocs.forEach((b, i) => {
+    const dernier = i === niveau.blocs.length - 1
     if (b.mode === 'fullpower' && b.structure) {
-      duree += dureeTotaleStructure(b.structure)
-      distance += distanceTotaleStructure(b.structure, vmaRef)
+      const opts = dernier ? { inclureRecupFinale: false } : undefined
+      duree += dureeTotaleStructure(b.structure, opts)
+      distance += distanceTotaleStructure(b.structure, vmaRef, opts)
     } else if (b.mode !== 'fullpower') {
       duree += b.duree_s
       distance += b.distance_m
     }
   })
+  duree += dureeRecuperationFinale(niveau, dureeRecupFixeDefaut)
   return { distance, duree }
 }
