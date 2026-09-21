@@ -38,6 +38,16 @@ try {
 
 export const cloudDisponible = () => !!db
 
+// Nettoie une valeur avant écriture Firestore : passer par JSON retire tous les champs
+// `undefined` (Firestore refuse d'écrire un document qui en contient, et échoue alors
+// entièrement et silencieusement avec l'ancien code) sans changer le reste de la structure.
+// C'est la cause la plus probable des enregistrements qui semblaient réussir (l'écran se
+// fermait normalement) mais disparaissaient après une actualisation : l'écriture Firestore
+// avait échoué en silence, faute de ce nettoyage.
+function nettoyer(valeur) {
+  return JSON.parse(JSON.stringify(valeur))
+}
+
 // --- Accès (administrateur + collègues) : config unique, partagée par tous les appareils,
 // indépendante de tout teacherId puisqu'elle sert justement à définir la liste des teacherId
 // valides. ---
@@ -65,8 +75,10 @@ export async function loadAccesConfig(pinAdminParDefaut) {
 }
 
 export async function saveAccesConfig(config) {
-  if (!db) return
-  await setDoc(doc(db, 'cdp_acces', 'config'), config).catch(() => {})
+  if (!db) return false
+  return setDoc(doc(db, 'cdp_acces', 'config'), nettoyer(config))
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture accès impossible', e); return false })
 }
 
 // --- Roster (classes + élèves) d'un enseignant : un seul document par teacherId. ---
@@ -83,8 +95,10 @@ export async function loadRosterTeacher(teacherId) {
 }
 
 export async function saveRosterTeacher(teacherId, roster) {
-  if (!db) return
-  await setDoc(doc(db, 'profs', teacherId, 'meta', 'roster'), { classes: roster }).catch(() => {})
+  if (!db) return false
+  return setDoc(doc(db, 'profs', teacherId, 'meta', 'roster'), { classes: nettoyer(roster) })
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture roster impossible', e); return false })
 }
 
 // --- Réalisations (séances/tests réalisés) d'un enseignant : une collection, un document par
@@ -106,13 +120,17 @@ export async function loadRealisationsTeacher(teacherId) {
 }
 
 export function cloudEcrireRealisation(teacherId, realisation) {
-  if (!db) return Promise.resolve()
-  return setDoc(doc(colRealisations(teacherId), realisation.id), realisation).catch(() => {})
+  if (!db) return Promise.resolve(false)
+  return setDoc(doc(colRealisations(teacherId), realisation.id), nettoyer(realisation))
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture réalisation impossible', e); return false })
 }
 
 export function cloudSupprimerRealisation(teacherId, id) {
-  if (!db) return Promise.resolve()
-  return deleteDoc(doc(colRealisations(teacherId), id)).catch(() => {})
+  if (!db) return Promise.resolve(false)
+  return deleteDoc(doc(colRealisations(teacherId), id))
+    .then(() => true)
+    .catch((e) => { console.warn('Suppression réalisation impossible', e); return false })
 }
 
 // --- VMA (par élève) d'un enseignant : une collection, un document par élève (clé = cleEleve). ---
@@ -135,8 +153,10 @@ export async function loadVmaTeacher(teacherId) {
 }
 
 export function cloudEcrireVma(teacherId, cle, detail) {
-  if (!db) return Promise.resolve()
-  return setDoc(doc(colVma(teacherId), cle), detail).catch(() => {})
+  if (!db) return Promise.resolve(false)
+  return setDoc(doc(colVma(teacherId), cle), nettoyer(detail))
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture VMA impossible', e); return false })
 }
 
 // --- Bibliothèque de séances d'un enseignant : un seul document. ---
@@ -153,8 +173,10 @@ export async function loadSeancesTeacher(teacherId) {
 }
 
 export function cloudEcrireSeances(teacherId, seances) {
-  if (!db) return Promise.resolve()
-  return setDoc(doc(db, 'profs', teacherId, 'meta', 'seances'), { liste: seances }).catch(() => {})
+  if (!db) return Promise.resolve(false)
+  return setDoc(doc(db, 'profs', teacherId, 'meta', 'seances'), { liste: nettoyer(seances) })
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture séances impossible', e); return false })
 }
 
 // --- Visibilité des tests VMA/Fartlek d'un enseignant : un seul document. ---
@@ -171,8 +193,10 @@ export async function loadTestsVisibiliteTeacher(teacherId) {
 }
 
 export function cloudEcrireTestsVisibilite(teacherId, visibilite) {
-  if (!db) return Promise.resolve()
-  return setDoc(doc(db, 'profs', teacherId, 'meta', 'testsVisibilite'), { data: visibilite }).catch(() => {})
+  if (!db) return Promise.resolve(false)
+  return setDoc(doc(db, 'profs', teacherId, 'meta', 'testsVisibilite'), { data: nettoyer(visibilite) })
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture visibilité tests impossible', e); return false })
 }
 
 // --- Barème de la note réelle (pondérations + pénalités, réglables côté enseignant) : un seul
@@ -190,8 +214,10 @@ export async function loadBaremeTeacher(teacherId) {
 }
 
 export function cloudEcrireBareme(teacherId, bareme) {
-  if (!db) return Promise.resolve()
-  return setDoc(doc(db, 'profs', teacherId, 'meta', 'bareme'), { data: bareme }).catch(() => {})
+  if (!db) return Promise.resolve(false)
+  return setDoc(doc(db, 'profs', teacherId, 'meta', 'bareme'), { data: nettoyer(bareme) })
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture barème impossible', e); return false })
 }
 
 // --- Migration depuis l'ancienne version (un seul professeur, "code de synchro" au lieu d'un

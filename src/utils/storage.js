@@ -341,7 +341,7 @@ export const storage = {
   getSeances: () => cache.seances,
   setSeances: (seances) => {
     cache.seances = seances
-    cloud.cloudEcrireSeances(cache.teacherId, seances)
+    return cloud.cloudEcrireSeances(cache.teacherId, seances)
   },
 
   getRealisations: () => cache.realisations,
