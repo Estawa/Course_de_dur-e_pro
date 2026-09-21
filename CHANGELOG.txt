@@ -1,3 +1,9 @@
+v1.49.0 — Correctif important : enregistrements de séance perdus en silence
+- Bug identifié : toute écriture cloud (séances, réalisations, VMA, roster, visibilité, barème) échouait silencieusement si l'objet enregistré contenait un champ `undefined` (Firestore refuse ces documents) — l'écran se fermait normalement, laissant croire que ça avait marché, mais rien n'était réellement sauvegardé ; la donnée réapparaissait donc manquante à la prochaine actualisation. C'est très probablement ce qui expliquait les séances "test" créées puis partagées qui disparaissaient après actualisation
+- Corrigé à la racine : toute donnée est désormais nettoyée (champs `undefined` retirés) avant chaque écriture cloud, quel que soit le type de donnée
+- Enregistrer ou éditer une séance, et partager sa visibilité à une classe, affichent maintenant une confirmation explicite ("Séance enregistrée ✓" / "Visibilité mise à jour ✓") en cas de succès, ou un message d'erreur clair en cas d'échec (au lieu de fermer l'écran sans rien dire) — en cas d'échec, l'éditeur reste ouvert pour ne pas perdre la séance en cours de saisie et permettre de réessayer
+- L'écran de création/édition de séance se ferme désormais uniquement une fois l'enregistrement confirmé réussi, pour que la fermeture serve elle-même de confirmation visuelle
+
 v1.48.0 — Barème réglable par curseurs, avec recalcul de l'historique
 - L'onglet "Barème" est désormais éditable : un curseur par critère (poids allure/régularité/récupération, tolérance et pénalité de pauses, pénalités pouls/Borg/observation, plafonds), avec un aperçu chiffré à côté de chaque curseur
 - Rien n'est appliqué tant que le bouton "Enregistrer et recalculer" n'est pas pressé (bouton "↺" pour revenir aux valeurs par défaut sans sauvegarder)
