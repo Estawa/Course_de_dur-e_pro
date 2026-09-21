@@ -1,3 +1,25 @@
+v1.48.0 — Barème réglable par curseurs, avec recalcul de l'historique
+- L'onglet "Barème" est désormais éditable : un curseur par critère (poids allure/régularité/récupération, tolérance et pénalité de pauses, pénalités pouls/Borg/observation, plafonds), avec un aperçu chiffré à côté de chaque curseur
+- Rien n'est appliqué tant que le bouton "Enregistrer et recalculer" n'est pas pressé (bouton "↺" pour revenir aux valeurs par défaut sans sauvegarder)
+- Une fois enregistré : le barème personnalisé est mémorisé (synchronisé comme le reste de l'espace, donc conservé d'une session à l'autre et partagé entre appareils du même professeur) ET la note réelle de TOUTES les réalisations déjà enregistrées est immédiatement recalculée avec les nouvelles valeurs, sur l'ensemble des classes de l'espace actif — pas seulement les prochaines séances ; un message indique combien de séances ont effectivement changé de note
+- Le barème est propre à chaque espace enseignant (utile en "Vue globale" : le barème affiché/modifié est celui du collègue consulté, pas le sien)
+
+v1.47.0 — Nouveau barème de la note réelle
+- Refonte complète du calcul de la note "réelle" (jamais montrée à l'élève, qui ne voit que sa note déclarée) : la distance/durée réellement parcourue plafonne désormais la note du bloc (ex. la moitié de la distance prévue ⇒ 10/20 maximum), au lieu d'être simplement moyennée avec les autres critères comme avant — corrige le problème de fond des notes gonflées identifié en v1.46.0 (un bloc pouvait rester "terminé" et bien noté même très incomplet)
+- Sous ce plafond, la qualité d'exécution (allure 55% / régularité 25% / récupération 20%) détermine la note réelle du bloc
+- Nouvelles pénalités : pauses au-delà de la 1ère (−0,5 pt/pause, max −2 pts par bloc), pouls non renseigné (−0,5 pt/prise manquante), Borg final non renseigné (−1 pt), observation finale non renseignée (−0,5 pt) — ces 3 dernières plafonnées à −5 pts au total pour la séance ; le mode "Sans téléphone" (qui ne recueille jamais le pouls) est exempté de la pénalité pouls
+- Toutes les pondérations sont centralisées dans utils/bareme.js, commentées, pour pouvoir être ajustées facilement au fil des séances
+- Nouvel onglet enseignant "Barème" (lecture seule, jamais accessible côté élève) affichant la grille complète, pour s'y reporter et juger si les pondérations restent pertinentes
+
+v1.46.0 — Correctif important : note de bloc gonflée sans GPS
+- Bug identifié : quand le GPS n'a pas mesuré la distance d'un bloc, l'écran de correction de distance était pré-rempli avec la distance PRÉVUE ; il suffisait de valider sans rien changer pour obtenir 100% de distance quel que soit ce qui avait réellement été couru — d'où des blocs marqués "réussis" et des notes proches de 20/20 pour des élèves n'ayant pas terminé ou ayant couru à une allure très en dessous de l'objectif
+- Corrigé : le champ démarre désormais vide et le bouton "Valider" reste désactivé tant qu'aucune distance n'a été saisie, pour forcer une estimation réellement active plutôt qu'une validation par défaut
+- Concerne tous les blocs sans GPS exploitable (GPS refusé/indisponible pendant tout le bloc) ; les blocs avec GPS actif étaient déjà corrects (distance mesurée réellement, pas de valeur par défaut)
+
+v1.45.0 — Annonce avant la prise de pouls
+- Prise de pouls (repos, avant travail, final) : ajout d'un écran d'annonce ("Attention, prise de votre pouls sur 12 secondes !", vocale + affichée) suivi d'un pré-décompte visuel 5→1, avant le décompte des 12 secondes existant, pour laisser à l'élève le temps de se préparer (main sur le poignet/le cou) et synchroniser le départ
+- La reprise de séquence après fermeture/mise en veille de l'appli (ReprisePrompt) couvrait déjà tous les cas depuis la v1.43.0 (séance, tests VMA, Fartlek, Run en direct) ; aucun changement nécessaire de ce côté
+
 v1.44.0 — Suivi sans téléphone
 - Nouveau mode côté enseignant (onglet "Élèves & suivi" → bouton "Sans téléphone") pour les élèves n'ayant pas leur téléphone en séance : le prof choisit la séance du jour et les élèves concernés, puis saisit pour chacun distance et temps réalisés répétition par répétition, bloc par bloc
 - Calcul identique à celui d'un élève autonome sans GPS : allure réelle déduite de la saisie, note réelle (4 critères pondérés) et note déclarée calculées de la même façon, pour produire une fiche de suivi en tout point comparable
