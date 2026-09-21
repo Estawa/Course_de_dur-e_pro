@@ -1,3 +1,14 @@
+v1.51.0 — Durées d'échauffement et de récupération finale enfin fonctionnelles
+- La durée d'échauffement réglée par niveau dans l'éditeur était jusqu'ici ignorée à l'exécution : le décompte réel utilisait toujours une durée fixe de 8 min, quoi que le professeur ait réglé (le champ était trompeur). Corrigé : la durée réglée par niveau est maintenant celle qui s'applique vraiment
+- Nouveau : la récupération de fin de séance (fixée à 5 min pour toutes les séances jusqu'ici) est désormais réglable par niveau dans l'éditeur, au même endroit que l'échauffement
+- Dans les deux cas, la distance minimale objectif est recalculée proportionnellement à la durée choisie, pour garder un objectif d'allure cohérent quelle que soit la durée
+- L'aperçu de séance côté élève affiche maintenant aussi la durée de récupération finale prévue, comme c'était déjà le cas pour l'échauffement
+- Les séances déjà enregistrées avant cette version gardent leur comportement d'origine tant qu'elles ne sont pas rouvertes/modifiées (récupération à 5 min par défaut)
+
+v1.50.0 — Correctif : blocs Full Power enregistrés sans contenu réel
+- Bug identifié : un bloc Full Power dont la "Séquence" restait vide (Types A/B/C définis mais jamais ajoutés à la séquence) s'enregistrait quand même — le bloc réellement joué ne contenait alors que l'échauffement/la récupération éventuels, rien du travail préparé. C'est ce qui expliquait la séance "sans rapport" avec ce qui avait été configuré
+- Corrigé : l'enregistrement d'une séance est désormais bloqué si un bloc Full Power visible n'a aucun type dans sa séquence, avec un message précis indiquant quel niveau et quel bloc corriger
+
 v1.49.0 — Correctif important : enregistrements de séance perdus en silence
 - Bug identifié : toute écriture cloud (séances, réalisations, VMA, roster, visibilité, barème) échouait silencieusement si l'objet enregistré contenait un champ `undefined` (Firestore refuse ces documents) — l'écran se fermait normalement, laissant croire que ça avait marché, mais rien n'était réellement sauvegardé ; la donnée réapparaissait donc manquante à la prochaine actualisation. C'est très probablement ce qui expliquait les séances "test" créées puis partagées qui disparaissaient après actualisation
 - Corrigé à la racine : toute donnée est désormais nettoyée (champs `undefined` retirés) avant chaque écriture cloud, quel que soit le type de donnée
