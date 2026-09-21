@@ -10,7 +10,7 @@ import { calculerNoteSeance } from '../utils/calc'
 import { expanserStructure, dureeTotaleStructure, distanceTotaleStructure } from '../utils/fullpower'
 import { useWakeLock } from '../utils/wakeLock'
 
-function preparerBloc(bloc, niveau, vmaRef) {
+export function preparerBloc(bloc, niveau, vmaRef) {
   if (bloc.mode === 'fullpower' && bloc.structure) {
     return {
       phases: expanserStructure(bloc.structure, vmaRef),

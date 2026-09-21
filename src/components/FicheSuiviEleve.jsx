@@ -293,7 +293,10 @@ export default function FicheSuiviEleve({
                   <div key={r.id} className={`rounded-lg px-3 py-2.5 ${r.exclureCycle ? 'bg-piste-50/60 opacity-70' : 'bg-piste-50'}`}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-xs font-medium text-piste-900">{r.seanceTitre}{r.niveauNom ? ` · ${r.niveauNom}` : ''}</p>
+                        <p className="text-xs font-medium text-piste-900">
+                          {r.seanceTitre}{r.niveauNom ? ` · ${r.niveauNom}` : ''}
+                          {r.saisieProf && <span className="text-piste-500 font-normal"> · saisie prof</span>}
+                        </p>
                         {estRunDirect ? (
                           <p className="text-[11px] text-piste-500">
                             {new Date(r.date).toLocaleDateString('fr-FR')} · {Math.round(r.runDirect.dureeGlobaleMs / 60000)} min · {r.runDirect.distanceGlobaleM} m

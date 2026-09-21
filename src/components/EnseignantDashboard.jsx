@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, FileSpreadsheet } from 'lucide-react'
+import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, FileSpreadsheet, WifiOff } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import VmaEleveLigne, { LABEL_TEST, formatDateVma } from './VmaEleveLigne'
 import FicheSuiviEleve from './FicheSuiviEleve'
+import SuiviSansTelephone from './SuiviSansTelephone'
 import VisibiliteClasses from './VisibiliteClasses'
 import EspaceAcces from './EspaceAcces'
 import { storage } from '../utils/storage'
@@ -20,7 +21,7 @@ const GROUPES_SCOLAIRES = [
 export default function EnseignantDashboard({
   role, nomCollegue, teacherIdEnseignant, accesConfig, onChangerEspace, onMigrer,
   onChangerPinAdmin, onChangerNomAdmin, onAjouterCollegue, onSupprimerCollegue, onReinitialiserPinCollegue,
-  seances, setSeances, realisations, onModifierRealisation, onSupprimerRealisation, onSupprimerRealisationsEleve, onSupprimerRealisationsClasse
+  seances, setSeances, realisations, onAjouterRealisation, onModifierRealisation, onSupprimerRealisation, onSupprimerRealisationsEleve, onSupprimerRealisationsClasse
 }) {
   const estAdmin = role === 'admin'
   const [onglet, setOnglet] = useState('seances') // seances | tests | suivi | vma | global | acces
@@ -41,6 +42,7 @@ export default function EnseignantDashboard({
   const [nouvelleClasseNom, setNouvelleClasseNom] = useState('')
   const [draggedId, setDraggedId] = useState(null)
   const [testPourVisibilite, setTestPourVisibilite] = useState(null)
+  const [sansTelephoneOuvert, setSansTelephoneOuvert] = useState(false)
 
   // Groupe + trie les séances par espace (Secondes / Premières-Terminales), en traitant
   // toute séance sans niveauScolaire (créée avant cette fonctionnalité) comme "seconde".
@@ -640,6 +642,9 @@ export default function EnseignantDashboard({
               </button>
               {classeActive !== null && (
                 <>
+                  <button onClick={() => setSansTelephoneOuvert(true)} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
+                    <WifiOff size={14} /> Sans téléphone
+                  </button>
                   {lignesEleves.some((l) => l.realisations.length > 0) && (
                     <button onClick={supprimerSeancesClasse} className="flex items-center gap-1.5 text-xs font-medium text-alerte hover:text-alerte/80">
                       <Trash2 size={14} /> Effacer les séances de la classe
@@ -789,6 +794,17 @@ export default function EnseignantDashboard({
               />
             )
           })()}
+
+          {sansTelephoneOuvert && classeActive !== null && (
+            <SuiviSansTelephone
+              classe={classeActive}
+              eleves={lignesEleves}
+              seances={seances}
+              onFermer={() => setSansTelephoneOuvert(false)}
+              onAjouterRealisation={(r) => { onAjouterRealisation(r); setRosterVersion((v) => v + 1) }}
+              onModifierRealisation={(id, patch) => { onModifierRealisation(id, patch); setRosterVersion((v) => v + 1) }}
+            />
+          )}
         </section>
       )}
 
