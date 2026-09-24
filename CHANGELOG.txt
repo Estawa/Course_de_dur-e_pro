@@ -1,3 +1,7 @@
+v1.57.0 — Copier une séance d'un collègue, séances types réservées à l'administrateur
+- Vue globale : en consultant l'espace d'un collègue, chaque séance de sa bibliothèque a un bouton "Copier chez moi" qui l'ajoute à la bibliothèque de l'administrateur (copie indépendante, masquée pour toutes les classes, rangée dans le même espace Secondes / Premières-Terminales ; la séance du collègue reste intacte). Sécurité : la bibliothèque de l'administrateur est relue avant l'ajout, et rien n'est écrit si cette lecture échoue
+- Le bouton "Importer les séances types" n'est plus visible que par l'administrateur, dans son propre espace : les collègues ne peuvent plus importer les séances intégrées au code de l'application
+
 v1.56.0 — Guidage par bips 50 m, retour au départ, distance calculée par l'élève
 - Trois modes de guidage : GPS seul (encart de couleur, comme avant), Bips 50 m (un bip à chaque plot au rythme de l'allure cible, double bip au passage de la ligne tous les 400 m, vibration en complément) ou Mixte (bips + GPS qui mesure la distance en arrière-plan, sans encart pendant l'effort)
 - Réglage "Guidage par défaut de mes séances" en haut de l'onglet Séances (propre à chaque professeur, Mixte au départ), modifiable séance par séance dans l'éditeur ; l'élève choisit lui-même pour sa séance vierge ; le Run en direct et les tests VMA ne sont pas concernés
