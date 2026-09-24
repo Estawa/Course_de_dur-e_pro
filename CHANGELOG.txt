@@ -1,3 +1,28 @@
+v1.56.0 — Guidage par bips 50 m, retour au départ, distance calculée par l'élève
+- Trois modes de guidage : GPS seul (encart de couleur, comme avant), Bips 50 m (un bip à chaque plot au rythme de l'allure cible, double bip au passage de la ligne tous les 400 m, vibration en complément) ou Mixte (bips + GPS qui mesure la distance en arrière-plan, sans encart pendant l'effort)
+- Réglage "Guidage par défaut de mes séances" en haut de l'onglet Séances (propre à chaque professeur, Mixte au départ), modifiable séance par séance dans l'éditeur ; l'élève choisit lui-même pour sa séance vierge ; le Run en direct et les tests VMA ne sont pas concernés
+- En mode GPS, un bouton permet à l'élève de passer aux bips (mixte) en cours de séance si son GPS est imprécis ou indisponible
+- Retour au départ : option par niveau dans l'éditeur (Automatique = récups de 2 min ou plus / À chaque récupération / Jamais). Pendant ces récupérations : grand message "Retourne au départ avant la prochaine répétition !" et grand décompte de la récup restante ; chaque partie repart de la ligne (bips recalés sur les plots). Entre deux blocs : bandeau "Retourne au départ avant le prochain bloc !"
+- La distance GPS n'est plus jamais affichée pendant la course. Après chaque partie, l'élève calcule et saisit lui-même sa distance (km + m, au mètre près). Si la distance paraît incohérente au regard du temps de course, il doit la confirmer ou la modifier (revérifiée à chaque modification)
+- Compteur de tours (+1 tour / annuler) pendant la course, simple aide-mémoire rappelé au moment de la saisie
+- Distance retenue pour la note : la distance déclarée, sauf écart avec le GPS de plus de 5 % ET d'au moins 50 m → GPS retenu et alerte au professeur (fiche de suivi : encart "Écart distance déclarée / GPS" avec bascule déclarée/GPS et recalcul de la note ; liste des élèves : "écart de distance à vérifier") ; export CSV : distances déclarée et GPS
+- En mode bips seul (sans GPS), l'allure et la distance sont évaluées à partir de la distance déclarée
+- Bilan de séance : comparaison "Ton calcul / GPS" avec l'écart et la justesse du calcul (purement informatif)
+- Fartlek évaluatif en mode mixte : zones identiques pour tous (50 m intense / 150 m récup, ×2 depuis la ligne), niveaux différenciés par les %VMA (106,5/65, 110,5/62,5, 115/60) et la durée effective minimale (20/22/25 min), plafonds 14/17/20 inchangés ; bips à chaque plot au rythme de la zone, gong aux changements de zone, double bip sur la ligne, séquence recalée au début du tour après une pause en zone repos ; compteur de tours ; saisie de la distance totale par l'élève avec comparaison GPS ; bascule déclarée/GPS dans la fiche de suivi en cas d'écart
+- Binôme : le porteur du téléphone saisit la distance pour les deux
+
+v1.55.0 — Mode binôme pour l'élève sans téléphone
+- Aperçu de séance (bibliothèque) : bouton "Courir avec un binôme sans téléphone". L'élève choisit un camarade de sa classe, qui confirme sa présence en tapant son propre code PIN sur le téléphone
+- Binôme accepté seulement si les deux VMA sont proches (écart de 1 km/h maximum, constante ECART_VMA_MAX_BINOME dans utils/binome.js) ; le guidage se fait sur la VMA moyenne des deux, et l'aperçu affiche les allures correspondantes
+- Après chaque bloc, le porteur indique si son binôme est resté avec lui ; si non, le bloc du binôme est non réussi
+- Chaque bloc est réévalué contre les objectifs PERSONNELS de chacun (même distance/vitesses GPS, cibles calculées sur sa propre VMA) : chacun a sa propre réussite et sa propre note
+- Pouls : les deux comptent pendant le même décompte de 12 s, puis chacun saisit sa valeur ; en fin de séance, le binôme renseigne son Borg et son observation
+- Deux réalisations enregistrées : celle du porteur et celle du binôme. Celle du binôme est "validée" d'office si les deux ont réussi toute la séance (chaque bloc terminé à la bonne allure, sans décrochage), sinon "non validée" : c'est le professeur qui décide
+- Fiche de suivi (professeur) : encart binôme avec la réussite de chacun et les blocs décrochés, boutons Valider / Refuser (et Annuler ma décision) ; une séance non validée ou refusée ne compte pas dans la moyenne de cycle
+- Liste "Élèves & suivi" : mention "séance en binôme à valider" sur la ligne de l'élève concerné ; export CSV : nouvelle colonne "Binôme"
+- Historique élève : mention du binôme et du statut (validée / en attente de ton professeur / non retenue), sans note
+- La reprise de séance après fermeture de l'application conserve le binôme
+
 v1.54.0 — Confirmation, revoir un bilan, suppression élève et prof
 - "Terminer la récupération" (fin de séance) demande désormais une confirmation avant de valider, comme "Terminer le bloc"/"Pause"/"Abandonner" pendant la course, pour éviter une mauvaise manipulation
 - Côté élève : cliquer sur une séance dans "Mon historique" rouvre désormais son bilan complet (même écran qu'à la fin de la séance) ; un bouton permet aussi de supprimer cette séance de son historique, avec confirmation
