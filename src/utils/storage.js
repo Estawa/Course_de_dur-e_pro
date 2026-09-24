@@ -445,6 +445,14 @@ export const storage = {
     cache.vma = { ...cache.vma, [cle]: actuel }
     cloud.cloudEcrireVma(cache.teacherId, cle, actuel)
   },
+  modifierResultatFartlek: (eleve, id, patch) => {
+    const cle = storage.cleEleve(eleve)
+    const actuel = cache.vma[cle]
+    if (!actuel?.fartlek) return
+    actuel.fartlek = actuel.fartlek.map((f) => (f.id === id ? { ...f, ...patch } : f))
+    cache.vma = { ...cache.vma, [cle]: { ...actuel } }
+    cloud.cloudEcrireVma(cache.teacherId, cle, cache.vma[cle])
+  },
   getHistoriqueFartlek: (eleve) => {
     const d = storage.getVmaDetail(eleve)
     return (d.fartlek || []).slice().reverse()
@@ -478,6 +486,13 @@ export const storage = {
     cache.bareme = nouveauBareme
     cloud.cloudEcrireBareme(cache.teacherId, nouveauBareme)
     return storage.recalculerNotesReelles()
+  },
+  // Mode de guidage par défaut des séances de cet espace (GPS / bips 50 m / mixte), stocké avec
+  // le barème pour être synchronisé par professeur. Mixte tant que rien n'a été choisi.
+  getModeGuidageDefaut: () => cache.bareme?.modeGuidageDefaut || 'mixte',
+  setModeGuidageDefaut: (mode) => {
+    cache.bareme = { ...(cache.bareme || {}), modeGuidageDefaut: mode }
+    cloud.cloudEcrireBareme(cache.teacherId, cache.bareme)
   },
   recalculerNotesReelles: () => {
     const bareme = storage.getBareme()

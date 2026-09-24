@@ -35,11 +35,11 @@ export const TESTS_CATALOGUE = [
     id: 'fartlek',
     titre: 'Évaluation — Fartlek sur piste',
     objectif: 'Enchaîner les zones intenses et de récupération sur un tour de 400m pendant la durée effective minimale de ton niveau, en gérant tes éventuels arrêts.',
-    deroulement: 'Tour de 400m avec 2 zones intenses et 2 zones de récupération active alternées (plots), plus une zone de repos de 20m au niveau de la ligne de départ/arrivée où tu peux t\'arrêter. Un arrêt en dehors de cette zone reste possible mais compte contre toi.',
+    deroulement: 'Tour de 400m avec 2 zones intenses de 50m et 2 zones de récupération active de 150m alternées (plots), les mêmes pour tous. Un bip à chaque plot te donne l\'allure de ta zone. Une zone de repos de 20m au niveau de la ligne de départ/arrivée te permet de t\'arrêter ; un arrêt en dehors de cette zone reste possible mais compte contre toi. À la fin, tu calcules et saisis toi-même ta distance totale.',
     niveaux: [
-      { nom: 'Facile', description: 'Zones intenses 40m, récup 160m — durée effective minimale 20 min' },
-      { nom: 'Moyen', description: 'Zones intenses 50m, récup 150m — durée effective minimale 22 min' },
-      { nom: 'Difficile', description: 'Zones intenses 60m, récup 140m — durée effective minimale 25 min' }
+      { nom: 'Facile', description: 'Zones intenses à 106,5% VMA, récup à 65% VMA — durée effective minimale 20 min' },
+      { nom: 'Moyen', description: 'Zones intenses à 110,5% VMA, récup à 62,5% VMA — durée effective minimale 22 min' },
+      { nom: 'Difficile', description: 'Zones intenses à 115% VMA, récup à 60% VMA — durée effective minimale 25 min' }
     ]
   }
 ]

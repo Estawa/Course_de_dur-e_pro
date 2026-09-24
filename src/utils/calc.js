@@ -1,3 +1,4 @@
+import { binomeCompte } from './binome'
 import { BAREME } from './bareme'
 
 export function formatDuree(totalSec) {
@@ -262,7 +263,9 @@ export function tauxReussiteRealisation(r) {
 // l'historique et peut toujours être consultée séance par séance. Un Run en direct (course libre
 // sans objectif prescrit, sans note) n'entre jamais dans ce calcul non plus.
 export function syntheseCycle(realisationsEleve) {
-  const comptees = realisationsEleve.filter((r) => !r.exclureCycle && !r.runDirect)
+  // Une séance en binôme (élève sans téléphone) non validée ou refusée par le professeur ne
+  // compte pas non plus (voir utils/binome.js).
+  const comptees = realisationsEleve.filter((r) => !r.exclureCycle && !r.runDirect && binomeCompte(r))
   if (!comptees.length) return null
   const notes = comptees.map((r) => noteFinale(r))
   const moyenne = notes.reduce((a, b) => a + b, 0) / notes.length

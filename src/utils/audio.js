@@ -69,3 +69,25 @@ export function annoncerVocal(texte) {
     // silence si la synthèse vocale échoue
   }
 }
+
+// Mode bips 50 m : un bip à chaque plot, un signal distinct au passage de la ligne (tous les
+// 400 m), avec une courte vibration en complément (repère utile quand plusieurs téléphones
+// bipent en même temps sur la piste). Vibration ignorée si l'appareil ne la gère pas (iPhone).
+export function vibrer(motif) {
+  try {
+    if (navigator.vibrate) navigator.vibrate(motif)
+  } catch (e) {
+    // ignoré
+  }
+}
+
+export function bipPlot() {
+  beep({ freq: 1000, duration: 0.09, volume: 0.35, type: 'square' })
+  vibrer(80)
+}
+
+export function bipLigne() {
+  beep({ freq: 1320, duration: 0.12, volume: 0.4, type: 'square' })
+  setTimeout(() => beep({ freq: 1320, duration: 0.12, volume: 0.4, type: 'square' }), 160)
+  vibrer([80, 60, 80])
+}
