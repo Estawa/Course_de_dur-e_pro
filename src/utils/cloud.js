@@ -172,6 +172,15 @@ export async function loadSeancesTeacher(teacherId) {
   }
 }
 
+// Variante stricte : lève une erreur au lieu de renvoyer [] si la lecture échoue. Utilisée avant
+// d'AJOUTER une séance dans la bibliothèque d'un autre espace (copie depuis un collègue), pour ne
+// jamais réécrire cette bibliothèque à partir d'une liste vide par erreur.
+export async function loadSeancesTeacherStrict(teacherId) {
+  if (!db) throw new Error('Cloud indisponible')
+  const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'seances'))
+  return snap.exists() ? snap.data().liste || [] : []
+}
+
 export function cloudEcrireSeances(teacherId, seances) {
   if (!db) return Promise.resolve(false)
   return setDoc(doc(db, 'profs', teacherId, 'meta', 'seances'), { liste: nettoyer(seances) })
