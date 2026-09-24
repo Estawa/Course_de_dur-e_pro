@@ -17,6 +17,8 @@ import RunDirect from './components/RunDirect'
 import RunDirectBilan from './components/RunDirectBilan'
 import { storage } from './utils/storage'
 import { calculerNoteReelle } from './utils/calc'
+import { seanceReussie } from './utils/binome'
+import { resoudreModeGuidage } from './utils/guidage'
 
 export default function App() {
   // --- Accès (admin + collègues) : chargé une fois au démarrage, indépendant de tout élève
@@ -34,6 +36,9 @@ export default function App() {
   const [niveauActif, setNiveauActif] = useState(null)
   const [dernierResultat, setDernierResultat] = useState(null)
   const [dernierRunDirect, setDernierRunDirect] = useState(null)
+  // Binôme sans téléphone ajouté depuis l'aperçu de séance : { eleve, vma, vmaPorteur, vmaGuidage }
+  const [binomeActif, setBinomeActif] = useState(null)
+  const [dernierBinome, setDernierBinome] = useState(null) // réalisation créditée au binôme, pour le bilan
 
   // Session enseignant : locale à l'appareil (rôle + identité), les données elles-mêmes sont
   // rechargées à chaque fois via storage.chargerEspace(teacherId).
@@ -93,6 +98,7 @@ export default function App() {
   function handleReprendreSession() {
     setSeanceActive(sessionAReprendre.seanceActive)
     setNiveauActif(sessionAReprendre.niveauActif)
+    setBinomeActif(sessionAReprendre.binomeActif || null)
     setRepriseActive(sessionAReprendre)
     setEcran('course')
     setSessionAReprendre(null)
@@ -104,7 +110,7 @@ export default function App() {
   }
 
   function handleProgressSeance(snapshot) {
-    storage.sauvegarderSessionCours(eleve, 'course', { seanceActive, niveauActif, ...snapshot })
+    storage.sauvegarderSessionCours(eleve, 'course', { seanceActive, niveauActif, binomeActif, ...snapshot })
   }
 
   function setSeances(nouvelles) {
@@ -209,6 +215,7 @@ export default function App() {
 
   function handleChoisirSeanceBibliotheque(seance) {
     setSeanceActive(seance)
+    setBinomeActif(null)
     setEcran('choixNiveau')
   }
 
@@ -221,8 +228,9 @@ export default function App() {
     setEcran('course')
   }
 
-  function handleLancerSeanceVierge({ titre, niveau }) {
-    setSeanceActive({ id: 'libre', titre })
+  function handleLancerSeanceVierge({ titre, niveau, modeGuidage }) {
+    setSeanceActive({ id: 'libre', titre, modeGuidage })
+    setBinomeActif(null)
     setNiveauActif(niveau)
     setEcran('course')
   }
@@ -257,28 +265,77 @@ export default function App() {
     setEcran('outils')
   }
 
-  function handleFinSeance(resultat) {
+  function handleFinSeance(resultatComplet) {
+    const { resultatBinome, ...resultat } = resultatComplet
     const { note: noteReelle, avecGps: noteReelleAvecGps } = calculerNoteReelle(resultat, storage.getBareme())
+    const date = Date.now()
     const realisation = {
       id: crypto.randomUUID(),
       eleve,
       seanceId: seanceActive.id,
       seanceTitre: seanceActive.titre,
       niveauNom: niveauActif.nom,
-      date: Date.now(),
+      date,
       noteReelle,
       noteReelleAvecGps,
       ...resultat
     }
-    storage.ajouterRealisation(realisation)
-    setRealisations([...realisations, realisation])
+    const nouvelles = [realisation]
+
+    // Mode binôme : une 2e réalisation est créée pour l'élève sans téléphone, à partir des mêmes
+    // mesures réévaluées sur ses objectifs personnels. Validée d'office si les deux ont réussi
+    // toute la séance, sinon "non validée" : le professeur tranche depuis la fiche de suivi.
+    let realisationBinome = null
+    if (resultatBinome) {
+      const reussitePorteur = seanceReussie(resultat.blocsResultats)
+      const reussiteBinome = seanceReussie(resultatBinome.blocsResultats)
+      const { eleve: eleveB, ...resteB } = resultatBinome
+      const notesB = calculerNoteReelle(resteB, storage.getBareme())
+      realisationBinome = {
+        id: crypto.randomUUID(),
+        eleve: eleveB,
+        seanceId: seanceActive.id,
+        seanceTitre: seanceActive.titre,
+        niveauNom: niveauActif.nom,
+        date,
+        noteReelle: notesB.note,
+        noteReelleAvecGps: notesB.avecGps,
+        echauffementChoisi: resultat.echauffementChoisi,
+        echauffementResultat: resultat.echauffementResultat,
+        recuperationResultat: resultat.recuperationResultat,
+        recuperationSautee: resultat.recuperationSautee,
+        ...resteB,
+        binome: {
+          role: 'sansTelephone',
+          partenaire: { id: eleve.id, nom: eleve.nom, prenom: eleve.prenom, classe: eleve.classe },
+          realisationPartenaireId: realisation.id,
+          vmaGuidage: binomeActif?.vmaGuidage ?? null,
+          reussitePorteur,
+          reussiteBinome,
+          statut: reussitePorteur && reussiteBinome ? 'valide' : 'non_valide'
+        }
+      }
+      realisation.binome = {
+        role: 'porteur',
+        partenaire: { id: eleveB.id, nom: eleveB.nom, prenom: eleveB.prenom, classe: eleveB.classe },
+        realisationPartenaireId: realisationBinome.id,
+        vmaGuidage: binomeActif?.vmaGuidage ?? null
+      }
+      nouvelles.push(realisationBinome)
+    }
+
+    nouvelles.forEach((r) => storage.ajouterRealisation(r))
+    setRealisations([...realisations, ...nouvelles])
     setDernierResultat(realisation)
+    setDernierBinome(realisationBinome)
+    setBinomeActif(null)
     storage.effacerSessionCours(eleve, 'course')
     setRepriseActive(null)
     setEcran('bilan')
   }
 
   function handleAbandonSeance() {
+    setBinomeActif(null)
     storage.effacerSessionCours(eleve, 'course')
     setRepriseActive(null)
     setEcran('tuiles')
@@ -292,6 +349,7 @@ export default function App() {
       )
     : []
   const vmaRef = eleve ? storage.getVmaRetenue(eleve) : null
+  const modeGuidageActif = resoudreModeGuidage(seanceActive?.modeGuidage, storage.getModeGuidageDefaut())
 
   function handleAjouterRealisationProf(realisation) {
     storage.ajouterRealisation(realisation)
@@ -400,7 +458,7 @@ export default function App() {
         <BibliothequeEleve seances={seances} realisations={mesRealisations} eleve={eleve} onChoisirSeance={handleChoisirSeanceBibliotheque} onLancerFartlek={() => setEcran('fartlek')} onSupprimerRealisation={handleSupprimerRealisationEleve} />
       )}
 
-      {ecran === 'vierge' && <SeanceVierge onLancer={handleLancerSeanceVierge} />}
+      {ecran === 'vierge' && <SeanceVierge modeParDefaut={storage.getModeGuidageDefaut()} onLancer={handleLancerSeanceVierge} />}
 
       {ecran === 'outils' && <OutilsEleve eleve={eleve} onComposerSeance={() => setEcran('vierge')} onLancerFartlek={() => setEcran('fartlek')} onLancerRunDirect={handleLancerRunDirect} onActiviteEnCours={setActiviteEnCours} />}
 
@@ -421,13 +479,26 @@ export default function App() {
       )}
 
       {ecran === 'apercu' && niveauActif && (
-        <ApercuSeance niveau={niveauActif} seanceTitre={seanceActive?.titre} vmaRef={vmaRef} regleParticuliere={seanceActive?.regleParticuliere} onDemarrer={handleDemarrerSeance} />
+        <ApercuSeance
+          niveau={niveauActif}
+          seanceTitre={seanceActive?.titre}
+          vmaRef={vmaRef}
+          regleParticuliere={seanceActive?.regleParticuliere}
+          modeGuidage={modeGuidageActif}
+          eleve={eleve}
+          binome={binomeActif}
+          onChoisirBinome={setBinomeActif}
+          onRetirerBinome={() => setBinomeActif(null)}
+          onDemarrer={handleDemarrerSeance}
+        />
       )}
 
       {ecran === 'course' && niveauActif && (
         <SeanceRunner
           niveau={niveauActif}
           vmaRef={vmaRef}
+          binome={binomeActif}
+          modeGuidage={modeGuidageActif}
           reprise={repriseActive}
           onProgress={handleProgressSeance}
           onFinSeance={handleFinSeance}
@@ -436,7 +507,7 @@ export default function App() {
       )}
 
       {ecran === 'bilan' && dernierResultat && (
-        <Bilan resultat={dernierResultat} niveauNom={niveauActif?.nom} onRetourAccueil={() => setEcran('tuiles')} />
+        <Bilan resultat={dernierResultat} resultatBinome={dernierBinome} niveauNom={niveauActif?.nom} onRetourAccueil={() => setEcran('tuiles')} />
       )}
 
       {ecran === 'enseignantPin' && <EnseignantPin accesConfig={accesConfig} onValide={handlePinValide} />}
