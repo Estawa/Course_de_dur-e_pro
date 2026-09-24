@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, FileSpreadsheet, WifiOff } from 'lucide-react'
+import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, FileSpreadsheet, WifiOff, Copy } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import VmaEleveLigne, { LABEL_TEST, formatDateVma } from './VmaEleveLigne'
@@ -12,6 +12,7 @@ import VisibiliteClasses from './VisibiliteClasses'
 import EspaceAcces from './EspaceAcces'
 import BaremeNotation from './BaremeNotation'
 import { storage } from '../utils/storage'
+import { loadSeancesTeacherStrict, cloudEcrireSeances } from '../utils/cloud'
 import { noteFinale, pourcentagesReussite, syntheseCycle, criteresSeance } from '../utils/calc'
 import { genererSeancesTypesSecondes } from '../utils/seancesTypesSecondes'
 import { TESTS_CATALOGUE } from '../utils/testsCatalogue'
@@ -75,7 +76,47 @@ export default function EnseignantDashboard({
     return groupes
   }, [seances])
 
+  // Les séances types intégrées au code (celles construites par l'administrateur) ne sont
+  // importables que par lui, dans son propre espace — jamais par les collègues.
+  const peutImporterTypes = estAdmin && espaceActifId === teacherIdEnseignant
+  const consulteCollegue = espaceActifId !== teacherIdEnseignant
+
+  // Vue globale : copie d'une séance d'un collègue dans la bibliothèque de l'administrateur.
+  // La copie est indépendante (nouvel identifiant), masquée pour toutes les classes, rangée dans
+  // le même espace (Secondes / Premières-Terminales), et la séance du collègue reste intacte.
+  const [copieEnCours, setCopieEnCours] = useState(null)
+  async function copierVersMaBibliotheque(s) {
+    setCopieEnCours(s.id)
+    try {
+      const miennes = await loadSeancesTeacherStrict(teacherIdEnseignant)
+      const groupe = s.niveauScolaire || 'seconde'
+      const maxOrdre = miennes.filter((m) => (m.niveauScolaire || 'seconde') === groupe).reduce((acc, m) => Math.max(acc, m.ordre ?? 0), 0)
+      const copie = {
+        ...JSON.parse(JSON.stringify(s)),
+        id: crypto.randomUUID(),
+        codeType: undefined,
+        niveaux: s.niveaux.map((n) => ({ ...JSON.parse(JSON.stringify(n)), id: crypto.randomUUID() })),
+        visible: false,
+        classesVisibles: [],
+        ordre: maxOrdre + 1,
+        dateCreation: Date.now(),
+        copieDe: nomCollegueConsulte || null
+      }
+      const ok = await cloudEcrireSeances(teacherIdEnseignant, [...miennes, copie])
+      setMessageSeance(
+        ok
+          ? { type: 'ok', texte: `« ${s.titre} » copiée dans ta bibliothèque ✓ (masquée pour tes classes)` }
+          : { type: 'erreur', texte: 'Échec de la copie (connexion réseau ?) — réessaie.' }
+      )
+    } catch (e) {
+      setMessageSeance({ type: 'erreur', texte: 'Échec de la copie (connexion réseau ?) — réessaie.' })
+    } finally {
+      setCopieEnCours(null)
+    }
+  }
+
   function importerSeancesTypes() {
+    if (!peutImporterTypes) return
     const dejaImportees = new Set(seances.map((s) => s.codeType).filter(Boolean))
     const nouvelles = genererSeancesTypesSecondes().filter((s) => !dejaImportees.has(s.codeType))
     if (nouvelles.length === 0) return
@@ -566,12 +607,14 @@ export default function EnseignantDashboard({
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold tracking-wide text-piste-500 uppercase">Bibliothèque de séances</h3>
             <div className="flex items-center gap-2">
-              <button
-                onClick={importerSeancesTypes}
-                className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900"
-              >
-                <Sparkles size={14} /> Importer les séances types
-              </button>
+              {peutImporterTypes && (
+                <button
+                  onClick={importerSeancesTypes}
+                  className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900"
+                >
+                  <Sparkles size={14} /> Importer les séances types
+                </button>
+              )}
               <button
                 onClick={ouvrirNouvelleSeance}
                 className="flex items-center gap-1.5 bg-piste-800 hover:bg-piste-700 text-white text-sm font-medium px-3.5 py-2 rounded-full transition"
@@ -598,7 +641,7 @@ export default function EnseignantDashboard({
                 }}
               >
                 {seancesParGroupe[groupe.id].length === 0 && (
-                  <p className="text-xs text-piste-400 italic px-1">Glisse une séance ici, ou importe les séances types.</p>
+                  <p className="text-xs text-piste-400 italic px-1">{peutImporterTypes ? 'Glisse une séance ici, ou importe les séances types.' : 'Glisse une séance ici, ou crée-en une.'}</p>
                 )}
                 {seancesParGroupe[groupe.id].map((s) => {
                   const nbClassesVisibles = Array.isArray(s.classesVisibles) ? s.classesVisibles.length : s.visible ? classes.length : 0
@@ -628,6 +671,19 @@ export default function EnseignantDashboard({
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        {consulteCollegue && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              copierVersMaBibliotheque(s)
+                            }}
+                            disabled={copieEnCours === s.id}
+                            title="Copier dans ma bibliothèque"
+                            className="flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-full border border-piste-300 text-piste-800 disabled:opacity-40"
+                          >
+                            <Copy size={12} /> {copieEnCours === s.id ? 'Copie…' : 'Copier chez moi'}
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
