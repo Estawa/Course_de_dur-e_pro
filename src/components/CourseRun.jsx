@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Square, TrendingDown, TrendingUp, CheckCircle2, LogOut, Pause, Play } from 'lucide-react'
-import { beepDepart, beepFin, planifierBipRegulation, gongTransition, annoncerVocal } from '../utils/audio'
+import { Square, TrendingDown, TrendingUp, CheckCircle2, LogOut, Pause, Play, Plus, Minus, Volume2 } from 'lucide-react'
+import { beepDepart, beepFin, planifierBipRegulation, gongTransition, annoncerVocal, bipPlot, bipLigne } from '../utils/audio'
+import { distanceTheorique, temps50mS, PLOT_M, TOUR_M } from '../utils/guidage'
 import { formatDuree, vitesseVersAllure, vitesseVersTemps50m } from '../utils/calc'
 import { libellePhase } from '../utils/fullpower'
 import IndicateurGps from './IndicateurGps'
@@ -18,7 +19,20 @@ const TOLERANCE_GPS = 0.09 // ±9%, même tolérance que Fractionné GPS Pro
 // (fermeture/mise en veille de l'appli), à restaurer au lieu de repartir de 0 — voir
 // onDistanceProgress plus bas, qui remonte régulièrement la distance en cours au parent pour
 // qu'il puisse la sauvegarder.
-export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc, onTermineBloc, onAbandon, resumeStartTs, onDemarre, resumeDistance, onDistanceProgress }) {
+// modeGuidage : 'gps' (vitesse GPS, encart de couleur), 'bips' (bip à chaque plot de 50 m au
+// rythme de l'allure cible, sans GPS) ou 'mixte' (bips + GPS mesurant la distance en
+// arrière-plan). La distance GPS n'est JAMAIS affichée pendant la course : l'élève calcule et
+// saisit lui-même sa distance à la fin (voir SaisieDistance). En mode 'gps', un bouton permet à
+// l'élève de passer en mixte (onChangerMode) si son GPS est imprécis ou décroche.
+// Chaque départ se fait sur la ligne : les bips sont calés sur la distance théorique parcourue
+// depuis le départ, donc sur les plots fixes de la piste (signal distinct tous les 400 m).
+export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc, labelTerminer = 'Terminer le bloc', modeGuidage = 'gps', onChangerMode, onTermineBloc, onAbandon, resumeStartTs, onDemarre, resumeDistance, onDistanceProgress, resumeTours = 0 }) {
+  const avecBips = modeGuidage !== 'gps'
+  const avecGps = modeGuidage !== 'bips'
+  const [tours, setTours] = useState(resumeTours)
+  const toursRef = useRef(resumeTours)
+  useEffect(() => { toursRef.current = tours }, [tours])
+  const dernierPlotRef = useRef(null)
   const [etat, setEtat] = useState(resumeStartTs ? 'course' : 'latence') // latence | course | fin
   const [compteALatence, setCompteALatence] = useState(4)
   const [elapsed, setElapsed] = useState(0)
@@ -30,7 +44,7 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
   // puisse être sauvegardée et restaurée en cas de fermeture de l'appli (resumeDistance ci-dessus).
   useEffect(() => {
     if (etat !== 'course') return
-    const iv = setInterval(() => onDistanceProgress?.(distanceRef.current), 3000)
+    const iv = setInterval(() => onDistanceProgress?.(distanceRef.current, toursRef.current), 3000)
     return () => clearInterval(iv)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etat])
@@ -135,9 +149,25 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
     if (etat !== 'course' || enPause) return
     intervalRef.current = setInterval(() => {
       setElapsed((Date.now() - startRef.current) / 1000)
-    }, 250)
+    }, avecBips ? 100 : 250)
     return () => clearInterval(intervalRef.current)
-  }, [etat, enPause])
+  }, [etat, enPause, avecBips])
+
+  // Bips 50 m : un bip chaque fois que la distance théorique (allures cibles suivies exactement
+  // depuis la ligne de départ) franchit un plot ; signal distinct à chaque passage de ligne.
+  useEffect(() => {
+    if (!avecBips || etat !== 'course' || enPause) return
+    const plot = Math.floor((distanceTheorique(phases, elapsed) + 0.001) / PLOT_M)
+    if (dernierPlotRef.current == null) {
+      dernierPlotRef.current = plot
+      return
+    }
+    if (plot > dernierPlotRef.current) {
+      dernierPlotRef.current = plot
+      if ((plot * PLOT_M) % TOUR_M === 0) bipLigne()
+      else bipPlot()
+    }
+  }, [elapsed, etat, enPause, avecBips, phases])
 
   // Annonce (visuelle + vocale) et gong à chaque changement de phase : "Départ !", "Récupération
   // type Répétition/Série", etc. Le gong ne joue pas sur la toute première phase (départ du bloc).
@@ -171,6 +201,10 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
   // bascule sur l'affichage minuteur (voir rendu plus bas) — jamais de blocage de la séance.
   useEffect(() => {
     if (etat === 'fin') return
+    if (!avecGps) {
+      setGpsOk(false)
+      return
+    }
     if (!('geolocation' in navigator)) {
       setGpsOk(false)
       return
@@ -213,15 +247,16 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
     return () => {
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current)
     }
-  }, [etat])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etat, avecGps])
 
   // Bips de régulation d'allure (dès que le GPS répond)
   useEffect(() => {
-    if (etat !== 'course' || gpsOk !== true || !vitesseCible) return
+    if (etat !== 'course' || gpsOk !== true || !vitesseCible || modeGuidage !== 'gps') return
     const ecart = (vitesseInstant - vitesseCible) / vitesseCible
     bipTimeoutRef.current = planifierBipRegulation(ecart, () => {})
     return () => clearTimeout(bipTimeoutRef.current)
-  }, [vitesseInstant, etat, gpsOk, vitesseCible])
+  }, [vitesseInstant, etat, gpsOk, vitesseCible, modeGuidage])
 
   function demanderConfirmation(action) {
     setConfirmation(action)
@@ -345,6 +380,16 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         vitesseMoyenne: Math.round(vitesseMoyenne * 10) / 10,
         vitesseCible: Math.round(vitesseCibleMoyenneTravail * 10) / 10,
         ...calculerCriteres4(),
+        // Vitesse moyenne mesurée par phase (même ordre que `phases`) et fin par chrono : permettent
+        // de réévaluer ce bloc contre d'autres objectifs (mode binôme, voir utils/binome.js).
+        vitessesPhases: phases.map((_, i) => {
+          const s = phaseSamplesRef.current[i]
+          return s && s.length ? Math.round((s.reduce((a, b) => a + b, 0) / s.length) * 100) / 100 : null
+        }),
+        finAutomatique: !!automatique,
+        distanceGPS: Math.round(distance),
+        tours,
+        modeGuidage,
         ...statsPause
       })
     } else {
@@ -366,6 +411,10 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         pctAllure: respectAllure ? 100 : 40,
         pctRecup: null,
         pctRegularite: null,
+        finAutomatique: !!automatique,
+        distanceGPS: null,
+        tours,
+        modeGuidage,
         ...statsPause
       })
     }
@@ -376,7 +425,8 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
       <div className="max-w-md mx-auto px-6 py-24 text-center">
         <p className="text-piste-600 mb-4">Prépare-toi...</p>
         <div className="font-display text-7xl text-piste-900 mb-6">{compteALatence}</div>
-        <IndicateurGps gpsOk={gpsOk} className="flex justify-center" />
+        {avecGps && <IndicateurGps gpsOk={gpsOk} className="flex justify-center" />}
+        {avecBips && <p className="text-xs text-piste-500 mt-3">Place-toi sur la ligne de départ : un bip à chaque plot.</p>}
       </div>
     )
   }
@@ -421,40 +471,83 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
       )}
       {!(repTotal > 0 && finIndexRep > indexPhase) && <div className="mb-8" />}
 
-      {gpsOk !== true && (
+      {modeGuidage === 'gps' && gpsOk !== true && (
         <IndicateurGps gpsOk={gpsOk} className="mb-4 flex justify-center" />
       )}
 
-      {gpsOk === true ? (
-        <div className={`rounded-2xl border-2 p-6 mb-8 transition-colors ${dansLaZone ? 'border-piste-400 bg-piste-50' : 'border-alerte/50 bg-[#fbeeea]'}`}>
+      {modeGuidage === 'gps' && gpsOk === true ? (
+        <div className={`rounded-2xl border-2 p-6 mb-4 transition-colors ${dansLaZone ? 'border-piste-400 bg-piste-50' : 'border-alerte/50 bg-[#fbeeea]'}`}>
           <div className="flex items-center justify-center gap-2 mb-1">
             {ecartPct > 5 && <TrendingUp className="text-alerte" size={20} />}
             {ecartPct < -5 && <TrendingDown className="text-alerte" size={20} />}
             {dansLaZone && <CheckCircle2 className="text-piste-600" size={20} />}
             <span className="font-display text-3xl text-piste-900 tabular-nums">{vitesseInstant.toFixed(1)} km/h</span>
           </div>
-          <p className="text-xs text-piste-600">{Math.round(distance)} m parcourus</p>
           {serieTotal > 1 && (
             <p className="text-[11px] text-piste-400 mt-2 pt-2 border-t border-piste-200">
               Série {serieIndex + 1}/{serieTotal} · reste {formatDuree(serieRestante)}
             </p>
           )}
         </div>
+      ) : avecBips ? (
+        <div className="rounded-2xl border-2 border-piste-400 bg-piste-50 p-5 mb-4">
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <Volume2 size={18} className="text-piste-600" />
+            <span className="font-display text-3xl text-piste-900 tabular-nums">
+              {temps50mS(vitesseCible) ? `${temps50mS(vitesseCible).toFixed(1).replace('.', ',')} s` : '—'}
+            </span>
+          </div>
+          <p className="text-xs text-piste-600">au 50 m · sois au plot à chaque bip</p>
+          <p className="text-[11px] text-piste-400 mt-1">Double bip = passage sur la ligne</p>
+          {serieTotal > 1 && (
+            <p className="text-[11px] text-piste-400 mt-2 pt-2 border-t border-piste-200">
+              Série {serieIndex + 1}/{serieTotal} · reste {formatDuree(serieRestante)}
+            </p>
+          )}
+          {modeGuidage === 'mixte' && (
+            <IndicateurGps gpsOk={gpsOk} className="mt-2 flex justify-center" />
+          )}
+        </div>
       ) : (
-        <div className="rounded-2xl border-2 border-piste-300 bg-piste-50 p-6 mb-8">
+        <div className="rounded-2xl border-2 border-piste-300 bg-piste-50 p-6 mb-4">
           <p className="font-display text-3xl text-piste-900 mb-1">
             {formatDuree(serieTotal > 1 ? serieRestante : dureeTotalePhases - elapsed)}
           </p>
           <p className="text-xs text-piste-600">
-            {serieTotal > 1 ? `temps restant sur la série ${serieIndex + 1}/${serieTotal}` : 'temps restant sur ce bloc'}
+            {serieTotal > 1 ? `temps restant sur la série ${serieIndex + 1}/${serieTotal}` : 'temps restant'}
           </p>
-          {serieTotal > 1 && (
-            <p className="text-[11px] text-piste-400 mt-1">
-              dont {formatDuree(dureeTotalePhases - elapsed)} sur l'ensemble du bloc
-            </p>
-          )}
         </div>
       )}
+
+      {modeGuidage === 'gps' && onChangerMode && (
+        <button
+          onClick={() => onChangerMode('mixte')}
+          className={`w-full text-xs font-medium rounded-xl py-2.5 mb-4 border ${gpsOk === false ? 'border-alerte/50 text-alerte bg-[#fbeeea]' : 'border-piste-200 text-piste-600'}`}
+        >
+          {gpsOk === false ? 'GPS indisponible : passer aux bips 50 m' : 'GPS imprécis ? Passer aux bips 50 m'}
+        </button>
+      )}
+
+      <div className="flex items-center justify-between gap-3 border-2 border-piste-200 rounded-2xl px-3 py-2 mb-6">
+        <button
+          onClick={() => setTours((t) => Math.max(0, t - 1))}
+          disabled={tours === 0}
+          className="p-3 rounded-xl text-piste-500 disabled:opacity-30"
+          aria-label="Annuler un tour"
+        >
+          <Minus size={18} />
+        </button>
+        <div className="text-center">
+          <p className="font-display text-2xl text-piste-900 tabular-nums">{tours}</p>
+          <p className="text-[11px] text-piste-500">tour{tours > 1 ? 's' : ''} complet{tours > 1 ? 's' : ''}</p>
+        </div>
+        <button
+          onClick={() => setTours((t) => t + 1)}
+          className="flex items-center gap-1.5 bg-piste-800 text-white font-medium px-5 py-4 rounded-xl active:scale-[0.97]"
+        >
+          <Plus size={18} /> 1 tour
+        </button>
+      </div>
 
       {enPause ? (
         <div className="rounded-xl border-2 border-piste-300 bg-piste-50 p-5 text-center">
@@ -473,7 +566,7 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
             onClick={() => demanderConfirmation('terminer')}
             className="w-full flex items-center justify-center gap-2 bg-alerte hover:bg-alerte/90 text-white font-medium py-4 rounded-xl transition active:scale-[0.98]"
           >
-            <Square size={16} fill="white" /> Terminer le bloc
+            <Square size={16} fill="white" /> {labelTerminer}
           </button>
           <button
             onClick={() => demanderConfirmation('pause')}
@@ -487,7 +580,7 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         </>
       ) : confirmation === 'terminer' ? (
         <div className="rounded-xl border-2 border-alerte/40 bg-[#fbeeea] p-4">
-          <p className="text-xs text-piste-700 mb-3">Confirme pour terminer ce bloc maintenant</p>
+          <p className="text-xs text-piste-700 mb-3">Confirme pour terminer maintenant</p>
           <div className="flex items-center justify-center gap-3">
             <button onClick={confirmerAction} className="flex items-center gap-2 bg-alerte text-white px-5 py-3 rounded-xl font-medium">
               <Square size={16} fill="white" /> Confirmer

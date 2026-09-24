@@ -1,4 +1,6 @@
-import { CheckCircle2, MinusCircle, XCircle } from 'lucide-react'
+import { CheckCircle2, MinusCircle, XCircle, Users } from 'lucide-react'
+import { STATUTS_BINOME, nomCourt } from '../utils/binome'
+import { formatKmM } from '../utils/guidage'
 import { formatDuree, criteresSeance } from '../utils/calc'
 import { libelleNiveau } from '../utils/niveauLabels'
 
@@ -30,6 +32,48 @@ function CriteresCard({ criteres }) {
   )
 }
 
+// Comparaison entre la distance calculée par l'élève et la mesure GPS (quand elle existe), pour
+// qu'il se positionne sur la justesse de son calcul — purement informatif, sans effet sur la note.
+function ComparaisonDistances({ blocsResultats }) {
+  const blocs = blocsResultats.filter((b) => b.distanceDeclaree != null)
+  if (!blocs.length) return null
+  const totalDeclare = blocs.reduce((a, b) => a + (b.distanceDeclaree || 0), 0)
+  const avecGps = blocs.filter((b) => b.distanceGPS != null)
+  const totalGps = avecGps.length === blocs.length ? avecGps.reduce((a, b) => a + b.distanceGPS, 0) : null
+  const justesse = totalGps ? Math.max(0, Math.round(100 - (Math.abs(totalDeclare - totalGps) / totalGps) * 100)) : null
+  return (
+    <div className="border-2 border-piste-200 rounded-xl px-4 py-3 text-left mb-6">
+      <p className="text-[11px] text-piste-500 mb-2">Ta distance calculée{totalGps != null ? ' et la mesure GPS' : ''}</p>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] text-piste-500">Ton calcul</p>
+          <p className="font-display text-xl text-piste-900">{formatKmM(totalDeclare)}</p>
+        </div>
+        {totalGps != null && (
+          <div className="text-right">
+            <p className="text-[11px] text-piste-500">GPS</p>
+            <p className="font-display text-xl text-piste-900">{formatKmM(totalGps)}</p>
+          </div>
+        )}
+      </div>
+      {totalGps != null && (
+        <p className="text-xs text-piste-600 mt-2">
+          Écart : {totalDeclare - totalGps > 0 ? '+' : ''}{totalDeclare - totalGps} m · justesse de ton calcul {justesse} %
+        </p>
+      )}
+      {blocs.length > 1 && (
+        <div className="mt-2 pt-2 border-t border-piste-100 space-y-0.5">
+          {blocs.map((b, i) => (
+            <p key={b.blocId || i} className="text-[11px] text-piste-500">
+              Bloc {i + 1} : {formatKmM(b.distanceDeclaree)}{b.distanceGPS != null ? ` · GPS ${formatKmM(b.distanceGPS)}` : ''}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PhaseRecap({ titre, resultat, sautee }) {
   if (sautee) {
     return (
@@ -51,7 +95,7 @@ function PhaseRecap({ titre, resultat, sautee }) {
   )
 }
 
-export default function Bilan({ resultat, niveauNom, onRetourAccueil, labelRetour = "Retour à l'accueil" }) {
+export default function Bilan({ resultat, resultatBinome = null, niveauNom, onRetourAccueil, labelRetour = "Retour à l'accueil" }) {
   const {
     blocsResultats, borgParPhase, observationGenerale, note, echauffementResultat,
     echauffementChoisi, recuperationResultat, recuperationSautee, poulsParPhase, observationTravail
@@ -73,6 +117,31 @@ export default function Bilan({ resultat, niveauNom, onRetourAccueil, labelRetou
       <h2 className="font-display text-2xl text-piste-900 mb-1">Séance terminée</h2>
       <p className="text-sm text-piste-600 mb-6">{libelleNiveau(niveauNom)} · {blocsResultats.length} bloc{blocsResultats.length > 1 ? 's' : ''}</p>
 
+      {resultat.binome && (
+        <div className="flex items-start gap-2 border-2 border-piste-200 rounded-xl px-4 py-3 mb-6 text-left">
+          <Users size={16} className="text-piste-600 shrink-0 mt-0.5" />
+          <div className="text-sm text-piste-800">
+            {resultat.binome.role === 'porteur' ? (
+              <>
+                <p>Séance courue en binôme avec {nomCourt(resultat.binome.partenaire)}.</p>
+                {resultatBinome?.binome && (
+                  <p className="text-xs text-piste-600 mt-0.5">
+                    {resultatBinome.binome.statut === 'valide'
+                      ? `Sa séance est enregistrée et validée.`
+                      : `Sa séance est enregistrée ; ton professeur décidera de la valider.`}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p>Séance courue en binôme sur le téléphone de {nomCourt(resultat.binome.partenaire)}.</p>
+                <p className="text-xs text-piste-600 mt-0.5">{STATUTS_BINOME[resultat.binome.statut] || ''}</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {echauffementChoisi === false && (
         <div className="bg-piste-50 rounded-xl px-4 py-3 text-left mb-3">
           <p className="text-sm font-medium text-piste-900">Échauffement</p>
@@ -85,6 +154,8 @@ export default function Bilan({ resultat, niveauNom, onRetourAccueil, labelRetou
 
       <p className="text-xs font-semibold text-piste-500 uppercase tracking-wide mb-2 text-left">Travail — réussite par critère</p>
       <CriteresCard criteres={criteres} />
+
+      <ComparaisonDistances blocsResultats={blocsResultats} />
 
       <div className="bg-piste-50 rounded-xl px-3 py-2.5 text-left mb-6">
         <p className="text-[11px] text-piste-500">Distance / durée totale de travail</p>
@@ -102,7 +173,7 @@ export default function Bilan({ resultat, niveauNom, onRetourAccueil, labelRetou
 
       <div className="space-y-3 text-left mb-6">
         {blocsResultats.map((b, i) => {
-          const { icone: Icone, couleur, label } = STYLE_REUSSITE[b.reussite]
+          const { icone: Icone, couleur, label } = STYLE_REUSSITE[b.reussite] || STYLE_REUSSITE.non_reussi
           return (
             <div key={b.blocId} className="bg-piste-50 rounded-xl px-4 py-3">
               <div className="flex items-center gap-3">

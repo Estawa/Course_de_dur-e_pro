@@ -1,11 +1,11 @@
 import { useState } from 'react'
 
-export default function ObservationFinale({ onValide }) {
+export default function ObservationFinale({ onValide, titre = 'Un mot sur ta séance ?', libelleBouton = 'Terminer la séance' }) {
   const [observation, setObservation] = useState('')
 
   return (
     <div className="max-w-md mx-auto px-6 py-8">
-      <h2 className="font-display text-2xl text-piste-900 mb-1 text-center">Un mot sur ta séance ?</h2>
+      <h2 className="font-display text-2xl text-piste-900 mb-1 text-center">{titre}</h2>
       <p className="text-sm text-piste-600 mb-6 text-center">Observation générale, facultative.</p>
 
       <textarea
@@ -20,7 +20,7 @@ export default function ObservationFinale({ onValide }) {
         onClick={() => onValide(observation.trim())}
         className="w-full bg-piste-800 hover:bg-piste-700 text-white font-medium py-3.5 rounded-xl transition active:scale-[0.98]"
       >
-        Terminer la séance
+        {libelleBouton}
       </button>
     </div>
   )

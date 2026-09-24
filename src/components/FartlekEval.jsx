@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { MapPin, Pause, Play, AlertTriangle, Timer as TimerIcon, Square } from 'lucide-react'
+import { MapPin, Pause, Play, AlertTriangle, Timer as TimerIcon, Square, Plus, Minus, Volume2 } from 'lucide-react'
 import { useGpsSuivi } from '../utils/gps'
-import { NIVEAUX_FARTLEK, TRANCHE_MALUS_S, distanceAttendueM, calculerNoteFartlek } from '../utils/fartlekCalc'
+import { NIVEAUX_FARTLEK, TRANCHE_MALUS_S, distanceAttendueM, calculerNoteFartlek, distanceTheoriqueFartlek, zoneA } from '../utils/fartlekCalc'
+import { formatKmM, resoudreDistance, temps50mS } from '../utils/guidage'
+import SaisieDistance from './SaisieDistance'
 import { formatDuree } from '../utils/calc'
 import { libelleNiveau } from '../utils/niveauLabels'
-import { beep, beepDepart, beepFin, annoncerVocal } from '../utils/audio'
+import { beep, beepDepart, beepFin, annoncerVocal, bipPlot, bipLigne, gongTransition } from '../utils/audio'
 import BorgScale from './BorgScale'
 import ObservationFinale from './ObservationFinale'
 import { storage } from '../utils/storage'
@@ -27,7 +29,7 @@ function ChoixNiveauFartlek({ onChoisir }) {
           >
             <p className="font-display text-lg text-piste-900">{nom}</p>
             <p className="text-xs text-piste-500 mt-0.5">
-              Zones intenses {cfg.intenseM}m · récup {cfg.recupM}m · durée effective minimale {Math.round(cfg.dureeMinS / 60)} min
+              Zones intenses à {cfg.pctIntense}% VMA · récup à {cfg.pctRecup}% VMA · durée effective minimale {Math.round(cfg.dureeMinS / 60)} min
             </p>
           </button>
         ))}
@@ -44,7 +46,9 @@ function ApercuFartlek({ niveauNom, onDemarrer }) {
       <h2 className="font-display text-2xl text-piste-900 mb-4 text-center">{libelleNiveau(niveauNom)}</h2>
 
       <div className="bg-piste-50 rounded-xl p-4 mb-3 space-y-1.5">
-        <p className="text-sm text-piste-800">Tour de 400m : {cfg.intenseM}m intense / {cfg.recupM}m récup, ×2</p>
+        <p className="text-sm text-piste-800">Tour de 400m : {cfg.intenseM}m intense / {cfg.recupM}m récup, ×2 (en partant de la ligne)</p>
+        <p className="text-sm text-piste-800">Allures : {cfg.pctIntense}% VMA en zone intense, {cfg.pctRecup}% VMA en récup</p>
+        <p className="text-sm text-piste-800">Un bip à chaque plot, au rythme de la zone ; double bip sur la ligne, gong aux changements de zone</p>
         <p className="text-sm text-piste-800">Durée de course effective minimale : {Math.round(cfg.dureeMinS / 60)} min</p>
       </div>
 
@@ -53,7 +57,8 @@ function ApercuFartlek({ niveauNom, onDemarrer }) {
         <p className="text-sm text-piste-800">
           Une zone de repos de 20m se trouve au niveau de la ligne de départ/arrivée : tu peux t'y
           arrêter (signale-le avec le bouton dédié). Un arrêt ailleurs sur la piste reste possible
-          mais compte contre toi.
+          mais compte contre toi. Après une pause, repars de la ligne : les bips reprennent au début du tour.
+          À la fin, tu calcules et saisis toi-même ta distance totale.
         </p>
       </div>
 
@@ -97,6 +102,13 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
   // Ref toujours à jour de l'état, utilisable dans la closure figée de l'interval ci-dessous.
   const etatRef = useRef(etat)
   etatRef.current = etat
+  // Bips : la séquence repart du début du tour (ligne de départ) à chaque reprise après une pause
+  // en zone repos. ancreRef = temps effectif (s) au départ de la séquence en cours.
+  const ancreRef = useRef(reprise ? null : 0)
+  const dernierPlotRef = useRef(null)
+  const [tours, setTours] = useState(reprise?.tours || 0)
+  const toursRef = useRef(reprise?.tours || 0)
+  toursRef.current = tours
 
   function snapshot(etatActuel) {
     return {
@@ -108,7 +120,8 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
       etat: etatActuel,
       // Distance GPS cumulée au moment du snapshot, pour pouvoir la restaurer si l'appli se
       // ferme et que l'élève reprend le Fartlek plus tard (voir useGpsSuivi ci-dessus).
-      distanceTotaleSauvegardee: distanceTotaleRef.current
+      distanceTotaleSauvegardee: distanceTotaleRef.current,
+      tours: toursRef.current
     }
   }
 
@@ -170,6 +183,9 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
     if (etat === 'pauseRepos' && pauseDebutRef.current) {
       totalPauseReposMsRef.current += Date.now() - pauseDebutRef.current
       pauseDebutRef.current = null
+      // Repart de la ligne : la séquence de bips reprend au début du tour.
+      ancreRef.current = null
+      dernierPlotRef.current = null
     }
     if (etat === 'arretHorsZone') {
       arretDebutRef.current = null
@@ -180,6 +196,28 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
   }
 
   const effectifS = effectifMsMaintenant() / 1000
+
+  // Position théorique dans la séquence de bips en cours, et bips à chaque plot franchi.
+  if (etat !== 'pauseRepos' && ancreRef.current == null) ancreRef.current = effectifS
+  const tSequence = etat === 'pauseRepos' ? 0 : Math.max(0, effectifS - (ancreRef.current ?? effectifS))
+  const dTheo = distanceTheoriqueFartlek(niveauNom, vmaRef, tSequence)
+  const zoneCourante = zoneA(dTheo)
+  const vZone = ((zoneCourante === 'intense' ? cfg.pctIntense : cfg.pctRecup) / 100) * (vmaRef || 0)
+  useEffect(() => {
+    if (etat === 'pauseRepos') return
+    const plot = Math.floor((dTheo + 0.001) / 50)
+    if (dernierPlotRef.current == null) {
+      dernierPlotRef.current = plot
+      return
+    }
+    if (plot > dernierPlotRef.current) {
+      dernierPlotRef.current = plot
+      const pos = (plot * 50) % 400
+      if (pos === 0) bipLigne()
+      else if (zoneA(plot * 50) !== zoneA(plot * 50 - 1)) gongTransition()
+      else bipPlot()
+    }
+  })
   const dureeAtteinte = effectifS >= cfg.dureeMinS
   const peutTerminer = dureeAtteinte && etat === 'normal'
 
@@ -204,9 +242,10 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
       niveauNom,
       dureeEffectiveS: Math.round(effectifS),
       dureeMinS: cfg.dureeMinS,
-      distanceReelleM: distReelle,
+      distanceGpsM: gpsOk === true ? distReelle : null,
       distanceAttendueM: distAttendue,
       viaGps: gpsOk === true,
+      tours: toursRef.current,
       nbArretsRepos: nbArretsReposRef.current,
       nbArretsHorsZone: nbArretsHorsZoneRef.current,
       malusTotal: malusRef.current
@@ -222,7 +261,7 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
       </div>
       <p className="text-xs text-piste-500 mb-6">
         course effective / {Math.round(cfg.dureeMinS / 60)} min mini
-        {!gpsOk && <span className="text-alerte"> · GPS indisponible</span>}
+
       </p>
 
       {etat === 'pauseRepos' && (
@@ -236,15 +275,38 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-piste-50 rounded-xl px-3 py-3">
-          <p className="text-[11px] text-piste-500 uppercase tracking-wide">Vitesse</p>
-          <p className="font-display text-lg text-piste-900">{vitesseInstant.toFixed(1)} km/h</p>
+      <div className={`rounded-2xl border-2 p-4 mb-4 ${zoneCourante === 'intense' ? 'border-alerte/50 bg-[#fbeeea]' : 'border-piste-300 bg-piste-50'}`}>
+        <p className="text-xs font-semibold text-piste-700 mb-1">
+          {etat === 'pauseRepos' ? 'Repars de la ligne' : zoneCourante === 'intense' ? 'Zone intense' : 'Zone récup'}
+        </p>
+        <div className="flex items-center justify-center gap-2">
+          <Volume2 size={16} className="text-piste-600" />
+          <span className="font-display text-2xl text-piste-900 tabular-nums">
+            {temps50mS(vZone) ? `${temps50mS(vZone).toFixed(1).replace('.', ',')} s` : '—'}
+          </span>
         </div>
-        <div className="bg-piste-50 rounded-xl px-3 py-3">
-          <p className="text-[11px] text-piste-500 uppercase tracking-wide">Distance</p>
-          <p className="font-display text-lg text-piste-900">{Math.round(distanceTotale)} m</p>
+        <p className="text-[11px] text-piste-500">au 50 m · sois au plot à chaque bip</p>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 border-2 border-piste-200 rounded-2xl px-3 py-2 mb-4">
+        <button
+          onClick={() => setTours((t) => Math.max(0, t - 1))}
+          disabled={tours === 0}
+          className="p-3 rounded-xl text-piste-500 disabled:opacity-30"
+          aria-label="Annuler un tour"
+        >
+          <Minus size={18} />
+        </button>
+        <div className="text-center">
+          <p className="font-display text-2xl text-piste-900 tabular-nums">{tours}</p>
+          <p className="text-[11px] text-piste-500">tour{tours > 1 ? 's' : ''} complet{tours > 1 ? 's' : ''}</p>
         </div>
+        <button
+          onClick={() => setTours((t) => t + 1)}
+          className="flex items-center gap-1.5 bg-piste-800 text-white font-medium px-5 py-4 rounded-xl active:scale-[0.97]"
+        >
+          <Plus size={18} /> 1 tour
+        </button>
       </div>
 
       {etat === 'normal' && (
@@ -326,6 +388,20 @@ export default function FartlekEval({ eleve, vmaRef, onTermine, onActiviteEnCour
   function handleFinCourse(donnees) {
     storage.effacerSessionCours(eleve, TYPE_SESSION)
     setDonneesCourse(donnees)
+    setPhase('saisie')
+  }
+
+  // L'élève calcule et saisit sa distance totale ; elle fait foi sauf écart trop important avec
+  // la mesure GPS (> 5 % et ≥ 50 m) : le GPS est alors retenu et le professeur alerté.
+  function handleValideDistance(distanceDeclareeM) {
+    const res = resoudreDistance(distanceDeclareeM, donneesCourse.distanceGpsM)
+    setDonneesCourse((d) => ({
+      ...d,
+      distanceDeclareeM,
+      distanceReelleM: res.distanceRealisee,
+      sourceDistance: res.sourceDistance,
+      alerteDistance: res.alerteDistance
+    }))
     setPhase('borg')
   }
 
@@ -366,6 +442,16 @@ export default function FartlekEval({ eleve, vmaRef, onTermine, onActiviteEnCour
       />
     )
   }
+  if (phase === 'saisie') {
+    return (
+      <SaisieDistance
+        titre="Fartlek terminé"
+        dureeCourseS={donneesCourse.dureeEffectiveS}
+        tours={donneesCourse.tours || 0}
+        onValide={handleValideDistance}
+      />
+    )
+  }
   if (phase === 'borg') {
     return <BorgScale onValide={handleValideBorg} />
   }
@@ -377,9 +463,29 @@ export default function FartlekEval({ eleve, vmaRef, onTermine, onActiviteEnCour
       <div className="max-w-md mx-auto px-6 py-10 text-center">
         <TimerIcon size={32} className="mx-auto mb-3 text-piste-600" />
         <h2 className="font-display text-2xl text-piste-900 mb-2">Évaluation enregistrée</h2>
-        <p className="text-sm text-piste-600 mb-1">
-          Durée effective : {formatDuree(donneesCourse.dureeEffectiveS)} · Distance : {donneesCourse.distanceReelleM} m
+        <p className="text-sm text-piste-600 mb-3">
+          Durée effective : {formatDuree(donneesCourse.dureeEffectiveS)}
         </p>
+        <div className="border-2 border-piste-200 rounded-xl px-4 py-3 text-left mb-3">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[11px] text-piste-500">Ton calcul</p>
+              <p className="font-display text-xl text-piste-900">{formatKmM(donneesCourse.distanceDeclareeM)}</p>
+            </div>
+            {donneesCourse.distanceGpsM != null && (
+              <div className="text-right">
+                <p className="text-[11px] text-piste-500">GPS</p>
+                <p className="font-display text-xl text-piste-900">{formatKmM(donneesCourse.distanceGpsM)}</p>
+              </div>
+            )}
+          </div>
+          {donneesCourse.distanceGpsM ? (
+            <p className="text-xs text-piste-600 mt-2">
+              Écart : {donneesCourse.distanceDeclareeM - donneesCourse.distanceGpsM > 0 ? '+' : ''}{donneesCourse.distanceDeclareeM - donneesCourse.distanceGpsM} m · justesse de ton calcul{' '}
+              {Math.max(0, Math.round(100 - (Math.abs(donneesCourse.distanceDeclareeM - donneesCourse.distanceGpsM) / donneesCourse.distanceGpsM) * 100))} %
+            </p>
+          ) : null}
+        </div>
         <p className="text-sm text-piste-600 mb-8">
           Arrêts zone repos : {donneesCourse.nbArretsRepos} · Arrêts hors zone : {donneesCourse.nbArretsHorsZone}
         </p>

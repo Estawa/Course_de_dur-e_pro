@@ -3,6 +3,7 @@ import { Plus, Trash2, X } from 'lucide-react'
 import FullPowerBuilder from './FullPowerBuilder'
 import SelecteurDuree from './SelecteurDuree'
 import { libelleNiveau } from '../utils/niveauLabels'
+import { MODES_GUIDAGE, OPTIONS_RETOUR_DEPART } from '../utils/guidage'
 
 const NOMS_NIVEAUX = ['Facile', 'Moyen', 'Difficile']
 
@@ -29,6 +30,7 @@ function niveauDepuisSeance(n) {
     nom: n.nom,
     visible: n.visible !== false,
     echauffement: n.echauffement ? { ...n.echauffement } : echauffementVide(),
+    retourDepart: n.retourDepart || 'auto',
     blocs: n.blocs.map((b) =>
       b.mode === 'fullpower'
         ? { id: b.id, mode: 'fullpower', structure: b.structure }
@@ -37,8 +39,9 @@ function niveauDepuisSeance(n) {
   }
 }
 
-export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }) {
+export default function SeanceEditor({ seanceInitiale, modeParDefaut = 'mixte', onEnregistrer, onFermer }) {
   const [titre, setTitre] = useState(seanceInitiale?.titre || '')
+  const [modeGuidage, setModeGuidage] = useState(seanceInitiale?.modeGuidage || 'defaut')
   const [regleParticuliere, setRegleParticuliere] = useState(seanceInitiale?.regleParticuliere || '')
   const [niveaux, setNiveaux] = useState(
     seanceInitiale ? seanceInitiale.niveaux.map(niveauDepuisSeance) : NOMS_NIVEAUX.map(niveauVide)
@@ -110,6 +113,7 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
       nom: n.nom,
       visible: n.visible !== false,
       echauffement: { active: !!n.echauffement?.active, duree_s: Number(n.echauffement?.duree_s) || 0 },
+      retourDepart: n.retourDepart || 'auto',
       blocs: n.blocs.map((b) => {
         if (b.mode === 'fullpower') {
           return { id: b.id, mode: 'fullpower', structure: b.structure }
@@ -123,6 +127,7 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
       id: seanceInitiale?.id || crypto.randomUUID(),
       titre: titre.trim(),
       regleParticuliere: regleParticuliere.trim() || null,
+      modeGuidage,
       dateCreation: seanceInitiale?.dateCreation || Date.now(),
       // Classement Secondes / Premières-Terminales : géré depuis la bibliothèque (glisser-déposer
       // entre les deux espaces), pas depuis cet éditeur. Ordre d'affichage idem.
@@ -175,6 +180,18 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
             />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-piste-800 mb-1">Guidage de l'allure</label>
+            <select
+              value={modeGuidage}
+              onChange={(e) => setModeGuidage(e.target.value)}
+              className="w-full rounded-xl border border-piste-200 px-3 py-2.5 text-sm bg-white"
+            >
+              <option value="defaut">Mon réglage par défaut ({MODES_GUIDAGE[modeParDefaut] || MODES_GUIDAGE.mixte})</option>
+              {Object.entries(MODES_GUIDAGE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+
           {niveaux.map((n) => (
             <div key={n.id} className="border border-piste-100 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
@@ -206,6 +223,17 @@ export default function SeanceEditor({ seanceInitiale, onEnregistrer, onFermer }
                     onChange={(v) => majNiveau(n.id, 'echauffement', { ...n.echauffement, duree_s: v })}
                   />
                 )}
+              </div>
+
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-piste-700 mb-1">Retour à la ligne de départ pendant les récupérations</label>
+                <select
+                  value={n.retourDepart || 'auto'}
+                  onChange={(e) => majNiveau(n.id, 'retourDepart', e.target.value)}
+                  className="w-full rounded-lg border border-piste-200 px-2.5 py-2 text-xs bg-white"
+                >
+                  {Object.entries(OPTIONS_RETOUR_DEPART).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
               </div>
 
               <div className="space-y-4 mb-2">

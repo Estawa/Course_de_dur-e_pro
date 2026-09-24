@@ -6,6 +6,10 @@ import ExclusionRealisation from './ExclusionRealisation'
 import NotificationsRealisation from './NotificationsRealisation'
 import RunDirectCarteModal from './RunDirectCarteModal'
 import Bilan from './Bilan'
+import ValidationBinome from './ValidationBinome'
+import ControleDistance from './ControleDistance'
+import { calculerNoteFartlek } from '../utils/fartlekCalc'
+import { binomeCompte } from '../utils/binome'
 import { storage } from '../utils/storage'
 import { noteFinale, tauxReussiteRealisation, blocAvecGps } from '../utils/calc'
 import { libelleNiveau } from '../utils/niveauLabels'
@@ -31,6 +35,7 @@ export default function FicheSuiviEleve({
   const [editionOuverte, setEditionOuverte] = useState(false)
   const [runDirectOuvert, setRunDirectOuvert] = useState(null)
   const [bilanOuvert, setBilanOuvert] = useState(null)
+  const [, setVersionFartlek] = useState(0) // force le rafraîchissement après une bascule de distance Fartlek
   const [editNom, setEditNom] = useState(eleve.nom)
   const [editPrenom, setEditPrenom] = useState(eleve.prenom)
   const [editSexe, setEditSexe] = useState(eleve.sexe || '')
@@ -293,12 +298,13 @@ export default function FicheSuiviEleve({
                     : `${nbBlocsGpsMesures}/${blocsGpsDemandes.length} bloc${blocsGpsDemandes.length > 1 ? 's' : ''} mesuré${nbBlocsGpsMesures > 1 ? 's' : ''} par GPS`
                 const pctGlobal = tauxReussiteRealisation(r)
                 return (
-                  <div key={r.id} className={`rounded-lg px-3 py-2.5 ${r.exclureCycle ? 'bg-piste-50/60 opacity-70' : 'bg-piste-50'}`}>
+                  <div key={r.id} className={`rounded-lg px-3 py-2.5 ${r.exclureCycle || !binomeCompte(r) ? 'bg-piste-50/60 opacity-80' : 'bg-piste-50'}`}>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs font-medium text-piste-900">
                           {r.seanceTitre}{r.niveauNom ? ` · ${libelleNiveau(r.niveauNom)}` : ''}
                           {r.saisieProf && <span className="text-piste-500 font-normal"> · saisie prof</span>}
+                          {r.binome?.role === 'sansTelephone' && <span className="text-piste-500 font-normal"> · binôme</span>}
                         </p>
                         {estRunDirect ? (
                           <p className="text-[11px] text-piste-500">
@@ -350,6 +356,8 @@ export default function FicheSuiviEleve({
                         )}
                       </div>
                     </div>
+                    <ValidationBinome realisation={r} onModifier={onModifierRealisation} />
+                    <ControleDistance realisation={r} onModifier={onModifierRealisation} />
                     {onModifierRealisation && (
                       <>
                         <ComportementAjustement realisation={r} onModifier={onModifierRealisation} />
@@ -383,6 +391,25 @@ export default function FicheSuiviEleve({
                           <p className="text-[11px] text-piste-500">
                             Arrêts repos {h.nbArretsRepos} · Arrêts hors zone {h.nbArretsHorsZone} (malus -{h.malusTotal}) · Bonus +{h.bonus} · Borg {h.borg}
                           </p>
+                          {h.distanceDeclareeM != null && (
+                            <p className={`text-[11px] ${h.alerteDistance ? 'text-alerte font-medium' : 'text-piste-500'}`}>
+                              Déclarée {h.distanceDeclareeM} m{h.distanceGpsM != null ? ` · GPS ${h.distanceGpsM} m` : ''} · retenue : {h.sourceDistance === 'gps' ? 'GPS' : 'déclarée'}
+                              {h.distanceGpsM != null && h.alerteDistance && (
+                                <button
+                                  onClick={() => {
+                                    const source = h.sourceDistance === 'gps' ? 'declaree' : 'gps'
+                                    const d = source === 'gps' ? h.distanceGpsM : h.distanceDeclareeM
+                                    const noteInfo = calculerNoteFartlek({ niveauNom: h.niveauNom, distanceReelleM: d, distanceAttendueM: h.distanceAttendueM, malusTotal: h.malusTotal })
+                                    storage.modifierResultatFartlek(eleve, h.id, { distanceReelleM: d, sourceDistance: source, ...noteInfo })
+                                    setVersionFartlek((v) => v + 1)
+                                  }}
+                                  className="ml-1.5 underline text-piste-700 font-medium"
+                                >
+                                  retenir {h.sourceDistance === 'gps' ? 'la déclarée' : 'le GPS'}
+                                </button>
+                              )}
+                            </p>
+                          )}
                         </div>
                         <div className="text-right">
                           <span className="font-display text-piste-900">{h.noteFinale}/{h.plafond}</span>

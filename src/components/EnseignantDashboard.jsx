@@ -5,6 +5,8 @@ import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import VmaEleveLigne, { LABEL_TEST, formatDateVma } from './VmaEleveLigne'
 import FicheSuiviEleve from './FicheSuiviEleve'
+import { STATUTS_BINOME } from '../utils/binome'
+import { MODES_GUIDAGE } from '../utils/guidage'
 import SuiviSansTelephone from './SuiviSansTelephone'
 import VisibiliteClasses from './VisibiliteClasses'
 import EspaceAcces from './EspaceAcces'
@@ -31,6 +33,11 @@ export default function EnseignantDashboard({
   const [chargementEspace, setChargementEspace] = useState(false)
   const [editeurOuvert, setEditeurOuvert] = useState(false)
   const [seanceEnEdition, setSeanceEnEdition] = useState(null)
+  const [modeGuidageDefaut, setModeGuidageDefaut] = useState(() => storage.getModeGuidageDefaut())
+  // L'espace consulté peut changer (Vue globale) : le réglage affiché suit l'espace chargé.
+  useEffect(() => {
+    if (!chargementEspace) setModeGuidageDefaut(storage.getModeGuidageDefaut())
+  }, [espaceActifId, chargementEspace])
   const [seancePourVisibilite, setSeancePourVisibilite] = useState(null)
   const [importOuvert, setImportOuvert] = useState(false)
   const [rosterVersion, setRosterVersion] = useState(0) // force refresh après import/suppression
@@ -366,6 +373,17 @@ export default function EnseignantDashboard({
       'Note sur': 20,
       'Détail critères': detailCriteres(r),
       'Exclue du cycle': r.exclureCycle ? 'oui' : 'non',
+      'Distance déclarée (m)': (r.blocsResultats || []).some((b) => b.distanceDeclaree != null)
+        ? (r.blocsResultats || []).reduce((a, b) => a + (b.distanceDeclaree || 0), 0)
+        : '',
+      'Distance GPS (m)': (r.blocsResultats || []).length && (r.blocsResultats || []).every((b) => b.distanceGPS != null)
+        ? (r.blocsResultats || []).reduce((a, b) => a + b.distanceGPS, 0)
+        : '',
+      Binôme: r.binome
+        ? r.binome.role === 'porteur'
+          ? `porteur du téléphone (avec ${r.binome.partenaire.prenom} ${r.binome.partenaire.nom})`
+          : `sans téléphone (tél. de ${r.binome.partenaire.prenom} ${r.binome.partenaire.nom}) · ${STATUTS_BINOME[r.binome.statut] || r.binome.statut}`
+        : '',
       Observation: r.observationGenerale || r.commentaireComportement || ''
     }))
 
@@ -523,6 +541,19 @@ export default function EnseignantDashboard({
 
       {onglet === 'seances' && (
         <section>
+          <div className="flex items-center gap-2 bg-piste-50 rounded-xl px-4 py-3 mb-4">
+            <label className="text-xs font-medium text-piste-700 shrink-0">Guidage par défaut de mes séances</label>
+            <select
+              value={modeGuidageDefaut}
+              onChange={(e) => {
+                storage.setModeGuidageDefaut(e.target.value)
+                setModeGuidageDefaut(e.target.value)
+              }}
+              className="flex-1 min-w-0 rounded-lg border border-piste-200 px-2.5 py-1.5 text-xs bg-white"
+            >
+              {Object.entries(MODES_GUIDAGE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
           {messageSeance && (
             <div className={`text-xs rounded-xl px-4 py-2.5 mb-3 border ${
               messageSeance.type === 'ok'
@@ -776,6 +807,12 @@ export default function EnseignantDashboard({
                   const detailVma = eleve.id ? storage.getVmaDetail({ id: eleve.id, nom: eleve.nom, prenom: eleve.prenom, classe: classeActive }) : null
                   const vmaRetenue = detailVma ? detailVma.manuelle ?? detailVma.auto ?? null : null
                   const vmaImposee = detailVma && detailVma.manuelle != null
+                  const nbBinomesAValider = eleve.id
+                    ? realisations.filter((r) => r.eleve?.id === eleve.id && r.binome?.role === 'sansTelephone' && r.binome.statut === 'non_valide').length
+                    : 0
+                  const nbAlertesDistance = eleve.id
+                    ? realisations.filter((r) => r.eleve?.id === eleve.id && (r.blocsResultats || []).some((b) => b.alerteDistance && b.sourceDistance === 'gps')).length
+                    : 0
                   return (
                     <button
                       key={cle}
@@ -797,6 +834,16 @@ export default function EnseignantDashboard({
                             ? `${LABEL_TEST[detailVma.autoTest] || detailVma.autoTest} · ${formatDateVma(detailVma.autoDate)}`
                             : 'Aucun test VMA'}
                         </p>
+                        {nbAlertesDistance > 0 && (
+                          <p className="text-[11px] font-medium text-alerte">
+                            {nbAlertesDistance} écart{nbAlertesDistance > 1 ? 's' : ''} de distance à vérifier
+                          </p>
+                        )}
+                        {nbBinomesAValider > 0 && (
+                          <p className="text-[11px] font-medium text-alerte">
+                            {nbBinomesAValider} séance{nbBinomesAValider > 1 ? 's' : ''} en binôme à valider
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0 pl-2">
                         <span className="font-display text-lg text-piste-900">{vmaRetenue ? `${vmaRetenue} km/h` : '—'}</span>
@@ -904,6 +951,7 @@ export default function EnseignantDashboard({
       {editeurOuvert && (
         <SeanceEditor
           seanceInitiale={seanceEnEdition}
+          modeParDefaut={modeGuidageDefaut}
           onEnregistrer={enregistrerSeance}
           onFermer={() => {
             setEditeurOuvert(false)

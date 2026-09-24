@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import FullPowerBuilder from './FullPowerBuilder'
+import { MODES_GUIDAGE } from '../utils/guidage'
 
-export default function SeanceVierge({ onLancer }) {
+export default function SeanceVierge({ modeParDefaut = 'mixte', onLancer }) {
   const [titre, setTitre] = useState('')
+  const [modeGuidage, setModeGuidage] = useState(modeParDefaut)
   const [structure, setStructure] = useState(null)
 
   const pretALancer = structure && structure.sequence.length > 0
@@ -24,11 +26,23 @@ export default function SeanceVierge({ onLancer }) {
 
       <FullPowerBuilder structureInitiale={structure} onChange={setStructure} />
 
+      <div className="mt-5">
+        <label className="block text-sm font-medium text-piste-800 mb-1">Guidage de l'allure</label>
+        <select
+          value={modeGuidage}
+          onChange={(e) => setModeGuidage(e.target.value)}
+          className="w-full rounded-xl border border-piste-200 px-3 py-2.5 text-sm bg-white"
+        >
+          {Object.entries(MODES_GUIDAGE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </div>
+
       <button
         disabled={!pretALancer}
         onClick={() =>
           onLancer({
             titre: titre.trim() || 'Séance libre',
+            modeGuidage,
             niveau: {
               id: crypto.randomUUID(),
               nom: 'Séance libre',

@@ -7,7 +7,7 @@ const CHOIX = [
   { valeur: 'non_reussi', label: 'Non réussi', icone: XCircle, couleur: 'border-alerte/50 bg-[#fbeeea] text-piste-800' }
 ]
 
-export default function BilanBloc({ labelBloc, onValide }) {
+export default function BilanBloc({ labelBloc, annonceRetour = false, onValide }) {
   const [choix, setChoix] = useState(null)
   const [note, setNote] = useState('')
 
@@ -15,6 +15,11 @@ export default function BilanBloc({ labelBloc, onValide }) {
 
   return (
     <div className="max-w-md mx-auto px-6 py-10">
+      {annonceRetour && (
+        <div className="rounded-2xl bg-alerte text-white px-5 py-4 mb-6 text-center">
+          <p className="font-display text-lg leading-snug">Retourne au départ avant le prochain bloc !</p>
+        </div>
+      )}
       <p className="text-xs uppercase tracking-wide text-piste-500 mb-1 text-center">{labelBloc}</p>
       <h2 className="font-display text-2xl text-piste-900 mb-6 text-center">Comment s'est passé ce bloc ?</h2>
 

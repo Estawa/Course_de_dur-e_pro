@@ -1,5 +1,6 @@
 import { TrendingUp, Star } from 'lucide-react'
 import { tauxReussiteRealisation } from '../utils/calc'
+import { binomeCompte } from '../utils/binome'
 
 const LARGEUR = 320
 const HAUTEUR = 100
@@ -12,7 +13,7 @@ const MARGE = 14
 // le reste de l'appli, qui n'en embarque aucune.
 export default function ProgressionEleve({ realisations }) {
   const serie = realisations
-    .filter((r) => !r.exclureCycle)
+    .filter((r) => !r.exclureCycle && binomeCompte(r))
     .slice()
     .sort((a, b) => a.date - b.date)
     .map((r) => tauxReussiteRealisation(r))

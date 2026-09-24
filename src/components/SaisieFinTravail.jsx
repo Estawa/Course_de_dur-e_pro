@@ -10,9 +10,10 @@ const DUREE_FENETRE_S = 2 * 60 + 30
 // échelle de Borg. Un décompte de 2min30 reste affiché en continu pendant toute la séquence — il
 // est indicatif (rien ne bloque si l'élève dépasse), pour donner un repère de temps pendant que la
 // récupération de fin de séance a déjà commencé à courir en arrière-plan (voir SeanceRunner).
-export default function SaisieFinTravail({ distanceRealisee, dureeRealisee, onValide }) {
+export default function SaisieFinTravail({ distanceRealisee, dureeRealisee, binomeNom, onValide }) {
   const [etape, setEtape] = useState('pouls') // 'pouls' | 'recap'
   const [pouls, setPouls] = useState(null)
+  const [poulsBinome, setPoulsBinome] = useState(null)
   const [observation, setObservation] = useState('')
   const [borg, setBorg] = useState(null)
   const [restant, setRestant] = useState(DUREE_FENETRE_S)
@@ -26,14 +27,15 @@ export default function SaisieFinTravail({ distanceRealisee, dureeRealisee, onVa
     return () => clearInterval(iv)
   }, [])
 
-  function handlePouls(valeur) {
+  function handlePouls(valeur, valeurBinome) {
     setPouls(valeur)
+    setPoulsBinome(valeurBinome ?? null)
     setEtape('recap')
   }
 
   function valider() {
     const dureeEcouleeS = (Date.now() - startRef.current) / 1000
-    onValide({ pouls, observation, borg, dureeEcouleeS })
+    onValide({ pouls, poulsBinome, observation, borg, dureeEcouleeS })
   }
 
   return (
@@ -46,6 +48,7 @@ export default function SaisieFinTravail({ distanceRealisee, dureeRealisee, onVa
       {etape === 'pouls' && (
         <PriseDePouls
           titre="Pouls immédiat après l'effort"
+          binomeNom={binomeNom}
           onValide={handlePouls}
         />
       )}
@@ -58,7 +61,7 @@ export default function SaisieFinTravail({ distanceRealisee, dureeRealisee, onVa
             <p className="text-xs text-piste-500">Temps de travail réalisé</p>
             <p className="text-sm font-medium text-piste-900 mb-2">{formatDuree(dureeRealisee)}</p>
             <p className="text-xs text-piste-500">Pouls immédiat</p>
-            <p className="text-sm font-medium text-piste-900">{pouls} bpm/min</p>
+            <p className="text-sm font-medium text-piste-900">{pouls} bpm/min{binomeNom ? ` · ${binomeNom} : ${poulsBinome} bpm/min` : ''}</p>
           </div>
 
           <label className="block text-[11px] font-semibold text-piste-500 uppercase tracking-wide mb-1.5">

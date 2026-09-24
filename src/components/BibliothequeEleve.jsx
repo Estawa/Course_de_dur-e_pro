@@ -10,6 +10,14 @@ import ProgressionEleve from './ProgressionEleve'
 import RunDirectCarteModal from './RunDirectCarteModal'
 import Bilan from './Bilan'
 
+// Statut d'une séance courue en binôme sans téléphone, tel que l'élève le voit (sans note).
+const STATUTS_BINOME_ELEVE = {
+  valide: 'validée',
+  non_valide: 'en attente de ton professeur',
+  valide_prof: 'validée par ton professeur',
+  refuse: 'non retenue par ton professeur'
+}
+
 export default function BibliothequeEleve({ seances, realisations, eleve, onChoisirSeance, onLancerFartlek, onSupprimerRealisation }) {
   const [runDirectOuvert, setRunDirectOuvert] = useState(null)
   const [bilanOuvert, setBilanOuvert] = useState(null)
@@ -147,7 +155,11 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
               >
                 <div>
                   <p className="font-medium text-piste-900 text-sm">{r.seanceTitre} · {libelleNiveau(r.niveauNom)}</p>
-                  <p className="text-xs text-piste-500 mt-0.5">{new Date(r.date).toLocaleDateString('fr-FR')}</p>
+                  <p className="text-xs text-piste-500 mt-0.5">
+                    {new Date(r.date).toLocaleDateString('fr-FR')}
+                    {r.binome?.role === 'porteur' && ` · en binôme avec ${r.binome.partenaire.prenom}`}
+                    {r.binome?.role === 'sansTelephone' && ` · en binôme (tél. de ${r.binome.partenaire.prenom}) · ${STATUTS_BINOME_ELEVE[r.binome.statut] || ''}`}
+                  </p>
                   <div className="flex items-center gap-3 mt-1.5">
                     <span className="flex items-center gap-1 text-xs text-piste-600">
                       <CheckCircle2 size={13} className="text-piste-600" />

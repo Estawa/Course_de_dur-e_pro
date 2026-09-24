@@ -10,11 +10,14 @@ import { beep, beepDepart, beepFin, annoncerVocal } from '../utils/audio'
 //    la valeur /1min une fois le décompte terminé.
 const DUREE_ANNONCE_S = 3
 
-export default function PriseDePouls({ titre = 'Prise de pouls', sousTitre, onValide }) {
+// binomeNom (facultatif, mode binôme) : les deux élèves comptent pendant le même décompte, puis
+// chacun saisit sa valeur ; onValide(poulsPorteur, poulsBinome).
+export default function PriseDePouls({ titre = 'Prise de pouls', sousTitre, binomeNom, onValide }) {
   const [etape, setEtape] = useState('annonce') // annonce | preCompte | compte | saisie
   const [preCompte, setPreCompte] = useState(5)
   const [compte, setCompte] = useState(12)
   const [pouls, setPouls] = useState('')
+  const [poulsBinome, setPoulsBinome] = useState('')
 
   useEffect(() => {
     if (etape !== 'annonce') return
@@ -52,7 +55,7 @@ export default function PriseDePouls({ titre = 'Prise de pouls', sousTitre, onVa
         <p className="text-piste-600 mb-1">{titre}</p>
         {sousTitre && <p className="text-xs text-piste-500 mb-6">{sousTitre}</p>}
         <p className="text-lg font-medium text-piste-900 mt-8">Attention, prise de votre pouls sur 12 secondes !</p>
-        <p className="text-xs text-piste-500 mt-4">Prépare-toi à compter tes pulsations (poignet ou cou).</p>
+        <p className="text-xs text-piste-500 mt-4">{binomeNom ? 'Comptez tous les deux vos pulsations (poignet ou cou).' : 'Prépare-toi à compter tes pulsations (poignet ou cou).'}</p>
       </div>
     )
   }
@@ -83,21 +86,34 @@ export default function PriseDePouls({ titre = 'Prise de pouls', sousTitre, onVa
     <div className="max-w-md mx-auto px-6 py-16 text-center">
       <p className="text-piste-600 mb-1">{titre}</p>
       <p className="text-xs text-piste-500 mb-6">Multiplie par 5 le nombre de pulsations comptées, et indique le résultat sur 1 minute.</p>
-      <div className="flex items-center justify-center gap-2 mb-8">
-        <input
-          type="number"
-          min="0"
-          inputMode="numeric"
-          value={pouls}
-          onChange={(e) => setPouls(e.target.value)}
-          placeholder="0"
-          className="w-28 text-center text-3xl font-display rounded-xl border-2 border-piste-200 px-3 py-3 focus:outline-none focus:border-piste-500"
-        />
-        <span className="text-piste-600 text-sm">bpm/min</span>
-      </div>
+      {[
+        { label: binomeNom ? 'Toi' : null, valeur: pouls, set: setPouls },
+        ...(binomeNom ? [{ label: binomeNom, valeur: poulsBinome, set: setPoulsBinome }] : [])
+      ].map((champ, i) => (
+        <div key={i} className={binomeNom ? 'mb-5' : ''}>
+          {champ.label && <p className="text-sm font-medium text-piste-800 mb-1.5">{champ.label}</p>}
+          <div className={`flex items-center justify-center gap-2 ${binomeNom ? '' : 'mb-8'}`}>
+            <input
+              type="number"
+              min="0"
+              inputMode="numeric"
+              value={champ.valeur}
+              onChange={(e) => champ.set(e.target.value)}
+              placeholder="0"
+              className="w-28 text-center text-3xl font-display rounded-xl border-2 border-piste-200 px-3 py-3 focus:outline-none focus:border-piste-500"
+            />
+            <span className="text-piste-600 text-sm">bpm/min</span>
+          </div>
+        </div>
+      ))}
       <button
-        disabled={pouls === ''}
-        onClick={() => onValide(Math.max(0, Math.round(Number(pouls) || 0)))}
+        disabled={pouls === '' || (binomeNom && poulsBinome === '')}
+        onClick={() =>
+          onValide(
+            Math.max(0, Math.round(Number(pouls) || 0)),
+            binomeNom ? Math.max(0, Math.round(Number(poulsBinome) || 0)) : undefined
+          )
+        }
         className="w-full bg-piste-800 hover:bg-piste-700 disabled:opacity-40 text-white font-medium py-3.5 rounded-xl transition active:scale-[0.98]"
       >
         Valider

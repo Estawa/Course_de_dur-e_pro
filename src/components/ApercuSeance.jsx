@@ -3,6 +3,8 @@ import { formatDuree, vitesseVersAllure, vitesseVersTemps50m } from '../utils/ca
 import { totauxNiveau, dureeRecuperationFinale } from '../utils/fullpower'
 import { libelleNiveau } from '../utils/niveauLabels'
 import { RECUPERATION_FIXE } from '../utils/phasesFixes'
+import BinomeChoix from './BinomeChoix'
+import { MODES_GUIDAGE, SEUIL_RETOUR_DEPART_S } from '../utils/guidage'
 
 function allureEtRepere(kmh) {
   return `${vitesseVersAllure(kmh)} · ${vitesseVersTemps50m(kmh)}`
@@ -36,7 +38,9 @@ function detailBlocFullPower(b, vmaRef, masquerRecupFinale) {
   return lignes
 }
 
-export default function ApercuSeance({ niveau, seanceTitre, vmaRef, regleParticuliere, onDemarrer }) {
+export default function ApercuSeance({ niveau, seanceTitre, vmaRef: vmaPerso, regleParticuliere, modeGuidage, eleve, binome, onChoisirBinome, onRetirerBinome, onDemarrer }) {
+  // En binôme, les allures affichées sont celles du guidage (VMA moyenne des deux élèves).
+  const vmaRef = binome ? binome.vmaGuidage : vmaPerso
   const { distance, duree } = totauxNiveau(niveau, vmaRef, RECUPERATION_FIXE.duree_s)
   const dureeRecupFinale = dureeRecuperationFinale(niveau, RECUPERATION_FIXE.duree_s)
 
@@ -75,6 +79,20 @@ export default function ApercuSeance({ niveau, seanceTitre, vmaRef, regleParticu
         <p className="text-sm text-piste-800">Récupération finale : {formatDuree(dureeRecupFinale)}</p>
       </div>
 
+      {modeGuidage && (
+        <div className="bg-piste-50 rounded-xl px-4 py-3 mb-3 text-sm text-piste-800">
+          <p>Guidage : {MODES_GUIDAGE[modeGuidage]}</p>
+          <p className="text-xs text-piste-600 mt-1">
+            {niveau.retourDepart === 'jamais'
+              ? 'Les récupérations se font sur place.'
+              : niveau.retourDepart === 'toujours'
+              ? 'Retour à la ligne de départ pendant chaque récupération.'
+              : `Retour à la ligne de départ pendant les récupérations de ${SEUIL_RETOUR_DEPART_S / 60} min ou plus.`}
+            {' '}Tu calcules et saisis ta distance après chaque partie.
+          </p>
+        </div>
+      )}
+
       <div className="space-y-3 mb-8">
         {niveau.blocs.map((b, i) => (
           <div key={b.id} className="border border-piste-100 rounded-xl p-4">
@@ -90,6 +108,10 @@ export default function ApercuSeance({ niveau, seanceTitre, vmaRef, regleParticu
           </div>
         ))}
       </div>
+
+      {onChoisirBinome && (
+        <BinomeChoix eleve={eleve} vmaPorteur={vmaPerso} binome={binome} onChoisir={onChoisirBinome} onRetirer={onRetirerBinome} />
+      )}
 
       <button
         onClick={onDemarrer}
