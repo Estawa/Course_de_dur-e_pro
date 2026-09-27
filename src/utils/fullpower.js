@@ -15,34 +15,50 @@ export function recupVide(duree_s = 120, pct_vma = 50) {
   return { active: false, duree_s, pct_vma }
 }
 
-// Transforme la structure (types + séquence + nb tours) en liste plate de phases,
-// en résolvant les vitesses cibles à partir de la VMA de référence.
-// Chaque phase de récupération est étiquetée (recupType) pour permettre l'annonce
-// appropriée pendant la course : 'repetition' (entre deux répétitions d'un même passage),
-// 'serie' (entre deux tours de la séquence) ou 'fin' (récupération/retour au calme final).
-// inclureRecupFinale : à false pour le DERNIER bloc d'un niveau — la "Récupération / retour au
-// calme final" de ce bloc sert alors uniquement à régler la durée de l'écran séance-level dédié
-// (Recuperation.jsx, voir dureeRecuperationFinale ci-dessous), pour éviter de la jouer deux fois
-// de suite (une fois dans ce bloc, une fois juste après).
+// Structure Full Power par défaut d'une nouvelle série : 1 type A, 1 répétition, 1 tour.
+export function structureVide() {
+  const a = typeVide('A')
+  return { types: [a], sequence: [{ typeId: a.id, repetitions: 1 }], nbTours: 1, recupSerie: recupVide(120, 50), recupFinale: recupVide(120, 50) }
+}
+
+// Liste à plat des répétitions (types) composant UN tour de la série.
+function instancesDuTour(structure) {
+  const instances = []
+  ;(structure.sequence || []).forEach((item) => {
+    const type = structure.types.find((t) => t.id === item.typeId)
+    if (!type) return
+    for (let r = 0; r < (Number(item.repetitions) || 0); r++) instances.push(type)
+  })
+  return instances
+}
+
+// Règle d'enchaînement (v1.58.0) : la récupération propre au type n'est PAS jouée après
+//   - la dernière répétition du DERNIER tour de la série : on enchaîne directement sur la
+//     récupération entre les séries, ou sur la phase suivante (récupération de fin de séance) ;
+//   - la dernière répétition d'un tour quand une "récupération entre les tours" est active :
+//     c'est elle qui la remplace (pas de cumul des deux).
+function recupDeRepetitionJouee(tour, nbTours, estDerniereDuTour, structure) {
+  if (!estDerniereDuTour) return true
+  if (tour === nbTours - 1) return false
+  return !structure.recupSerie?.active
+}
+
+// Transforme la structure d'une série (types + répétitions + nb de tours) en liste plate de
+// phases, en résolvant les vitesses cibles à partir de la VMA de référence.
+// Chaque phase de récupération est étiquetée (recupType) pour l'annonce pendant la course :
+// 'repetition' (entre deux répétitions), 'serie' (valeur historique = entre deux TOURS de la
+// série) ou 'fin' (récupération après la série).
+// serieIndex/serieTotal (noms historiques) désignent le TOUR en cours dans la série.
+// inclureRecupFinale : la récupération "après la série" n'est plus jouée dans le déroulé de la
+// série elle-même par SeanceRunner (écran dédié entre les séries, ou récupération de fin de
+// séance pour la dernière) — voir SeanceRunner.preparerBloc.
 export function expanserStructure(structure, vmaRef, { inclureRecupFinale = true } = {}) {
   const phases = []
   const vma = vmaRef || 15
-  const nbTours = structure.nbTours || 1
+  const nbTours = Math.max(1, Number(structure.nbTours) || 1)
+  const instances = instancesDuTour(structure)
   for (let tour = 0; tour < nbTours; tour++) {
-    // Liste à plat des répétitions du tour, pour savoir si on est sur la toute dernière
-    // (afin de ne pas cumuler la récup individuelle du type ET la récup de série qui suit).
-    const instances = []
-    structure.sequence.forEach((item) => {
-      const type = structure.types.find((t) => t.id === item.typeId)
-      if (!type) return
-      for (let r = 0; r < item.repetitions; r++) instances.push(type)
-    })
-    const skipDerniereRecup = tour < nbTours - 1 && structure.recupSerie?.active
     instances.forEach((type, i) => {
-      // serieIndex/serieTotal situent la phase dans le tour (série) en cours ; repIndex/repTotal
-      // situent la répétition au sein de ce tour. Ces champs permettent à l'écran de course de
-      // faire apparaître "Série X/N · Répétition Y/Z" et un décompte propre à chaque niveau,
-      // plutôt qu'un seul décompte portant sur tout le bloc.
       phases.push({
         phase: 'travail',
         typeLettre: type.lettre,
@@ -54,8 +70,8 @@ export function expanserStructure(structure, vmaRef, { inclureRecupFinale = true
         duree_s: type.duree_travail_s,
         vitesse_kmh: Math.round((type.pct_vma_travail / 100) * vma * 100) / 100
       })
-      const estDerniereInstanceDuTour = i === instances.length - 1
-      if (type.duree_recup_s > 0 && !(estDerniereInstanceDuTour && skipDerniereRecup)) {
+      const derniere = i === instances.length - 1
+      if (type.duree_recup_s > 0 && recupDeRepetitionJouee(tour, nbTours, derniere, structure)) {
         phases.push({
           phase: 'recup',
           recupType: 'repetition',
@@ -100,26 +116,15 @@ export function expanserStructure(structure, vmaRef, { inclureRecupFinale = true
   return phases
 }
 
-export function dureeTotaleStructure(structure, { inclureRecupFinale = true } = {}) {
-  let total = 0
-  const nbTours = structure.nbTours || 1
-  for (let tour = 0; tour < nbTours; tour++) {
-    const instances = []
-    structure.sequence.forEach((item) => {
-      const type = structure.types.find((t) => t.id === item.typeId)
-      if (!type) return
-      for (let r = 0; r < item.repetitions; r++) instances.push(type)
-    })
-    const skipDerniereRecup = tour < nbTours - 1 && structure.recupSerie?.active
-    instances.forEach((type, i) => {
-      const estDerniereInstanceDuTour = i === instances.length - 1
-      total += type.duree_travail_s
-      if (!(estDerniereInstanceDuTour && skipDerniereRecup)) total += type.duree_recup_s || 0
-    })
-    if (tour < nbTours - 1 && structure.recupSerie?.active) total += structure.recupSerie.duree_s
-  }
-  if (structure.recupFinale?.active && inclureRecupFinale) total += structure.recupFinale.duree_s
-  return total
+export function dureeTotaleStructure(structure, opts) {
+  return expanserStructure(structure, 15, opts).reduce((acc, p) => acc + (Number(p.duree_s) || 0), 0)
+}
+
+// Temps de travail effectif d'une série (phases d'effort uniquement, sans aucune récupération).
+export function tempsTravailStructure(structure) {
+  return expanserStructure(structure, 15, { inclureRecupFinale: false })
+    .filter((p) => p.phase === 'travail')
+    .reduce((acc, p) => acc + (Number(p.duree_s) || 0), 0)
 }
 
 export function distanceTotaleStructure(structure, vmaRef, opts) {
@@ -152,29 +157,51 @@ export function estDernierBlocAvecRecupDelegue(niveau, blocId) {
 export function libellePhase(p) {
   if (!p) return ''
   if (p.phase === 'travail') return 'Départ !'
-  if (p.recupType === 'serie') return 'Récupération type Série'
-  if (p.recupType === 'fin') return 'Récupération Fin de séance'
-  return 'Récupération type Répétition'
+  if (p.recupType === 'serie') return 'Récupération entre les séries'
+  if (p.recupType === 'fin') return 'Récupération entre les parties'
+  return 'Récupération'
 }
 
-// Distance et durée totales d'un niveau (échauffement + récupération finale de séance inclus),
-// pour l'aperçu avant de démarrer et pour les cartes de choix de niveau. La récupération finale
-// du dernier bloc (si Full Power et active) n'est comptée qu'une fois, via dureeRecuperationFinale
-// — voir plus haut — puisqu'elle n'est plus jouée dans le déroulé du bloc lui-même.
+// Durée de la récupération jouée APRÈS une série qui n'est pas la dernière du niveau
+// (écran "Récupération entre les séries", voir SeanceRunner) : réglage "Récupération après la
+// série" de cette série (Full Power). 0 si non active ou série en mode Simple.
+export function dureeRecupApresSerie(bloc) {
+  const r = bloc?.mode === 'fullpower' ? bloc.structure?.recupFinale : null
+  return r?.active && r.duree_s > 0 ? Number(r.duree_s) : 0
+}
+
+export function pctVmaRecupApresSerie(bloc) {
+  return bloc?.structure?.recupFinale?.pct_vma ?? 50
+}
+
+// Temps de travail effectif d'un niveau (somme des efforts de toutes ses séries, sans
+// échauffement ni récupérations).
+export function tempsTravailNiveau(niveau) {
+  return (niveau?.blocs || []).reduce((acc, b) => {
+    if (b.mode === 'fullpower') return acc + (b.structure ? tempsTravailStructure(b.structure) : 0)
+    return acc + (Number(b.duree_s) || 0)
+  }, 0)
+}
+
+// Distance, durée totale et temps de travail d'un niveau (échauffement + récupérations entre les
+// séries + récupération de fin de séance inclus dans la durée), pour l'éditeur, l'aperçu avant
+// de démarrer et les cartes de choix de niveau.
 export function totauxNiveau(niveau, vmaRef, dureeRecupFixeDefaut) {
   let distance = 0
-  let duree = niveau.echauffement?.active ? niveau.echauffement.duree_s : 0
-  niveau.blocs.forEach((b, i) => {
-    const dernier = i === niveau.blocs.length - 1
-    if (b.mode === 'fullpower' && b.structure) {
+  let duree = niveau.echauffement?.active ? Number(niveau.echauffement.duree_s) || 0 : 0
+  const blocs = niveau.blocs || []
+  blocs.forEach((b, i) => {
+    const dernier = i === blocs.length - 1
+    if (b.mode === 'fullpower') {
+      if (!b.structure) return
       const opts = dernier ? { inclureRecupFinale: false } : undefined
       duree += dureeTotaleStructure(b.structure, opts)
       distance += distanceTotaleStructure(b.structure, vmaRef, opts)
-    } else if (b.mode !== 'fullpower') {
-      duree += b.duree_s
-      distance += b.distance_m
+    } else {
+      duree += Number(b.duree_s) || 0
+      distance += Number(b.distance_m) || 0
     }
   })
   duree += dureeRecuperationFinale(niveau, dureeRecupFixeDefaut)
-  return { distance, duree }
+  return { distance, duree, travail: tempsTravailNiveau(niveau) }
 }
