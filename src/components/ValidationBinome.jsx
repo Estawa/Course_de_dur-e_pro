@@ -38,7 +38,7 @@ export default function ValidationBinome({ realisation, onModifier }) {
       <p className="text-[11px] text-piste-600 mt-0.5">
         {b.partenaire.prenom} : {b.reussitePorteur ? 'séance réussie' : 'séance non réussie'} · {realisation.eleve.prenom} :{' '}
         {b.reussiteBinome ? 'séance réussie' : 'séance non réussie'}
-        {blocsDecroches.length > 0 && ` · a décroché au bloc ${blocsDecroches.join(', ')}`}
+        {blocsDecroches.length > 0 && ` · a décroché à la partie ${blocsDecroches.join(', ')}`}
       </p>
       {(enAttente || b.statut === 'refuse') && (
         <p className="text-[11px] text-piste-500 mt-0.5">Ne compte pas dans la moyenne de cycle.</p>

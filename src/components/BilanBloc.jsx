@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { formatDuree } from '../utils/calc'
 import { CheckCircle2, MinusCircle, XCircle } from 'lucide-react'
 
 const CHOIX = [
@@ -7,7 +8,15 @@ const CHOIX = [
   { valeur: 'non_reussi', label: 'Non réussi', icone: XCircle, couleur: 'border-alerte/50 bg-[#fbeeea] text-piste-800' }
 ]
 
-export default function BilanBloc({ labelBloc, annonceRetour = false, onValide }) {
+export default function BilanBloc({ labelBloc, annonceRetour = false, recupFinTs = null, onValide }) {
+  // Décompte de la récupération entre les séries, déjà en cours pendant ce bilan.
+  const [resteRecup, setResteRecup] = useState(() => (recupFinTs ? Math.max(0, (recupFinTs - Date.now()) / 1000) : 0))
+  useEffect(() => {
+    if (!recupFinTs) return
+    const iv = setInterval(() => setResteRecup(Math.max(0, (recupFinTs - Date.now()) / 1000)), 500)
+    return () => clearInterval(iv)
+  }, [recupFinTs])
+
   const [choix, setChoix] = useState(null)
   const [note, setNote] = useState('')
 
@@ -17,11 +26,16 @@ export default function BilanBloc({ labelBloc, annonceRetour = false, onValide }
     <div className="max-w-md mx-auto px-6 py-10">
       {annonceRetour && (
         <div className="rounded-2xl bg-alerte text-white px-5 py-4 mb-6 text-center">
-          <p className="font-display text-lg leading-snug">Retourne au départ avant le prochain bloc !</p>
+          <p className="font-display text-lg leading-snug">Retourne au départ avant la prochaine partie !</p>
         </div>
       )}
+      {recupFinTs && (
+        <p className="text-center text-sm font-medium text-piste-700 bg-piste-50 rounded-xl py-2 mb-4 tabular-nums">
+          Récupération entre les parties : {resteRecup > 0 ? `reste ${formatDuree(resteRecup)}` : 'terminée'}
+        </p>
+      )}
       <p className="text-xs uppercase tracking-wide text-piste-500 mb-1 text-center">{labelBloc}</p>
-      <h2 className="font-display text-2xl text-piste-900 mb-6 text-center">Comment s'est passé ce bloc ?</h2>
+      <h2 className="font-display text-2xl text-piste-900 mb-6 text-center">Comment s'est passée cette partie ?</h2>
 
       <div className="space-y-3 mb-5">
         {CHOIX.map(({ valeur, label, icone: Icone, couleur }) => (

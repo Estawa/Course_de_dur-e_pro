@@ -1,4 +1,4 @@
-import { Flame, Info, Layers, MapPin, Timer as TimerIcon } from 'lucide-react'
+import { Dumbbell, Flame, Info, Layers, MapPin, Timer as TimerIcon } from 'lucide-react'
 import { formatDuree, vitesseVersAllure, vitesseVersTemps50m } from '../utils/calc'
 import { totauxNiveau, dureeRecuperationFinale } from '../utils/fullpower'
 import { libelleNiveau } from '../utils/niveauLabels'
@@ -14,7 +14,7 @@ function detailBlocSimple(b) {
   return [`${b.distance_m} m en ${formatDuree(b.duree_s)} (${allureEtRepere(b.allure_kmh)})`]
 }
 
-function detailBlocFullPower(b, vmaRef, masquerRecupFinale) {
+function detailBlocFullPower(b, vmaRef, estDerniere) {
   const s = b.structure
   if (!s) return []
   const lignes = s.sequence.map((item) => {
@@ -29,19 +29,20 @@ function detailBlocFullPower(b, vmaRef, masquerRecupFinale) {
         : ''
     return `Type ${type.lettre} × ${item.repetitions} : ${travail}${recup}`
   }).filter(Boolean)
-  if (s.nbTours > 1) lignes.push(`Séquence répétée ${s.nbTours} fois (séries)`)
-  if (s.recupSerie?.active && s.nbTours > 1) lignes.push(`Récupération entre séries : ${formatDuree(s.recupSerie.duree_s)} à ${s.recupSerie.pct_vma}% VMA`)
+  if (s.nbTours > 1) lignes.push(`Nombre de séries : ${s.nbTours}`)
+  if (s.recupSerie?.active && s.nbTours > 1) lignes.push(`Récupération entre les séries : ${formatDuree(s.recupSerie.duree_s)} à ${s.recupSerie.pct_vma}% VMA`)
+  lignes.push('Pas de récupération après la dernière répétition : on enchaîne directement.')
   // La récupération finale de ce bloc, si c'est le dernier du niveau, est déjà annoncée par la
   // ligne "Récupération finale" séance-level ci-dessus (voir dureeRecuperationFinale) — pas
   // besoin de la répéter ici, ce serait justement le doublon qu'on a supprimé.
-  if (s.recupFinale?.active && !masquerRecupFinale) lignes.push(`Récupération / retour au calme final : ${formatDuree(s.recupFinale.duree_s)} à ${s.recupFinale.pct_vma}% VMA`)
+  if (s.recupFinale?.active && !estDerniere) lignes.push(`Puis récupération entre les parties : ${formatDuree(s.recupFinale.duree_s)} à ${s.recupFinale.pct_vma}% VMA`)
   return lignes
 }
 
 export default function ApercuSeance({ niveau, seanceTitre, vmaRef: vmaPerso, regleParticuliere, modeGuidage, eleve, binome, onChoisirBinome, onRetirerBinome, onDemarrer }) {
   // En binôme, les allures affichées sont celles du guidage (VMA moyenne des deux élèves).
   const vmaRef = binome ? binome.vmaGuidage : vmaPerso
-  const { distance, duree } = totauxNiveau(niveau, vmaRef, RECUPERATION_FIXE.duree_s)
+  const { distance, duree, travail } = totauxNiveau(niveau, vmaRef, RECUPERATION_FIXE.duree_s)
   const dureeRecupFinale = dureeRecuperationFinale(niveau, RECUPERATION_FIXE.duree_s)
 
   return (
@@ -64,6 +65,10 @@ export default function ApercuSeance({ niveau, seanceTitre, vmaRef: vmaPerso, re
         <div className="bg-piste-50 rounded-xl px-3 py-3 flex items-center gap-2">
           <TimerIcon size={16} className="text-piste-600 shrink-0" />
           <span className="text-sm text-piste-800">{formatDuree(duree)} au total</span>
+        </div>
+        <div className="bg-piste-50 rounded-xl px-3 py-3 flex items-center gap-2 col-span-2">
+          <Dumbbell size={16} className="text-piste-600 shrink-0" />
+          <span className="text-sm text-piste-800">Temps de travail : {formatDuree(travail)}</span>
         </div>
       </div>
 
@@ -88,7 +93,7 @@ export default function ApercuSeance({ niveau, seanceTitre, vmaRef: vmaPerso, re
               : niveau.retourDepart === 'toujours'
               ? 'Retour à la ligne de départ pendant chaque récupération.'
               : `Retour à la ligne de départ pendant les récupérations de ${SEUIL_RETOUR_DEPART_S / 60} min ou plus.`}
-            {' '}Tu calcules et saisis ta distance après chaque partie.
+            {' '}Tu calcules et saisis ta distance après chaque partie (ou chaque tronçon, s'il y a un retour au départ).
           </p>
         </div>
       )}
@@ -98,7 +103,7 @@ export default function ApercuSeance({ niveau, seanceTitre, vmaRef: vmaPerso, re
           <div key={b.id} className="border border-piste-100 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <Layers size={14} className="text-piste-500" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-piste-500">Bloc {i + 1}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-piste-500">Partie {i + 1}</p>
             </div>
             <ul className="space-y-1">
               {(b.mode === 'fullpower' ? detailBlocFullPower(b, vmaRef, i === niveau.blocs.length - 1) : detailBlocSimple(b)).map((ligne, j) => (

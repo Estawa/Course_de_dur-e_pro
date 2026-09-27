@@ -11,20 +11,23 @@ import PriseDePouls from './PriseDePouls'
 import ChoixEchauffement from './ChoixEchauffement'
 import SaisieFinTravail from './SaisieFinTravail'
 import BinomeBloc from './BinomeBloc'
+import RecupInterSeries from './RecupInterSeries'
 import { reevaluerBloc } from '../utils/binome'
-import { decouperSegments, distancePhases, dureePhases, fusionnerSegments } from '../utils/guidage'
+import { decouperSegments, distancePhases, dureePhases, fusionnerSegments, SEUIL_RETOUR_DEPART_S } from '../utils/guidage'
 import { calculerNoteSeance } from '../utils/calc'
-import { expanserStructure, dureeTotaleStructure, distanceTotaleStructure, dureeRecuperationFinale, estDernierBlocAvecRecupDelegue } from '../utils/fullpower'
+import { expanserStructure, dureeTotaleStructure, distanceTotaleStructure, dureeRecuperationFinale, dureeRecupApresSerie, pctVmaRecupApresSerie } from '../utils/fullpower'
 import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 import { useWakeLock } from '../utils/wakeLock'
 import { libelleNiveau } from '../utils/niveauLabels'
 
 export function preparerBloc(bloc, niveau, vmaRef) {
   if (bloc.mode === 'fullpower' && bloc.structure) {
-    // Le dernier bloc du niveau, s'il a sa propre "Récupération / retour au calme final" active,
-    // ne la joue pas lui-même : elle sert uniquement à régler la durée de l'écran séance-level
-    // dédié (Recuperation, voir plus bas) — sinon elle serait jouée deux fois de suite.
-    const opts = estDernierBlocAvecRecupDelegue(niveau, bloc.id) ? { inclureRecupFinale: false } : undefined
+    // La "récupération après la série" n'est jamais jouée dans le déroulé de la série : pour une
+    // série intermédiaire, elle a son écran dédié (RecupInterSeries, pendant lequel l'élève saisit
+    // sa distance et fait son bilan) ; pour la dernière, elle règle la durée de la récupération de
+    // fin de séance (Recuperation). Les objectifs de distance/allure ne portent donc que sur la
+    // série courue elle-même.
+    const opts = { inclureRecupFinale: false }
     return {
       phases: expanserStructure(bloc.structure, vmaRef, opts),
       distanceCible: distanceTotaleStructure(bloc.structure, vmaRef, opts),
@@ -94,6 +97,9 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
   const [segmentsResultats, setSegmentsResultats] = useState(() => reprise?.segmentsResultats ?? [])
   const [resultatSegment, setResultatSegment] = useState(() => reprise?.resultatSegment ?? null)
   const [retourFinTs, setRetourFinTs] = useState(() => reprise?.retourFinTs ?? null)
+  // Fin (timestamp) de la récupération entre les séries en cours : démarre à la fin de la
+  // dernière répétition de la série, avant la saisie de distance et le bilan.
+  const [recupInterFinTs, setRecupInterFinTs] = useState(() => reprise?.recupInterFinTs ?? null)
   const toursEnCoursRef = useRef(reprise?.courseEtat === 'course' ? reprise.toursEnCours || 0 : 0)
   const courseStartTsRef = useRef(reprise?.courseEtat === 'course' ? reprise.courseStartTs : null)
   const [repriseConsommee, setRepriseConsommee] = useState(false)
@@ -127,6 +133,7 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
       segmentsResultats,
       resultatSegment,
       retourFinTs,
+      recupInterFinTs,
       toursEnCours: phase === 'course' ? toursEnCoursRef.current : 0,
       courseStartTs: courseStartTsRef.current,
       courseEtat: phase === 'course' ? 'course' : null,
@@ -137,7 +144,7 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
   useEffect(() => {
     onProgress?.(snapshotProgress())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indexBloc, phase, blocsResultats, echauffementChoisi, echauffementResultat, recuperationResultat, recuperationSautee, borgParPhase, poulsParPhase, observationTravail, dejaEcouleRecupS, resultatsCourseBloc, blocsResultatsBinome, poulsBinome, bilanBlocEnAttente, observationGeneraleEnAttente, borgBinome, modeEffectif, indexSegment, segmentsResultats, resultatSegment, retourFinTs])
+  }, [indexBloc, phase, blocsResultats, echauffementChoisi, echauffementResultat, recuperationResultat, recuperationSautee, borgParPhase, poulsParPhase, observationTravail, dejaEcouleRecupS, resultatsCourseBloc, blocsResultatsBinome, poulsBinome, bilanBlocEnAttente, observationGeneraleEnAttente, borgBinome, modeEffectif, indexSegment, segmentsResultats, resultatSegment, retourFinTs, recupInterFinTs])
 
   function handleCourseDemarre(ts) {
     courseStartTsRef.current = ts
@@ -161,13 +168,17 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
 
   const bloc = niveau.blocs[indexBloc]
   const dernierBloc = indexBloc === niveau.blocs.length - 1
-  const labelBloc = bloc ? `Bloc ${indexBloc + 1}/${niveau.blocs.length} · ${libelleNiveau(niveau.nom)}` : libelleNiveau(niveau.nom)
+  const labelBloc = bloc ? `Partie ${indexBloc + 1}/${niveau.blocs.length} · ${libelleNiveau(niveau.nom)}` : libelleNiveau(niveau.nom)
+  const dureeRecupInter = bloc && !dernierBloc ? dureeRecupApresSerie(bloc) : 0
+  const optionRetour = niveau.retourDepart || 'auto'
+  const retourAvantSerieSuivante =
+    dureeRecupInter > 0 && optionRetour !== 'jamais' && (optionRetour === 'toujours' || dureeRecupInter >= SEUIL_RETOUR_DEPART_S)
   const preparation = bloc ? preparerBloc(bloc, niveau, vmaGuidage) : null
   const decoupage = preparation ? decouperSegments(preparation.phases, niveau.retourDepart || 'auto') : { segments: [], retours: [] }
   const nbSegments = decoupage.segments.length
   const segment = decoupage.segments[indexSegment] || decoupage.segments[0]
   const dernierSegment = indexSegment >= nbSegments - 1
-  const labelSegment = nbSegments > 1 ? ` · Partie ${indexSegment + 1}/${nbSegments}` : ''
+  const labelSegment = nbSegments > 1 ? ` · Tronçon ${indexSegment + 1}/${nbSegments}` : ''
 
   function poulsBinomeSur(cle, valeurBinome) {
     if (binome) setPoulsBinome((p) => ({ ...p, [cle]: valeurBinome ?? null }))
@@ -208,6 +219,9 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
       setRetourFinTs(Date.now() + (decoupage.retours[indexSegment]?.duree_s || 0) * 1000)
     } else {
       setRetourFinTs(null)
+      // Dernière répétition de la série terminée : la récupération entre les séries démarre
+      // maintenant (la récupération de cette dernière répétition n'est pas jouée).
+      setRecupInterFinTs(dureeRecupInter > 0 ? Date.now() + dureeRecupInter * 1000 : null)
     }
     setPhase('saisieDistance')
   }
@@ -270,11 +284,18 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
   function passerAuBlocSuivant() {
     if (dernierBloc) {
       setPhase('finTravail')
+    } else if (recupInterFinTs && recupInterFinTs > Date.now()) {
+      setPhase('recupInterSeries')
     } else {
-      setIndexBloc((i) => i + 1)
-      setPhase('course')
-      setResultatsCourseBloc(null)
+      demarrerSerieSuivante()
     }
+  }
+
+  function demarrerSerieSuivante() {
+    setRecupInterFinTs(null)
+    setIndexBloc((i) => i + 1)
+    setPhase('course')
+    setResultatsCourseBloc(null)
   }
 
   // Saisie groupée juste après la dernière répétition de travail (pouls, récap distance/temps
@@ -409,7 +430,7 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
         distanceCible={distancePhases(segment.phases)}
         dureeCible={dureePhases(segment.phases)}
         labelBloc={labelBloc + labelSegment}
-        labelTerminer={nbSegments > 1 ? 'Terminer cette partie' : 'Terminer le bloc'}
+        labelTerminer={nbSegments > 1 ? 'Terminer ce tronçon' : 'Terminer la partie'}
         modeGuidage={modeEffectif}
         onChangerMode={setModeEffectif}
         resumeTours={resumeTours}
@@ -441,14 +462,27 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
   }
 
   if (phase === 'bilanBloc') {
-    return <BilanBloc labelBloc={labelBloc} annonceRetour={!dernierBloc} onValide={handleValideBilanBloc} />
+    return <BilanBloc labelBloc={labelBloc} annonceRetour={!dernierBloc && (dureeRecupInter === 0 || retourAvantSerieSuivante)} recupFinTs={dernierBloc ? null : recupInterFinTs} onValide={handleValideBilanBloc} />
+  }
+
+  if (phase === 'recupInterSeries') {
+    return (
+      <RecupInterSeries
+        key={`recup-inter-${indexBloc}`}
+        finTs={recupInterFinTs || Date.now()}
+        labelSuivante={`Partie ${indexBloc + 2}/${niveau.blocs.length}`}
+        vitesseKmh={Math.round((pctVmaRecupApresSerie(bloc) / 100) * (vmaGuidage || 15) * 100) / 100}
+        retourDepart={retourAvantSerieSuivante}
+        onTermine={demarrerSerieSuivante}
+      />
+    )
   }
 
   if (phase === 'saisieDistance') {
     return (
       <SaisieDistance
         key={`saisie-${indexBloc}-${indexSegment}`}
-        titre={`${labelBloc}${labelSegment} terminé${nbSegments > 1 ? 'e' : ''}`}
+        titre={`${labelBloc}${labelSegment} ${nbSegments > 1 ? 'terminé' : 'terminée'}`}
         dureeCourseS={resultatSegment?.dureeRealisee}
         tours={resultatSegment?.tours || 0}
         retourFinTs={dernierSegment ? null : retourFinTs}

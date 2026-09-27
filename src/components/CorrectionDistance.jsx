@@ -12,7 +12,7 @@ export default function CorrectionDistance({ distanceCible, onValide }) {
 
   return (
     <div className="max-w-md mx-auto px-6 py-10 text-center">
-      <h2 className="font-display text-xl text-piste-900 mb-2">GPS indisponible sur ce bloc</h2>
+      <h2 className="font-display text-xl text-piste-900 mb-2">GPS indisponible sur cette partie</h2>
       <p className="text-sm text-piste-600 mb-6">
         Le GPS n'a pas pu mesurer ta distance. Indique la distance que tu penses avoir réellement
         parcourue, pour que ta fiche reste fidèle à ce que tu as fait — pas forcément la distance

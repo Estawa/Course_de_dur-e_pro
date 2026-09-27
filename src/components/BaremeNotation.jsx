@@ -82,14 +82,14 @@ export default function BaremeNotation({ onRealisationsRecalculees }) {
         </div>
 
         <div className="rounded-xl border border-piste-200 p-4">
-          <p className="text-sm font-semibold text-piste-900 mb-3">3 — Pénalités de pauses (par bloc)</p>
+          <p className="text-sm font-semibold text-piste-900 mb-3">3 — Pénalités de pauses (par partie)</p>
           <Curseur label="Pauses tolérées avant pénalité" valeur={brouillon.pausesTolereesParBloc} min={0} max={5} step={1}
             format={(v) => `${v}`}
             onChange={(v) => maj(['pausesTolereesParBloc'], v)} />
           <Curseur label="Retrait par pause au-delà" valeur={brouillon.penalitePauseParUnite} min={0} max={3} step={0.5}
             format={(v) => `−${v} pt`}
             onChange={(v) => maj(['penalitePauseParUnite'], v)} />
-          <Curseur label="Retrait maximum, par bloc" valeur={brouillon.plafondPenalitePauseBloc} min={0} max={10} step={0.5}
+          <Curseur label="Retrait maximum, par partie" valeur={brouillon.plafondPenalitePauseBloc} min={0} max={10} step={0.5}
             format={(v) => `−${v} pts`}
             onChange={(v) => maj(['plafondPenalitePauseBloc'], v)} />
         </div>

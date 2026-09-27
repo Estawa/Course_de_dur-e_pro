@@ -1,26 +1,21 @@
 import { useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
-import FullPowerBuilder from './FullPowerBuilder'
 import SelecteurDuree from './SelecteurDuree'
+import ListeSeries, { serieSimpleVide } from './ListeSeries'
 import { libelleNiveau } from '../utils/niveauLabels'
+import { totauxNiveau, structureVide as structureVideCompat } from '../utils/fullpower'
+import { formatDuree } from '../utils/calc'
+import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 import { MODES_GUIDAGE, OPTIONS_RETOUR_DEPART } from '../utils/guidage'
 
 const NOMS_NIVEAUX = ['Facile', 'Moyen', 'Difficile']
-
-function blocSimpleVide() {
-  return { id: crypto.randomUUID(), mode: 'simple', distance_m: 400, duree_s: 120 }
-}
-
-function blocFullPowerVide() {
-  return { id: crypto.randomUUID(), mode: 'fullpower', structure: null }
-}
 
 function echauffementVide() {
   return { active: false, duree_s: 300 }
 }
 
 function niveauVide(nom) {
-  return { id: crypto.randomUUID(), nom, visible: true, echauffement: echauffementVide(), blocs: [blocSimpleVide(), blocSimpleVide(), blocSimpleVide()] }
+  return { id: crypto.randomUUID(), nom, visible: true, echauffement: echauffementVide(), blocs: [serieSimpleVide(), serieSimpleVide(), serieSimpleVide()] }
 }
 
 // Reconstruit l'état éditable d'un niveau déjà enregistré.
@@ -33,7 +28,7 @@ function niveauDepuisSeance(n) {
     retourDepart: n.retourDepart || 'auto',
     blocs: n.blocs.map((b) =>
       b.mode === 'fullpower'
-        ? { id: b.id, mode: 'fullpower', structure: b.structure }
+        ? { id: b.id, mode: 'fullpower', structure: b.structure || structureVideCompat() }
         : { id: b.id, mode: 'simple', distance_m: b.distance_m, duree_s: b.duree_s }
     )
   }
@@ -54,45 +49,33 @@ export default function SeanceEditor({ seanceInitiale, modeParDefaut = 'mixte', 
     setNiveaux((prev) => prev.map((n) => (n.id === id ? { ...n, [champ]: valeur } : n)))
   }
 
-  function majBloc(niveauId, blocId, champ, valeur) {
-    setNiveaux((prev) =>
-      prev.map((n) =>
-        n.id !== niveauId
-          ? n
-          : { ...n, blocs: n.blocs.map((b) => (b.id === blocId ? { ...b, [champ]: valeur } : b)) }
-      )
-    )
+  // Ajout d'un niveau supplémentaire (Niveau 4, 5…) : nommé directement "Niveau N" (les 3
+  // premiers gardent leur nom interne historique Facile/Moyen/Difficile, affiché Niveau 1/2/3).
+  function ajouterNiveau() {
+    setNiveaux((prev) => {
+      const pris = new Set(prev.map((n) => libelleNiveau(n.nom)))
+      let k = prev.length + 1
+      while (pris.has(`Niveau ${k}`)) k++
+      const base = prev[prev.length - 1]
+      const nouveau = base
+        ? { ...JSON.parse(JSON.stringify(base)), id: crypto.randomUUID(), nom: `Niveau ${k}`, visible: true }
+        : niveauVide(`Niveau ${k}`)
+      if (base) nouveau.blocs = nouveau.blocs.map((b) => ({ ...b, id: crypto.randomUUID() }))
+      return [...prev, nouveau]
+    })
   }
 
-  function changerModeBloc(niveauId, blocId, mode) {
-    setNiveaux((prev) =>
-      prev.map((n) =>
-        n.id !== niveauId
-          ? n
-          : {
-              ...n,
-              blocs: n.blocs.map((b) =>
-                b.id !== blocId ? b : mode === 'simple' ? { ...blocSimpleVide(), id: b.id } : { ...blocFullPowerVide(), id: b.id }
-              )
-            }
-      )
-    )
-  }
-
-  function ajouterBloc(niveauId) {
-    setNiveaux((prev) => prev.map((n) => (n.id === niveauId ? { ...n, blocs: [...n.blocs, blocSimpleVide()] } : n)))
-  }
-
-  function supprimerBloc(niveauId, blocId) {
-    setNiveaux((prev) =>
-      prev.map((n) => (n.id !== niveauId ? n : { ...n, blocs: n.blocs.filter((b) => b.id !== blocId) }))
-    )
+  function supprimerNiveau(id) {
+    const n = niveaux.find((x) => x.id === id)
+    if (!n || niveaux.length <= 1) return
+    if (!window.confirm(`Supprimer le ${libelleNiveau(n.nom)} de cette séance ?`)) return
+    setNiveaux((prev) => prev.filter((x) => x.id !== id))
   }
 
   function enregistrer() {
     if (!titre.trim()) return
 
-    // Un bloc Full Power sans aucun type ajouté à sa séquence ne joue en réalité que
+    // Une série Full Power sans aucune répétition ne joue en réalité que
     // l'échauffement/la récupération éventuels — presque rien du contenu préparé. Plutôt que
     // d'enregistrer silencieusement une séance quasi vide (comme avant), on bloque et on indique
     // précisément où corriger.
@@ -101,7 +84,7 @@ export default function SeanceEditor({ seanceInitiale, modeParDefaut = 'mixte', 
       for (let i = 0; i < n.blocs.length; i++) {
         const b = n.blocs[i]
         if (b.mode === 'fullpower' && !(b.structure?.sequence?.length > 0)) {
-          setErreur(`${libelleNiveau(n.nom)} · Bloc ${i + 1} (Full Power) : ajoute au moins un type à la séquence avant d'enregistrer, sinon ce bloc ne contiendra rien à courir.`)
+          setErreur(`${libelleNiveau(n.nom)} · Partie ${i + 1} (Full Power) : ajoute au moins une répétition avant d'enregistrer, sinon cette partie ne contiendra rien à courir.`)
           return
         }
       }
@@ -196,16 +179,25 @@ export default function SeanceEditor({ seanceInitiale, modeParDefaut = 'mixte', 
             <div key={n.id} className="border border-piste-100 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="font-display text-base text-piste-900">{libelleNiveau(n.nom)}</p>
-                <label className="flex items-center gap-2 text-xs font-medium text-piste-700">
-                  <input
-                    type="checkbox"
-                    checked={n.visible !== false}
-                    onChange={(e) => majNiveau(n.id, 'visible', e.target.checked)}
-                    className="w-4 h-4"
-                  />
-                  Visible aux élèves
-                </label>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-xs font-medium text-piste-700">
+                    <input
+                      type="checkbox"
+                      checked={n.visible !== false}
+                      onChange={(e) => majNiveau(n.id, 'visible', e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    Visible aux élèves
+                  </label>
+                  {niveaux.length > 1 && (
+                    <button onClick={() => supprimerNiveau(n.id)} title="Supprimer ce niveau" className="p-1 rounded-full hover:bg-[#fbeeea] text-alerte">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
+
+              <TotauxNiveau niveau={n} />
 
               <div className="flex items-center gap-3 mb-3">
                 <label className="flex items-center gap-2 text-xs font-medium text-piste-700">
@@ -236,62 +228,16 @@ export default function SeanceEditor({ seanceInitiale, modeParDefaut = 'mixte', 
                 </select>
               </div>
 
-              <div className="space-y-4 mb-2">
-                {n.blocs.map((b, i) => (
-                  <div key={b.id} className="bg-piste-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-piste-600">Bloc {i + 1}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="flex gap-1">
-                          {['simple', 'fullpower'].map((mode) => (
-                            <button
-                              key={mode}
-                              onClick={() => changerModeBloc(n.id, b.id, mode)}
-                              className={`text-[11px] px-2 py-1 rounded-full border transition ${b.mode === mode ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-700'}`}
-                            >
-                              {mode === 'simple' ? 'Simple' : 'Full Power'}
-                            </button>
-                          ))}
-                        </div>
-                        {n.blocs.length > 1 && (
-                          <button onClick={() => supprimerBloc(n.id, b.id)} className="p-1 rounded-full hover:bg-[#fbeeea] text-alerte shrink-0">
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {b.mode === 'simple' ? (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <input
-                          type="number"
-                          value={b.distance_m}
-                          onChange={(e) => majBloc(n.id, b.id, 'distance_m', e.target.value)}
-                          className="w-24 rounded-lg border border-piste-200 px-2.5 py-1.5 text-sm"
-                          placeholder="Distance (m)"
-                        />
-                        <SelecteurDuree
-                          valeurSec={b.duree_s}
-                          onChange={(v) => majBloc(n.id, b.id, 'duree_s', v)}
-                        />
-                      </div>
-                    ) : (
-                      <FullPowerBuilder
-                        structureInitiale={b.structure}
-                        onChange={(structure) => majBloc(n.id, b.id, 'structure', structure)}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => ajouterBloc(n.id)}
-                className="flex items-center gap-1 text-xs font-medium text-piste-700 hover:text-piste-900"
-              >
-                <Plus size={13} /> Ajouter un bloc
-              </button>
+              <ListeSeries series={n.blocs} onChange={(blocs) => majNiveau(n.id, 'blocs', blocs)} />
             </div>
           ))}
+
+          <button
+            onClick={ajouterNiveau}
+            className="w-full flex items-center justify-center gap-1.5 border-2 border-dashed border-piste-200 rounded-xl py-3 text-sm font-medium text-piste-700 hover:border-piste-400"
+          >
+            <Plus size={15} /> Ajouter un niveau (Niveau {niveaux.length + 1})
+          </button>
         </div>
 
         <div className="sticky bottom-0 bg-white border-t border-piste-100 p-4">
@@ -308,6 +254,23 @@ export default function SeanceEditor({ seanceInitiale, modeParDefaut = 'mixte', 
             {seanceInitiale ? 'Enregistrer les modifications' : 'Enregistrer la séance'}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Temps de travail effectif et durée totale du niveau, recalculés en direct pendant l'édition.
+function TotauxNiveau({ niveau }) {
+  const { duree, travail } = totauxNiveau(niveau, 15, RECUPERATION_FIXE.duree_s)
+  return (
+    <div className="grid grid-cols-2 gap-2 mb-3">
+      <div className="bg-piste-50 rounded-lg px-3 py-2">
+        <p className="text-[10px] uppercase tracking-wide text-piste-500">Temps de travail</p>
+        <p className="font-display text-base text-piste-900 tabular-nums">{formatDuree(travail)}</p>
+      </div>
+      <div className="bg-piste-50 rounded-lg px-3 py-2">
+        <p className="text-[10px] uppercase tracking-wide text-piste-500">Durée totale</p>
+        <p className="font-display text-base text-piste-900 tabular-nums">{formatDuree(duree)}</p>
       </div>
     </div>
   )

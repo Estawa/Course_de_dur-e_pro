@@ -26,7 +26,13 @@ const TOLERANCE_GPS = 0.09 // ±9%, même tolérance que Fractionné GPS Pro
 // l'élève de passer en mixte (onChangerMode) si son GPS est imprécis ou décroche.
 // Chaque départ se fait sur la ligne : les bips sont calés sur la distance théorique parcourue
 // depuis le départ, donc sur les plots fixes de la piste (signal distinct tous les 400 m).
-export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc, labelTerminer = 'Terminer le bloc', modeGuidage = 'gps', onChangerMode, onTermineBloc, onAbandon, resumeStartTs, onDemarre, resumeDistance, onDistanceProgress, resumeTours = 0 }) {
+// Chrono géant au format mm:ss (plus compact que formatDuree pour tenir en très gros caractères).
+function chronoMmSs(totalSec) {
+  const t = Math.max(0, Math.floor(totalSec))
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
+}
+
+export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc, labelTerminer = 'Terminer la partie', modeGuidage = 'gps', onChangerMode, onTermineBloc, onAbandon, resumeStartTs, onDemarre, resumeDistance, onDistanceProgress, resumeTours = 0 }) {
   const avecBips = modeGuidage !== 'gps'
   const avecGps = modeGuidage !== 'bips'
   const [tours, setTours] = useState(resumeTours)
@@ -459,11 +465,25 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
           {repTotal ? ` · Répétition ${repIndex}/${repTotal}` : ''}
         </p>
       )}
-      <p className="text-[11px] uppercase tracking-wide font-medium text-piste-600 mb-3">
-        {phaseCourante?.phase === 'recup' ? 'Récupération' : 'Travail'}{phaseCourante?.typeLettre ? ` · Type ${phaseCourante.typeLettre}` : ''}
-      </p>
-      <div className="font-display text-6xl text-piste-900 mb-2 tabular-nums">
-        {enRecup && '-'}{formatDuree(tempsAfficheGrandChrono)}
+      {/* Bandeau de phase : TRAVAIL (fond plein foncé, chrono qui défile) ou RÉCUPÉRATION
+          (fond clair, chrono qui décompte) — lisible d'un coup d'œil en courant. */}
+      <div
+        className={`rounded-3xl px-3 pt-5 pb-4 mb-3 border-4 transition-colors ${
+          enRecup ? 'bg-[#eef4f1] border-piste-400 text-piste-900' : 'bg-piste-800 border-piste-800 text-white'
+        }`}
+      >
+        <p className="font-display font-bold uppercase leading-none whitespace-nowrap text-[3.25rem] tracking-wide">
+          {enRecup ? "RÉCUP'" : 'TRAVAIL'}
+        </p>
+        {phaseCourante?.typeLettre && (
+          <p className={`text-sm font-medium mt-1 ${enRecup ? 'text-piste-600' : 'text-white/70'}`}>Type {phaseCourante.typeLettre}</p>
+        )}
+        <div className={`font-display font-bold leading-none tabular-nums whitespace-nowrap mt-3 ${enRecup ? 'text-[4.25rem]' : 'text-[5rem]'}`}>
+          {enRecup && '-'}{chronoMmSs(tempsAfficheGrandChrono)}
+        </div>
+        <p className={`text-xs uppercase tracking-wide mt-2 ${enRecup ? 'text-piste-600' : 'text-white/70'}`}>
+          {enRecup ? 'temps de récupération restant' : 'temps de travail écoulé'}
+        </p>
       </div>
       <p className="text-sm text-piste-500 mb-1">Objectif phase {formatDuree(phaseCourante?.duree_s || 0)} · {vitesseVersAllure(vitesseCible)} · {vitesseVersTemps50m(vitesseCible)}</p>
       {repTotal > 0 && finIndexRep > indexPhase && (
@@ -600,7 +620,7 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         </div>
       ) : (
         <div className="rounded-xl border-2 border-alerte/40 bg-[#fbeeea] p-4">
-          <p className="text-xs text-piste-700 mb-3">Confirme pour abandonner ce bloc sans l'enregistrer</p>
+          <p className="text-xs text-piste-700 mb-3">Confirme pour abandonner cette partie sans l'enregistrer</p>
           <div className="flex items-center justify-center gap-3">
             <button onClick={confirmerAction} className="flex items-center gap-2 bg-alerte text-white px-5 py-3 rounded-xl font-medium">
               <LogOut size={16} /> Confirmer l'abandon

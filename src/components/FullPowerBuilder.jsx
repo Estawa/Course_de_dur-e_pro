@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import { typeVide, dureeTotaleStructure, recupVide } from '../utils/fullpower'
+import { typeVide, dureeTotaleStructure, tempsTravailStructure, recupVide } from '../utils/fullpower'
 import { formatDuree } from '../utils/calc'
 import SelecteurDuree from './SelecteurDuree'
 
 const LETTRES = ['A', 'B', 'C', 'D']
 
-export default function FullPowerBuilder({ structureInitiale, onChange }) {
+// Construction d'UNE série : types de répétition (A/B/C/D), répétitions composant un tour,
+// nombre de tours de la série, récupération entre les tours, récupération après la série.
+// estDerniere : dernière série du niveau → sa "récupération après la série" devient la
+// récupération / retour au calme de fin de séance.
+export default function FullPowerBuilder({ structureInitiale, onChange, estDerniere = true }) {
   const [types, setTypes] = useState(structureInitiale?.types || [typeVide('A')])
   const [sequence, setSequence] = useState(structureInitiale?.sequence || [])
   const [nbTours, setNbTours] = useState(structureInitiale?.nbTours || 1)
@@ -74,7 +78,9 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
     emettre(types, sequence, nbTours, recupSerie, n)
   }
 
-  const dureeTotale = dureeTotaleStructure({ types, sequence, nbTours: Number(nbTours) || 1, recupSerie, recupFinale })
+  const structureCourante = { types, sequence, nbTours: Number(nbTours) || 1, recupSerie, recupFinale }
+  const dureeTotale = dureeTotaleStructure(structureCourante, { inclureRecupFinale: false })
+  const tempsTravail = tempsTravailStructure(structureCourante)
 
   return (
     <div className="space-y-5">
@@ -119,12 +125,12 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-piste-500">Séquence</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-piste-500">Répétitions d'une série</p>
           <button onClick={ajouterSequence} className="flex items-center gap-1 text-xs font-medium text-piste-700">
             <Plus size={13} /> Ajouter
           </button>
         </div>
-        {sequence.length === 0 && <p className="text-xs text-piste-500">Ajoute au moins un type dans la séquence.</p>}
+        {sequence.length === 0 && <p className="text-xs text-piste-500">Ajoute au moins une répétition.</p>}
         <div className="space-y-2">
           {sequence.map((s, i) => (
             <div key={i} className="flex items-center gap-2">
@@ -152,9 +158,9 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
         </div>
       </div>
 
-      <ChampNombre label="Nombre de tours de la séquence" valeur={nbTours} onChange={changerNbTours} />
+      <ChampNombre label="Nombre de séries" valeur={nbTours} onChange={(v) => changerNbTours(Math.max(1, v || 1))} />
 
-      <div className="border border-piste-100 rounded-xl p-3 space-y-2">
+      {Number(nbTours) > 1 && <div className="border border-piste-100 rounded-xl p-3 space-y-2">
         <label className="flex items-center gap-2 text-xs font-medium text-piste-800">
           <input
             type="checkbox"
@@ -162,7 +168,7 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
             onChange={(e) => majRecupSerie('active', e.target.checked)}
             className="w-4 h-4"
           />
-          Récupération entre séries (tours)
+          Récupération entre les séries
         </label>
         {recupSerie.active && (
           <div className="grid grid-cols-2 gap-2">
@@ -173,7 +179,7 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
             <ChampNombre label="% VMA récup" valeur={recupSerie.pct_vma} onChange={(v) => majRecupSerie('pct_vma', v)} />
           </div>
         )}
-      </div>
+      </div>}
 
       <div className="border border-piste-100 rounded-xl p-3 space-y-2">
         <label className="flex items-center gap-2 text-xs font-medium text-piste-800">
@@ -183,7 +189,7 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
             onChange={(e) => majRecupFinale('active', e.target.checked)}
             className="w-4 h-4"
           />
-          Récupération / retour au calme final
+          {estDerniere ? 'Récupération / retour au calme de fin de séance' : 'Récupération après la partie (avant la partie suivante)'}
         </label>
         {recupFinale.active && (
           <div className="grid grid-cols-2 gap-2">
@@ -196,7 +202,13 @@ export default function FullPowerBuilder({ structureInitiale, onChange }) {
         )}
       </div>
 
-      <p className="text-xs text-piste-500">Durée totale estimée : {formatDuree(dureeTotale)}</p>
+      <p className="text-[11px] text-piste-400 leading-snug">
+        La récupération de la dernière répétition de la dernière série n'est pas jouée : on enchaîne directement sur la
+        {estDerniere ? ' récupération de fin de séance.' : ' récupération après la partie, puis la partie suivante.'}
+      </p>
+      <p className="text-xs text-piste-600 font-medium">
+        Temps de travail : {formatDuree(tempsTravail)} · Durée de la partie : {formatDuree(dureeTotale)}
+      </p>
     </div>
   )
 }

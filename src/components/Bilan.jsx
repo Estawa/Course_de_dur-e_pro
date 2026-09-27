@@ -115,7 +115,7 @@ export default function Bilan({ resultat, resultatBinome = null, niveauNom, onRe
       </div>
 
       <h2 className="font-display text-2xl text-piste-900 mb-1">Séance terminée</h2>
-      <p className="text-sm text-piste-600 mb-6">{libelleNiveau(niveauNom)} · {blocsResultats.length} bloc{blocsResultats.length > 1 ? 's' : ''}</p>
+      <p className="text-sm text-piste-600 mb-6">{libelleNiveau(niveauNom)} · {blocsResultats.length} partie{blocsResultats.length > 1 ? 's' : ''}</p>
 
       {resultat.binome && (
         <div className="flex items-start gap-2 border-2 border-piste-200 rounded-xl px-4 py-3 mb-6 text-left">
@@ -179,7 +179,7 @@ export default function Bilan({ resultat, resultatBinome = null, niveauNom, onRe
               <div className="flex items-center gap-3">
                 <Icone className={`${couleur} shrink-0`} size={20} />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-piste-900">Bloc {i + 1} · {label}</p>
+                  <p className="text-sm font-medium text-piste-900">Partie {i + 1} · {label}</p>
                   {b.note && <p className="text-xs text-piste-500 mt-0.5">{b.note}</p>}
                   {b.distanceCorrigeeManuellement && (
                     <p className="text-xs text-piste-400 mt-0.5">Distance corrigée manuellement (GPS indisponible)</p>

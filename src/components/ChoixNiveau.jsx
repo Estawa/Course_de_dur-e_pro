@@ -1,4 +1,4 @@
-import { MapPin, Timer as TimerIcon, Layers } from 'lucide-react'
+import { MapPin, Timer as TimerIcon, Layers, Dumbbell } from 'lucide-react'
 import { formatDuree } from '../utils/calc'
 import { totauxNiveau } from '../utils/fullpower'
 import { RECUPERATION_FIXE } from '../utils/phasesFixes'
@@ -24,7 +24,7 @@ export default function ChoixNiveau({ seance, vmaRef, onChoisirNiveau }) {
 
       <div className="space-y-4">
         {niveauxVisibles.map((niveau) => {
-          const { distance, duree } = totauxNiveau(niveau, vmaRef, RECUPERATION_FIXE.duree_s)
+          const { distance, duree, travail } = totauxNiveau(niveau, vmaRef, RECUPERATION_FIXE.duree_s)
           return (
             <button
               key={niveau.id}
@@ -37,7 +37,7 @@ export default function ChoixNiveau({ seance, vmaRef, onChoisirNiveau }) {
               <div className="grid grid-cols-3 gap-3 text-sm text-piste-700">
                 <div className="flex items-center gap-1.5">
                   <Layers size={15} className="text-piste-500" />
-                  {niveau.blocs.length} bloc{niveau.blocs.length > 1 ? 's' : ''}
+                  {niveau.blocs.length} partie{niveau.blocs.length > 1 ? 's' : ''}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <MapPin size={15} className="text-piste-500" />
@@ -47,6 +47,10 @@ export default function ChoixNiveau({ seance, vmaRef, onChoisirNiveau }) {
                   <TimerIcon size={15} className="text-piste-500" />
                   {formatDuree(duree)}
                 </div>
+              </div>
+              <div className="flex items-center gap-1.5 text-sm text-piste-700 mt-2">
+                <Dumbbell size={15} className="text-piste-500" />
+                Temps de travail : {formatDuree(travail)}
               </div>
             </button>
           )

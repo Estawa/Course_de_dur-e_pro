@@ -295,7 +295,7 @@ export default function FicheSuiviEleve({
                 const labelGps =
                   blocsGpsDemandes.length === 0
                     ? null
-                    : `${nbBlocsGpsMesures}/${blocsGpsDemandes.length} bloc${blocsGpsDemandes.length > 1 ? 's' : ''} mesuré${nbBlocsGpsMesures > 1 ? 's' : ''} par GPS`
+                    : `${nbBlocsGpsMesures}/${blocsGpsDemandes.length} partie${blocsGpsDemandes.length > 1 ? 's' : ''} mesurée${nbBlocsGpsMesures > 1 ? 's' : ''} par GPS`
                 const pctGlobal = tauxReussiteRealisation(r)
                 return (
                   <div key={r.id} className={`rounded-lg px-3 py-2.5 ${r.exclureCycle || !binomeCompte(r) ? 'bg-piste-50/60 opacity-80' : 'bg-piste-50'}`}>
@@ -312,7 +312,7 @@ export default function FicheSuiviEleve({
                           </p>
                         ) : (
                           <p className="text-[11px] text-piste-500">
-                            {new Date(r.date).toLocaleDateString('fr-FR')} · {nbReussis}/{r.blocsResultats?.length ?? 0} blocs · Borg {r.borg}
+                            {new Date(r.date).toLocaleDateString('fr-FR')} · {nbReussis}/{r.blocsResultats?.length ?? 0} parties · Borg {r.borg}
                           </p>
                         )}
                         {estRunDirect && (

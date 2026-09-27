@@ -301,7 +301,7 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
             return (
               <div key={bloc.id} className="bg-piste-50 rounded-xl p-3.5">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-piste-800">Bloc {i + 1}/{niveauCourant.blocs.length}</p>
+                  <p className="text-xs font-semibold text-piste-800">Partie {i + 1}/{niveauCourant.blocs.length}</p>
                   <label className="flex items-center gap-1.5 text-[11px] text-piste-600">
                     <input
                       type="checkbox"

@@ -13,10 +13,11 @@ import EspaceAcces from './EspaceAcces'
 import BaremeNotation from './BaremeNotation'
 import { storage } from '../utils/storage'
 import { loadSeancesTeacherStrict, cloudEcrireSeances } from '../utils/cloud'
-import { noteFinale, pourcentagesReussite, syntheseCycle, criteresSeance } from '../utils/calc'
+import { noteFinale, pourcentagesReussite, syntheseCycle, criteresSeance, formatDuree } from '../utils/calc'
 import { genererSeancesTypesSecondes } from '../utils/seancesTypesSecondes'
 import { TESTS_CATALOGUE } from '../utils/testsCatalogue'
 import { libelleNiveau } from '../utils/niveauLabels'
+import { tempsTravailNiveau } from '../utils/fullpower'
 
 const GROUPES_SCOLAIRES = [
   { id: 'seconde', label: 'Secondes' },
@@ -330,7 +331,7 @@ export default function EnseignantDashboard({
   function exporterCSV() {
     const cible = classeActive !== null ? realisations.filter((r) => r.eleve.classe === classeActive) : realisations
     const lignes = [[
-      'Classe', 'Nom', 'Prénom', 'Séance', 'Niveau', 'Date', 'Blocs réussis', 'Borg',
+      'Classe', 'Nom', 'Prénom', 'Séance', 'Niveau', 'Date', 'Parties réussies', 'Borg',
       'Allure %', 'Distance/durée %', 'Note déclarée', 'Note réelle', 'Source',
       'Ajustement comportement', 'Remarque comportement', 'Note finale', 'Observation'
     ]]
@@ -450,7 +451,7 @@ export default function EnseignantDashboard({
           'Séances comptées': synth?.nbSeances ?? 0,
           'Séances exclues': synth?.nbSeancesExclues ?? 0,
           'Moyenne de cycle /20': synth?.moyenne ?? '',
-          'Blocs réussis': synth ? `${synth.nbBlocsReussis}/${synth.nbBlocsTotal}` : '',
+          'Parties réussies': synth ? `${synth.nbBlocsReussis}/${synth.nbBlocsTotal}` : '',
           Progression: synth?.progression ?? ''
         }
       })
@@ -668,6 +669,9 @@ export default function EnseignantDashboard({
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-piste-900 truncate">{s.titre}</p>
                           <p className="text-xs text-piste-500">{nbNiveauxVisibles}/{s.niveaux.length} niveaux visibles · Voir le détail</p>
+                          <p className="text-[11px] text-piste-400 truncate">
+                            Travail : {s.niveaux.map((n) => `${libelleNiveau(n.nom).replace('Niveau ', 'N')} ${formatDuree(tempsTravailNiveau(n))}`).join(' · ')}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
