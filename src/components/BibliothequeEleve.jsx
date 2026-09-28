@@ -150,7 +150,7 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
             return (
               <button
                 key={`s-${r.id}`}
-                onClick={() => setBilanOuvert(r)}
+                onClick={() => { if (!r.aucunePartieRealisee) setBilanOuvert(r) }}
                 className="w-full text-left bg-white border border-piste-100 rounded-xl p-4 flex items-center justify-between hover:border-piste-300 transition"
               >
                 <div>
@@ -159,6 +159,7 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
                     {new Date(r.date).toLocaleDateString('fr-FR')}
                     {r.binome?.role === 'porteur' && ` · en binôme avec ${r.binome.partenaire.prenom}`}
                     {r.binome?.role === 'sansTelephone' && ` · en binôme (tél. de ${r.binome.partenaire.prenom}) · ${STATUTS_BINOME_ELEVE[r.binome.statut] || ''}`}
+                    {r.arretProf && (r.aucunePartieRealisee ? ' · arrêtée par ton professeur avant le départ' : ' · arrêtée par ton professeur')}
                   </p>
                   <div className="flex items-center gap-3 mt-1.5">
                     <span className="flex items-center gap-1 text-xs text-piste-600">
@@ -169,7 +170,7 @@ export default function BibliothequeEleve({ seances, realisations, eleve, onChoi
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="font-display text-xl text-piste-900">{r.note}</span>
+                  <span className="font-display text-xl text-piste-900">{r.aucunePartieRealisee ? '–' : r.note}</span>
                   {onSupprimerRealisation && (
                     <button
                       onClick={(e) => supprimerRealisation(e, r)}

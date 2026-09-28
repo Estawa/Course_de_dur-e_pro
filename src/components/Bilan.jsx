@@ -3,6 +3,7 @@ import { STATUTS_BINOME, nomCourt } from '../utils/binome'
 import { formatKmM } from '../utils/guidage'
 import { formatDuree, criteresSeance } from '../utils/calc'
 import { libelleNiveau } from '../utils/niveauLabels'
+import { libelleMotif } from '../utils/arretProf'
 
 const STYLE_REUSSITE = {
   reussi: { icone: CheckCircle2, couleur: 'text-piste-600', label: 'Réussi' },
@@ -114,8 +115,15 @@ export default function Bilan({ resultat, resultatBinome = null, niveauNom, onRe
         <span className="font-display text-3xl text-piste-900">{note}/20</span>
       </div>
 
-      <h2 className="font-display text-2xl text-piste-900 mb-1">Séance terminée</h2>
-      <p className="text-sm text-piste-600 mb-6">{libelleNiveau(niveauNom)} · {blocsResultats.length} partie{blocsResultats.length > 1 ? 's' : ''}</p>
+      <h2 className="font-display text-2xl text-piste-900 mb-1">{resultat.arretProf ? 'Séance arrêtée par le professeur' : 'Séance terminée'}</h2>
+      <p className="text-sm text-piste-600 mb-6">{libelleNiveau(niveauNom)} · {blocsResultats.length} partie{blocsResultats.length > 1 ? 's' : ''}{resultat.arretProf && resultat.partiesPrevues ? ` réalisée${blocsResultats.length > 1 ? 's' : ''} sur ${resultat.partiesPrevues}` : ''}</p>
+
+      {resultat.arretProf && (
+        <div className="border-2 border-piste-800 rounded-xl px-4 py-3 mb-6 text-left">
+          <p className="text-sm font-medium text-piste-900">Motif : {libelleMotif(resultat.arretProf)}</p>
+          <p className="text-xs text-piste-600 mt-0.5">Seul ce qui a été couru est pris en compte : ce qui n'a pas pu être fait ne compte pas.</p>
+        </div>
+      )}
 
       {resultat.binome && (
         <div className="flex items-start gap-2 border-2 border-piste-200 rounded-xl px-4 py-3 mb-6 text-left">

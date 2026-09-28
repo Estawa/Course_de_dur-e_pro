@@ -9,9 +9,10 @@ import Bilan from './Bilan'
 import ValidationBinome from './ValidationBinome'
 import ControleDistance from './ControleDistance'
 import { calculerNoteFartlek } from '../utils/fartlekCalc'
+import { libelleMotif } from '../utils/arretProf'
 import { binomeCompte } from '../utils/binome'
 import { storage } from '../utils/storage'
-import { noteFinale, tauxReussiteRealisation, blocAvecGps } from '../utils/calc'
+import { noteFinale, tauxReussiteRealisation, blocAvecGps, formatDuree } from '../utils/calc'
 import { libelleNiveau } from '../utils/niveauLabels'
 
 // Distance de glissement horizontal minimale (px) pour déclencher un changement de fiche,
@@ -306,6 +307,14 @@ export default function FicheSuiviEleve({
                           {r.saisieProf && <span className="text-piste-500 font-normal"> · saisie prof</span>}
                           {r.binome?.role === 'sansTelephone' && <span className="text-piste-500 font-normal"> · binôme</span>}
                         </p>
+                        {r.arretProf && (
+                          <p className="text-[11px] font-medium text-alerte">
+                            Interrompue par le professeur · {libelleMotif(r.arretProf)}
+                            {r.aucunePartieRealisee
+                              ? ' · aucune partie courue, non notée'
+                              : r.partiesPrevues ? ` · ${r.partiesRealisees ?? r.blocsResultats?.length ?? 0}/${r.partiesPrevues} parties notées` : ''}
+                          </p>
+                        )}
                         {estRunDirect ? (
                           <p className="text-[11px] text-piste-500">
                             {new Date(r.date).toLocaleDateString('fr-FR')} · {Math.round(r.runDirect.dureeGlobaleMs / 60000)} min · {r.runDirect.distanceGlobaleM} m
@@ -337,7 +346,7 @@ export default function FicheSuiviEleve({
                         {labelGps && <p className="text-[11px] text-piste-500">{labelGps}</p>}
                       </div>
                       <div className="flex items-start gap-2">
-                        {!estRunDirect && (
+                        {!estRunDirect && !r.aucunePartieRealisee && (
                           <div className="text-right">
                             <span className="font-display text-piste-900">{noteAvecComportement}/20</span>
                             {ajustement !== 0 && (
@@ -385,6 +394,11 @@ export default function FicheSuiviEleve({
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-xs font-medium text-piste-900">Fartlek · {libelleNiveau(h.niveauNom)}</p>
+                          {h.arretProf && (
+                            <p className="text-[11px] font-medium text-alerte">
+                              Interrompu par le professeur · {libelleMotif(h.arretProf)} · évalué sur {formatDuree(h.dureeEffectiveS || 0)} courues (prévu {formatDuree(h.dureeMinS || 0)})
+                            </p>
+                          )}
                           <p className="text-[11px] text-piste-500">
                             {new Date(h.date).toLocaleDateString('fr-FR')} · {h.distanceReelleM}m / {h.distanceAttendueM}m attendus ({h.pctDistance}%)
                           </p>

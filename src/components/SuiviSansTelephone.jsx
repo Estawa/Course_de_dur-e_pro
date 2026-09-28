@@ -6,6 +6,7 @@ import { calculerNoteSeance, calculerNoteReelle, formatDuree, vitesseVersAllure 
 import { libelleNiveau } from '../utils/niveauLabels'
 import { construireResultatBlocSaisieProf, resultatBlocNonRealise, repetitionsInitiales } from '../utils/saisieProf'
 import { NIVEAUX_BORG } from '../utils/borg'
+import { MOTIFS_ARRET } from '../utils/arretProf'
 
 function cleEleve(e) {
   return e.id || `${e.nom}__${e.prenom}`
@@ -38,7 +39,7 @@ function donneesInitiales(niveau, vmaRef) {
       repetitions: repetitionsInitiales(phasesTravail, phasesRecup)
     }
   })
-  return { blocs, borg: null, observation: '' }
+  return { blocs, borg: null, observation: '', arret: null }
 }
 
 export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, onAjouterRealisation, onModifierRealisation }) {
@@ -129,6 +130,22 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
     })
   }
 
+  // Séance arrêtée par le professeur (météo…) : les parties non réalisées sont toujours exclues
+  // de la note — l'élève est noté uniquement sur ce qu'il a couru.
+  function majArret(arret) {
+    setDonneesParEleve((prev) => ({ ...prev, [cleCourante]: { ...prev[cleCourante], arret } }))
+  }
+
+  function appliquerArretATous() {
+    const arret = donneesParEleve[cleCourante]?.arret
+    if (!arret) return
+    setDonneesParEleve((prev) => {
+      const n = { ...prev }
+      Object.keys(n).forEach((cle) => { n[cle] = { ...n[cle], arret: { ...arret } } })
+      return n
+    })
+  }
+
   function majBorg(valeur) {
     setDonneesParEleve((prev) => ({ ...prev, [cleCourante]: { ...prev[cleCourante], borg: valeur } }))
   }
@@ -142,8 +159,8 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
     const blocsResultats = niveauCourant.blocs.map((bloc) => {
       const info = donneesCourantes.blocs[bloc.id]
       if (!info) return null
-      if (info.nonRealise) return resultatBlocNonRealise(bloc.id, info.phasesTravail, info.inclureDansNote)
-      return construireResultatBlocSaisieProf(bloc.id, info.phasesTravail, info.repetitions)
+      if (info.nonRealise) return resultatBlocNonRealise(bloc.id, info.phasesTravail, donneesCourantes.arret ? false : info.inclureDansNote)
+      return construireResultatBlocSaisieProf(bloc.id, info.phasesTravail, info.repetitions, { prorata: !!donneesCourantes.arret })
     }).filter(Boolean)
 
     const blocsPourNote = blocsResultats.filter((b) => !b.nonRealise || b.inclureDansNote)
@@ -173,7 +190,15 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
       borg: donneesCourantes.borg,
       observationGenerale: donneesCourantes.observation,
       note,
-      saisieProf: true
+      saisieProf: true,
+      ...(donneesCourantes.arret
+        ? {
+            arretProf: { motif: donneesCourantes.arret.motif, precision: donneesCourantes.arret.precision || '', ts: Date.now(), par: '', cible: 'saisie' },
+            partiesPrevues: niveauCourant.blocs.length,
+            partiesRealisees: blocsPourNote.length,
+            ...(blocsPourNote.length === 0 ? { aucunePartieRealisee: true, exclureCycle: true } : {})
+          }
+        : {})
     }
     if (idExistant) {
       onModifierRealisation(idExistant, contenu)
@@ -295,6 +320,44 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
         </div>
 
         <div className="p-5 space-y-4">
+          <div className={`rounded-xl p-3.5 border-2 ${donneesCourantes.arret ? 'border-alerte/60 bg-[#fbeeea]' : 'border-piste-100'}`}>
+            <label className="flex items-center gap-2 text-xs font-semibold text-piste-800">
+              <input
+                type="checkbox"
+                checked={!!donneesCourantes.arret}
+                onChange={(e) => majArret(e.target.checked ? { motif: 'meteo', precision: '' } : null)}
+                className="w-3.5 h-3.5"
+              />
+              Séance arrêtée par le professeur
+            </label>
+            {donneesCourantes.arret && (
+              <div className="mt-2.5 space-y-2">
+                <select
+                  value={donneesCourantes.arret.motif}
+                  onChange={(e) => majArret({ ...donneesCourantes.arret, motif: e.target.value })}
+                  className="w-full rounded-lg border border-piste-200 px-2.5 py-1.5 text-xs bg-white"
+                >
+                  {MOTIFS_ARRET.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </select>
+                <input
+                  value={donneesCourantes.arret.precision}
+                  onChange={(e) => majArret({ ...donneesCourantes.arret, precision: e.target.value })}
+                  placeholder="Précision (facultatif)"
+                  className="w-full rounded-lg border border-piste-200 px-2.5 py-1.5 text-xs bg-white"
+                />
+                <p className="text-[11px] text-piste-700">
+                  Coche « Non réalisé » sur les parties qui n'ont pas pu être courues : elles ne compteront pas dans la note.
+                  Pour une partie coupée en cours, mets 0 s aux répétitions non courues et le temps réellement couru sur la répétition interrompue : l'objectif est ramené à ce temps.
+                </p>
+                {elevesChoisis.length > 1 && (
+                  <button type="button" onClick={appliquerArretATous} className="text-[11px] font-medium text-piste-800 underline">
+                    Appliquer cet arrêt à tous les élèves de la saisie
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           {niveauCourant.blocs.map((bloc, i) => {
             const info = donneesCourantes.blocs[bloc.id]
             if (!info) return null
@@ -313,7 +376,9 @@ export default function SuiviSansTelephone({ classe, eleves, seances, onFermer, 
                   </label>
                 </div>
 
-                {info.nonRealise ? (
+                {info.nonRealise && donneesCourantes.arret ? (
+                  <p className="text-[11px] text-piste-600">Non courue à cause de l'arrêt : exclue du calcul de la note.</p>
+                ) : info.nonRealise ? (
                   <label className="flex items-center gap-1.5 text-[11px] text-piste-600">
                     <input
                       type="checkbox"

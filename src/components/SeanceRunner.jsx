@@ -19,6 +19,8 @@ import { expanserStructure, dureeTotaleStructure, distanceTotaleStructure, duree
 import { RECUPERATION_FIXE } from '../utils/phasesFixes'
 import { useWakeLock } from '../utils/wakeLock'
 import { libelleNiveau } from '../utils/niveauLabels'
+import ArretProfAnnonce from './ArretProfAnnonce'
+import { useArretProf, tronquerPhases, traceArret, DUREE_MIN_PARTIE_INTERROMPUE_S } from '../utils/arretProf'
 
 export function preparerBloc(bloc, niveau, vmaRef) {
   if (bloc.mode === 'fullpower' && bloc.structure) {
@@ -66,7 +68,20 @@ export function cibleCourue(bloc, niveau, vmaRef) {
 // modeGuidage : 'gps' | 'bips' | 'mixte' (voir utils/guidage.js). L'élève peut passer en mixte
 // en cours de séance (GPS imprécis ou perdu). Chaque bloc est découpé en segments séparés par les
 // récupérations de retour au départ ; après chaque segment, l'élève saisit sa distance.
-export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidage = 'gps', reprise, onProgress, onFinSeance, onAbandon }) {
+// Réussite déduite des deux critères mesurés, pour une partie interrompue par le professeur (pas
+// de bilan déclaratif demandé à l'élève à ce moment-là).
+function reussiteMesuree(r) {
+  if (r.termine && r.respectAllure) return 'reussi'
+  if (r.termine || r.respectAllure) return 'partiel'
+  return 'non_reussi'
+}
+
+// Arrêt par le professeur (voir utils/arretProf.js) : dès réception de l'ordre, la partie en
+// cours s'arrête (objectifs ramenés au temps réellement couru), l'élève saisit sa distance, puis
+// un écran annonce l'arrêt avant l'échelle de Borg et l'observation. Seules les parties
+// réalisées (terminées, ou interrompue au prorata) entrent dans la note ; les parties non
+// courues n'y figurent pas et ne pénalisent pas l'élève.
+export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidage = 'gps', eleve = null, seanceTitre = '', reprise, onProgress, onFinSeance, onArretSansRealisation, onAbandon }) {
   useWakeLock(true)
 
   const echauffementActif = !!niveau.echauffement?.active
@@ -100,6 +115,21 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
   // Fin (timestamp) de la récupération entre les séries en cours : démarre à la fin de la
   // dernière répétition de la série, avant la saisie de distance et le bilan.
   const [recupInterFinTs, setRecupInterFinTs] = useState(() => reprise?.recupInterFinTs ?? null)
+  // --- Arrêt par le professeur ---
+  const [debutSeanceTs] = useState(() => reprise?.debutSeanceTs ?? Date.now())
+  const [arret, setArret] = useState(() => reprise?.arret ?? null)
+  const arretRecu = useArretProf({
+    eleve,
+    actif: !!eleve,
+    debutTs: debutSeanceTs,
+    infos: {
+      type: 'seance',
+      titre: seanceTitre || 'Séance',
+      niveauNom: niveau?.nom || '',
+      binome: binome?.eleve ? `${binome.eleve.prenom} ${binome.eleve.nom}` : null
+    },
+    idsSupplementaires: binome?.eleve?.id ? [binome.eleve.id] : []
+  })
   const toursEnCoursRef = useRef(reprise?.courseEtat === 'course' ? reprise.toursEnCours || 0 : 0)
   const courseStartTsRef = useRef(reprise?.courseEtat === 'course' ? reprise.courseStartTs : null)
   const [repriseConsommee, setRepriseConsommee] = useState(false)
@@ -134,6 +164,8 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
       resultatSegment,
       retourFinTs,
       recupInterFinTs,
+      debutSeanceTs,
+      arret,
       toursEnCours: phase === 'course' ? toursEnCoursRef.current : 0,
       courseStartTs: courseStartTsRef.current,
       courseEtat: phase === 'course' ? 'course' : null,
@@ -144,7 +176,7 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
   useEffect(() => {
     onProgress?.(snapshotProgress())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indexBloc, phase, blocsResultats, echauffementChoisi, echauffementResultat, recuperationResultat, recuperationSautee, borgParPhase, poulsParPhase, observationTravail, dejaEcouleRecupS, resultatsCourseBloc, blocsResultatsBinome, poulsBinome, bilanBlocEnAttente, observationGeneraleEnAttente, borgBinome, modeEffectif, indexSegment, segmentsResultats, resultatSegment, retourFinTs, recupInterFinTs])
+  }, [indexBloc, phase, blocsResultats, echauffementChoisi, echauffementResultat, recuperationResultat, recuperationSautee, borgParPhase, poulsParPhase, observationTravail, dejaEcouleRecupS, resultatsCourseBloc, blocsResultatsBinome, poulsBinome, bilanBlocEnAttente, observationGeneraleEnAttente, borgBinome, modeEffectif, indexSegment, segmentsResultats, resultatSegment, retourFinTs, recupInterFinTs, arret])
 
   function handleCourseDemarre(ts) {
     courseStartTsRef.current = ts
@@ -215,6 +247,18 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
     // Fin d'un segment de course : l'élève saisit sa distance (et, s'il reste une partie à
     // courir, retourne au départ pendant la récupération).
     setResultatSegment(resultatCourse)
+    if (arret || resultatCourse?.arretProf) {
+      // Partie coupée par le professeur : l'élève saisit la distance courue jusqu'à l'arrêt —
+      // sauf s'il venait à peine de partir (rien d'évaluable sur ce tronçon, pas de saisie).
+      setRetourFinTs(null)
+      setRecupInterFinTs(null)
+      if (resultatCourse?.arretProf && (resultatCourse.tronqueS ?? 0) < DUREE_MIN_PARTIE_INTERROMPUE_S) {
+        cloturerPartieInterrompue([...segmentsResultats, { ...resultatCourse, distanceDeclaree: 0 }])
+        return
+      }
+      setPhase('saisieDistance')
+      return
+    }
     if (!dernierSegment) {
       setRetourFinTs(Date.now() + (decoupage.retours[indexSegment]?.duree_s || 0) * 1000)
     } else {
@@ -230,6 +274,10 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
     const complet = { ...resultatSegment, distanceDeclaree }
     const tous = [...segmentsResultats, complet]
     setSegmentsResultats(tous)
+    if (arret || complet.arretProf) {
+      cloturerPartieInterrompue(tous)
+      return
+    }
     if (dernierSegment) {
       // Fusion des segments puis réévaluation sur les objectifs réellement courus.
       const fusion = fusionnerSegments(tous, decoupage.segments)
@@ -240,6 +288,86 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
       setIndexSegment(0)
       setPhase('bilanBloc')
     }
+  }
+
+  // Objectifs de la portion de partie réellement courue, pour une VMA donnée : tronçons déjà
+  // terminés + tronçon interrompu ramené au temps couru (tronqueS).
+  function ciblePortionCourue(tous, vma) {
+    const prep = preparerBloc(bloc, niveau, vma)
+    const { segments } = decouperSegments(prep.phases, niveau.retourDepart || 'auto')
+    const segs = segments.slice(0, tous.length).map((sg, i) => {
+      const r = tous[i]
+      return r?.tronqueS != null ? { phases: tronquerPhases(sg.phases, r.tronqueS) } : sg
+    })
+    const phases = segs.flatMap((sg) => sg.phases)
+    return { segs, cible: { phases, distanceCible: distancePhases(phases), dureeCible: dureePhases(phases) } }
+  }
+
+  // Clôture de la partie en cours au moment de l'arrêt : elle est gardée (notée sur la portion
+  // courue) si l'élève a couru au moins DUREE_MIN_PARTIE_INTERROMPUE_S, sinon écartée.
+  function cloturerPartieInterrompue(tousSegments) {
+    let tous = tousSegments
+    const dernier = tous[tous.length - 1]
+    if (dernier?.tronqueS != null && dernier.tronqueS < DUREE_MIN_PARTIE_INTERROMPUE_S) tous = tous.slice(0, -1)
+    setSegmentsResultats([])
+    setResultatSegment(null)
+    setIndexSegment(0)
+    if (!tous.length) {
+      setPhase('arretAnnonce')
+      return
+    }
+    const { segs } = ciblePortionCourue(tous, vmaGuidage)
+    const fusion = fusionnerSegments(tous, segs)
+    const complet = tous.every((r) => r.tronqueS == null) && tous.length === nbSegments
+    const extra = { interrompue: !complet, note: complet ? '' : 'Partie interrompue par le professeur' }
+    if (binome) {
+      const rP = reevaluerBloc(fusion, ciblePortionCourue(tous, binome.vmaPorteur).cible)
+      const rB = reevaluerBloc(fusion, ciblePortionCourue(tous, binome.vma).cible)
+      setBlocsResultats((prev) => [...prev, { blocId: bloc.id, ...rP, reussite: reussiteMesuree(rP), ...extra }])
+      setBlocsResultatsBinome((prev) => [...prev, { blocId: bloc.id, ...rB, binomePresent: true, reussite: reussiteMesuree(rB), ...extra }])
+    } else {
+      const r = reevaluerBloc(fusion, ciblePortionCourue(tous, vmaGuidage).cible)
+      setBlocsResultats((prev) => [...prev, { blocId: bloc.id, ...r, reussite: reussiteMesuree(r), ...extra }])
+    }
+    setPhase('arretAnnonce')
+  }
+
+  // Réception de l'ordre d'arrêt : selon l'étape en cours, on coupe tout de suite ou on laisse
+  // finir la saisie en cours (distance, bilan de partie) avant d'annoncer l'arrêt.
+  useEffect(() => {
+    if (!arretRecu || arret) return
+    setArret(arretRecu)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arretRecu])
+
+  useEffect(() => {
+    if (!arret) return
+    const avantTravail = ['poulsRepos', 'choixEchauffement', 'echauffement', 'borgEchauffement', 'poulsAvantTravail']
+    const immediat = ['recupInterSeries', 'finTravail', 'recuperation', 'borgRecuperation', 'poulsFinal', 'finAnnonce']
+    if (avantTravail.includes(phase) || immediat.includes(phase)) {
+      setRecupInterFinTs(null)
+      setPhase('arretAnnonce')
+    } else if (phase === 'saisieDistance' && segmentsResultats.length > indexSegment) {
+      // Distance du tronçon déjà validée, l'élève attendait de repartir : on clôt la partie.
+      cloturerPartieInterrompue(segmentsResultats)
+    }
+    // 'course' : CourseRun reçoit arretForce et s'arrête de lui-même → saisie de distance.
+    // 'saisieDistance' (en cours), 'bilanBloc', 'binomeBloc' : on laisse finir, la suite est
+    // interceptée (handleValideDistance / passerAuBlocSuivant).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arret])
+
+  function handleContinuerApresArret() {
+    if (!blocsResultats.length) {
+      onArretSansRealisation?.(traceArret(arret))
+      return
+    }
+    setPhase('arretBorg')
+  }
+
+  function handleValideBorgArret(valeur) {
+    setBorgParPhase((p) => ({ ...p, travail: p.travail ?? valeur, recuperation: valeur }))
+    setPhase('observation')
   }
 
   function handleRepartir() {
@@ -282,7 +410,9 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
   }
 
   function passerAuBlocSuivant() {
-    if (dernierBloc) {
+    if (arret) {
+      setPhase('arretAnnonce')
+    } else if (dernierBloc) {
       setPhase('finTravail')
     } else if (recupInterFinTs && recupInterFinTs > Date.now()) {
       setPhase('recupInterSeries')
@@ -372,7 +502,12 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
 
   function terminerSeance(observationGenerale, resultatBinome) {
     const note = calculerNoteSeance(blocsResultats)
+    const infosArret = arret
+      ? { arretProf: traceArret(arret), partiesPrevues: niveau.blocs.length, partiesRealisees: blocsResultats.length }
+      : {}
+    if (resultatBinome && arret) Object.assign(resultatBinome, infosArret)
     onFinSeance({
+      ...infosArret,
       blocsResultats,
       echauffementChoisi,
       echauffementResultat,
@@ -440,6 +575,7 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
         onDemarre={handleCourseDemarre}
         resumeDistance={resumeDistance}
         onDistanceProgress={handleDistanceProgress}
+        arretForce={!!arret}
       />
     )
   }
@@ -478,14 +614,30 @@ export default function SeanceRunner({ niveau, vmaRef, binome = null, modeGuidag
     )
   }
 
+  if (phase === 'arretAnnonce') {
+    return (
+      <ArretProfAnnonce
+        arret={arret}
+        nbParties={blocsResultats.length}
+        nbPartiesPrevues={niveau.blocs.length}
+        onContinuer={handleContinuerApresArret}
+      />
+    )
+  }
+
+  if (phase === 'arretBorg') {
+    return <BorgScale titre="Ton ressenti sur ce que tu as couru" onValide={handleValideBorgArret} />
+  }
+
   if (phase === 'saisieDistance') {
+    const coupe = !!(arret || resultatSegment?.arretProf)
     return (
       <SaisieDistance
         key={`saisie-${indexBloc}-${indexSegment}`}
-        titre={`${labelBloc}${labelSegment} ${nbSegments > 1 ? 'terminé' : 'terminée'}`}
+        titre={coupe ? 'Séance arrêtée par ton professeur · distance courue' : `${labelBloc}${labelSegment} ${nbSegments > 1 ? 'terminé' : 'terminée'}`}
         dureeCourseS={resultatSegment?.dureeRealisee}
         tours={resultatSegment?.tours || 0}
-        retourFinTs={dernierSegment ? null : retourFinTs}
+        retourFinTs={dernierSegment || coupe ? null : retourFinTs}
         libelleSuite="la prochaine répétition"
         distanceInitiale={segmentsResultats.length > indexSegment ? segmentsResultats[indexSegment].distanceDeclaree : null}
         onValide={handleValideDistance}

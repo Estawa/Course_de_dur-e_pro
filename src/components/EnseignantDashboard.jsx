@@ -8,6 +8,7 @@ import FicheSuiviEleve from './FicheSuiviEleve'
 import { STATUTS_BINOME } from '../utils/binome'
 import { MODES_GUIDAGE } from '../utils/guidage'
 import SuiviSansTelephone from './SuiviSansTelephone'
+import PanneauDirect from './PanneauDirect'
 import VisibiliteClasses from './VisibiliteClasses'
 import EspaceAcces from './EspaceAcces'
 import BaremeNotation from './BaremeNotation'
@@ -17,6 +18,7 @@ import { noteFinale, pourcentagesReussite, syntheseCycle, criteresSeance, format
 import { genererSeancesTypesSecondes } from '../utils/seancesTypesSecondes'
 import { TESTS_CATALOGUE } from '../utils/testsCatalogue'
 import { libelleNiveau } from '../utils/niveauLabels'
+import { libelleMotif } from '../utils/arretProf'
 import { tempsTravailNiveau } from '../utils/fullpower'
 
 const GROUPES_SCOLAIRES = [
@@ -333,7 +335,7 @@ export default function EnseignantDashboard({
     const lignes = [[
       'Classe', 'Nom', 'Prénom', 'Séance', 'Niveau', 'Date', 'Parties réussies', 'Borg',
       'Allure %', 'Distance/durée %', 'Note déclarée', 'Note réelle', 'Source',
-      'Ajustement comportement', 'Remarque comportement', 'Note finale', 'Observation'
+      'Ajustement comportement', 'Remarque comportement', 'Note finale', 'Arrêt professeur', 'Observation'
     ]]
     cible.forEach((r) => {
       const nbReussis = r.blocsResultats.filter((b) => b.reussite === 'reussi').length
@@ -354,8 +356,9 @@ export default function EnseignantDashboard({
         r.noteReelleAvecGps === undefined ? '' : r.noteReelleAvecGps ? 'avec GPS' : 'sans GPS',
         r.ajustementComportement || 0,
         r.commentaireComportement || '',
-        noteFinale(r),
-        r.observationGenerale || ''
+        r.aucunePartieRealisee ? 'non notée' : noteFinale(r),
+        r.arretProf ? `${libelleMotif(r.arretProf)} (${r.partiesRealisees ?? r.blocsResultats.length}/${r.partiesPrevues ?? '?'} parties)` : '',
+        (r.observationGenerale || '').replace(/[;\n]/g, ' ')
       ])
     })
     const csv = lignes.map((l) => l.join(';')).join('\n')
@@ -521,6 +524,7 @@ export default function EnseignantDashboard({
 
       <div className="flex gap-1.5 mb-6 bg-piste-50 rounded-full p-1 w-fit flex-wrap">
         {[
+          { id: 'direct', label: 'En direct' },
           { id: 'seances', label: 'Séances' },
           { id: 'tests', label: 'Tests' },
           { id: 'suivi', label: 'Élèves & suivi' },
@@ -537,6 +541,8 @@ export default function EnseignantDashboard({
           </button>
         ))}
       </div>
+
+      {onglet === 'direct' && <PanneauDirect key={espaceActifId} teacherId={espaceActifId} classes={classes} nomProf={monNom} />}
 
       {onglet === 'global' && (
         <section>

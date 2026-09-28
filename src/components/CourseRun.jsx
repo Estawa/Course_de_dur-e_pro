@@ -32,7 +32,7 @@ function chronoMmSs(totalSec) {
   return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
 }
 
-export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc, labelTerminer = 'Terminer la partie', modeGuidage = 'gps', onChangerMode, onTermineBloc, onAbandon, resumeStartTs, onDemarre, resumeDistance, onDistanceProgress, resumeTours = 0 }) {
+export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc, labelTerminer = 'Terminer la partie', modeGuidage = 'gps', onChangerMode, onTermineBloc, onAbandon, resumeStartTs, onDemarre, resumeDistance, onDistanceProgress, resumeTours = 0, arretForce = false }) {
   const avecBips = modeGuidage !== 'gps'
   const avecGps = modeGuidage !== 'bips'
   const [tours, setTours] = useState(resumeTours)
@@ -264,6 +264,18 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
     return () => clearTimeout(bipTimeoutRef.current)
   }, [vitesseInstant, etat, gpsOk, vitesseCible, modeGuidage])
 
+  // Arrêt demandé par le professeur (météo, blessure…) : la partie s'arrête immédiatement, et
+  // ses objectifs sont ramenés au temps réellement couru (voir arreter()).
+  const arretForceTraiteRef = useRef(false)
+  useEffect(() => {
+    if (!arretForce || arretForceTraiteRef.current || etat === 'fin') return
+    arretForceTraiteRef.current = true
+    clearTimeout(confirmationTimeoutRef.current)
+    setConfirmation(null)
+    arreter(false, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arretForce, etat])
+
   function demanderConfirmation(action) {
     setConfirmation(action)
     clearTimeout(confirmationTimeoutRef.current)
@@ -305,13 +317,24 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
 
   useEffect(() => () => clearTimeout(confirmationTimeoutRef.current), [])
 
-  function arreter(automatique = false) {
+  function arreter(automatique = false, parProf = false) {
     beepFin()
     if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current)
     clearInterval(intervalRef.current)
     setEtat('fin')
 
-    const dureeReelle = elapsed
+    // Arrêt prof : temps couru lu directement sur l'horloge (l'état `elapsed` peut avoir jusqu'à
+    // 250 ms de retard, ou valoir 0 juste après une reprise de séance).
+    const dureeReelle = etat === 'latence'
+      ? 0
+      : parProf && !enPauseRef.current && startRef.current
+        ? Math.min(dureeTotalePhases, (Date.now() - startRef.current) / 1000)
+        : elapsed
+    // Arrêt par le professeur : objectifs ramenés à la portion réellement courue (prorata du
+    // temps), pour que l'élève soit évalué sur ce qu'il a fait et pas sur ce qui n'a pas pu l'être.
+    const distanceCibleEff = parProf ? distanceTheorique(phases, dureeReelle) : distanceCible
+    const dureeCibleEff = parProf ? dureeReelle : dureeCible
+    const infosArret = parProf ? { arretProf: true, tronqueS: Math.round(dureeReelle) } : {}
     let termine, respectAllure
     // Le calcul GPS ne s'applique que si le GPS a effectivement fonctionné pendant le bloc ;
     // sinon (indisponible/refusé), repli sur le même calcul que le guidage minuteur.
@@ -356,7 +379,7 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
       } else if (ratiosTravail.length === 1) {
         pctRegularite = 100
       }
-      const pctDistance = distanceCible ? Math.round(Math.min(100, (distance / distanceCible) * 100)) : null
+      const pctDistance = distanceCibleEff ? Math.round(Math.min(100, (distance / distanceCibleEff) * 100)) : null
       return { pctDistance, pctAllure, pctRecup, pctRegularite }
     }
 
@@ -367,7 +390,7 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
     }
 
     if (gpsExploitable) {
-      termine = automatique || distance >= distanceCible * 0.95
+      termine = automatique || distance >= distanceCibleEff * 0.95
       const vs = vitessesTravailRef.current
       const vitesseMoyenne = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : 0
       const vitesseCibleMoyenneTravail =
@@ -381,7 +404,7 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         termine,
         respectAllure,
         distanceRealisee: Math.round(distance),
-        distanceCible: Math.round(distanceCible || 0),
+        distanceCible: Math.round(distanceCibleEff || 0),
         dureeRealisee: dureeReelle,
         vitesseMoyenne: Math.round(vitesseMoyenne * 10) / 10,
         vitesseCible: Math.round(vitesseCibleMoyenneTravail * 10) / 10,
@@ -396,24 +419,25 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         distanceGPS: Math.round(distance),
         tours,
         modeGuidage,
-        ...statsPause
+        ...statsPause,
+        ...infosArret
       })
     } else {
-      termine = automatique || dureeReelle >= dureeCible * 0.9
-      respectAllure = Math.abs(dureeReelle - dureeCible) / dureeCible <= 0.1
+      termine = automatique || dureeReelle >= dureeCibleEff * 0.9
+      respectAllure = dureeCibleEff ? Math.abs(dureeReelle - dureeCibleEff) / dureeCibleEff <= 0.1 : false
       onTermineBloc({
         viaGPS: false,
         termine,
         respectAllure,
-        distanceRealisee: distanceCible,
-        distanceCible,
+        distanceRealisee: Math.round(distanceCibleEff || 0),
+        distanceCible: Math.round(distanceCibleEff || 0),
         dureeRealisee: dureeReelle,
-        dureeCible,
+        dureeCible: dureeCibleEff,
         vitesseMoyenne: null,
         vitesseCible: null,
         // Sans GPS, seuls Distance et Allure sont mesurables (comme avant) ; Récupération et
         // Régularité ne peuvent pas être évalués sans échantillons de vitesse.
-        pctDistance: termine ? 100 : Math.round(Math.min(100, (dureeReelle / dureeCible) * 100)),
+        pctDistance: termine ? 100 : dureeCibleEff ? Math.round(Math.min(100, (dureeReelle / dureeCibleEff) * 100)) : 0,
         pctAllure: respectAllure ? 100 : 40,
         pctRecup: null,
         pctRegularite: null,
@@ -421,7 +445,8 @@ export default function CourseRun({ phases, distanceCible, dureeCible, labelBloc
         distanceGPS: null,
         tours,
         modeGuidage,
-        ...statsPause
+        ...statsPause,
+        ...infosArret
       })
     }
   }

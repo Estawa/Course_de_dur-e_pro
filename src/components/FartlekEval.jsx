@@ -12,6 +12,12 @@ import ObservationFinale from './ObservationFinale'
 import { storage } from '../utils/storage'
 import { useWakeLock } from '../utils/wakeLock'
 import ReprisePrompt from './ReprisePrompt'
+import ArretProfAnnonce from './ArretProfAnnonce'
+import { useArretProf, traceArret } from '../utils/arretProf'
+
+// En dessous d'une minute de course effective au moment d'un arrêt par le professeur, le Fartlek
+// n'est pas évaluable : rien n'est enregistré.
+const DUREE_MIN_FARTLEK_INTERROMPU_S = 60
 
 const TYPE_SESSION = 'fartlek'
 
@@ -77,7 +83,7 @@ function ApercuFartlek({ niveauNom, onDemarrer }) {
 // moment de la coupure) : la durée de la coupure est ainsi comptée comme du temps de pause dès
 // que l'élève tape "Reprendre la course", sans jamais être comptabilisée comme temps de course
 // effectif ni continuer à accumuler un malus d'arrêt hors zone pendant que le téléphone était éteint.
-function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
+function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine, arretForce = false }) {
   const cfg = NIVEAUX_FARTLEK[niveauNom]
   // En cas de reprise, on réamorce le compteur GPS avec la distance déjà parcourue avant la
   // coupure (sauvegardée en continu, voir snapshot()) au lieu de repartir de 0 — sinon toute la
@@ -232,13 +238,29 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
     setConfirmationTerminer(false)
   }
 
-  function terminer() {
+  // Arrêt demandé par le professeur : fin immédiate, même si la durée minimale n'est pas atteinte.
+  // La distance attendue étant calculée sur la durée effective réellement courue, la note porte
+  // uniquement sur ce qui a été fait.
+  const arretTraiteRef = useRef(false)
+  useEffect(() => {
+    if (!arretForce || arretTraiteRef.current) return
+    arretTraiteRef.current = true
+    terminer(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arretForce])
+
+  function terminer(parProf = false) {
     clearTimeout(confirmationTimeoutRef.current)
     setConfirmationTerminer(false)
     beepFin()
     const distReelle = Math.round(distanceTotale)
     const distAttendue = Math.round(distanceAttendueM(niveauNom, vmaRef, effectifS))
+    if (parProf === true && effectifS < DUREE_MIN_FARTLEK_INTERROMPU_S) {
+      onTermine({ annule: true })
+      return
+    }
     onTermine({
+      ...(parProf === true ? { interrompu: true } : {}),
       niveauNom,
       dureeEffectiveS: Math.round(effectifS),
       dureeMinS: cfg.dureeMinS,
@@ -346,7 +368,7 @@ function CourseFartlek({ niveauNom, vmaRef, reprise, onProgress, onTermine }) {
         <div className="rounded-xl border-2 border-piste-300 bg-piste-50 p-4">
           <p className="text-xs text-piste-700 mb-3">Confirme pour terminer le Fartlek maintenant</p>
           <div className="flex items-center justify-center gap-3">
-            <button onClick={terminer} className="flex items-center gap-2 bg-piste-800 text-white px-5 py-3 rounded-xl font-medium">
+            <button onClick={() => terminer(false)} className="flex items-center gap-2 bg-piste-800 text-white px-5 py-3 rounded-xl font-medium">
               <Square size={16} fill="white" /> Confirmer
             </button>
             <button onClick={annulerConfirmationTerminer} className="text-xs text-piste-500 underline px-2">Annuler</button>
@@ -364,6 +386,24 @@ export default function FartlekEval({ eleve, vmaRef, onTermine, onActiviteEnCour
   const [niveauNom, setNiveauNom] = useState(null)
   const [donneesCourse, setDonneesCourse] = useState(null)
   const [borg, setBorg] = useState(null)
+  const [debutCourseTs, setDebutCourseTs] = useState(null)
+  const phasesSuivies = ['course', 'arretAnnonce', 'saisie', 'borg', 'observation']
+  const arretRecu = useArretProf({
+    eleve,
+    actif: !!debutCourseTs && phasesSuivies.includes(phase),
+    debutTs: debutCourseTs,
+    infos: { type: 'fartlek', titre: 'Fartlek évaluatif', niveauNom: niveauNom || '' }
+  })
+  const [arret, setArret] = useState(null)
+  useEffect(() => {
+    if (arretRecu && !arret && phase === 'course') setArret(arretRecu)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arretRecu, phase])
+  useEffect(() => {
+    if (phase === 'course' && !debutCourseTs) setDebutCourseTs(repriseProposee?.startTs || Date.now())
+    if (phase === 'niveau' || phase === 'recap') setDebutCourseTs(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
 
   // Signale au parent qu'un chrono est actif, pour désactiver la flèche retour de l'en-tête.
   useEffect(() => {
@@ -387,8 +427,14 @@ export default function FartlekEval({ eleve, vmaRef, onTermine, onActiviteEnCour
 
   function handleFinCourse(donnees) {
     storage.effacerSessionCours(eleve, TYPE_SESSION)
-    setDonneesCourse(donnees)
-    setPhase('saisie')
+    if (donnees.annule) {
+      setDonneesCourse(null)
+      setPhase('arretAnnule')
+      return
+    }
+    const { interrompu, ...reste } = donnees
+    setDonneesCourse(interrompu && arret ? { ...reste, arretProf: traceArret(arret) } : reste)
+    setPhase(interrompu ? 'arretAnnonce' : 'saisie')
   }
 
   // L'élève calcule et saisit sa distance totale ; elle fait foi sauf écart trop important avec
@@ -439,6 +485,26 @@ export default function FartlekEval({ eleve, vmaRef, onTermine, onActiviteEnCour
         reprise={repriseProposee}
         onProgress={handleProgressCourse}
         onTermine={handleFinCourse}
+        arretForce={!!arret}
+      />
+    )
+  }
+  if (phase === 'arretAnnonce') {
+    return (
+      <ArretProfAnnonce
+        arret={arret}
+        message={`Tu as couru ${formatDuree(donneesCourse?.dureeEffectiveS || 0)} : ton évaluation portera uniquement sur cette durée, pas sur la durée prévue. Calcule maintenant ta distance.`}
+        onContinuer={() => setPhase('saisie')}
+      />
+    )
+  }
+  if (phase === 'arretAnnule') {
+    return (
+      <ArretProfAnnonce
+        arret={arret}
+        message="Le Fartlek venait juste de commencer : rien n'est enregistré, tu le repasseras plus tard."
+        libelleBouton="Retour à l'accueil"
+        onContinuer={onTermine}
       />
     )
   }
@@ -463,6 +529,9 @@ export default function FartlekEval({ eleve, vmaRef, onTermine, onActiviteEnCour
       <div className="max-w-md mx-auto px-6 py-10 text-center">
         <TimerIcon size={32} className="mx-auto mb-3 text-piste-600" />
         <h2 className="font-display text-2xl text-piste-900 mb-2">Évaluation enregistrée</h2>
+        {donneesCourse.arretProf && (
+          <p className="text-xs font-medium text-piste-700 mb-2">Arrêtée par ton professeur · évaluée sur la durée courue</p>
+        )}
         <p className="text-sm text-piste-600 mb-3">
           Durée effective : {formatDuree(donneesCourse.dureeEffectiveS)}
         </p>
