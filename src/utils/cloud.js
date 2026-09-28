@@ -16,7 +16,7 @@
 // partagée, comme pour la synchro des autres applis de Christophe.
 
 import { initializeApp } from 'firebase/app'
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection } from 'firebase/firestore'
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, onSnapshot, query, where, updateDoc } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBkvREh1dwRmMZOriWka5rCK9WdER2oJOQ',
@@ -282,4 +282,63 @@ export async function listerDocumentsProfs() {
     console.warn('Listage des espaces profs impossible', e)
     return []
   }
+}
+
+// --- Arrêt de séance par le professeur (météo, blessure, fin de cours…) ---
+//
+// Deux collections sous l'espace du professeur :
+// - enCours/{eleveId} : présence "en direct" d'un élève qui court (séance, Fartlek, test VMA),
+//   écrite par son téléphone au démarrage puis rafraîchie toutes les minutes, effacée à la fin.
+//   Sert à afficher au professeur, en temps réel, qui est en train de courir.
+// - arrets/{id} : ordre d'arrêt envoyé par le professeur, pour un ou plusieurs élèves ou pour
+//   toute une classe. Chaque téléphone d'élève en course écoute les ordres de SA classe et
+//   s'arrête s'il est concerné (y compris à retardement, dès que le réseau revient).
+
+export function cloudEcrireEnCours(teacherId, eleveId, data) {
+  if (!db || !teacherId || !eleveId) return Promise.resolve(false)
+  return setDoc(doc(db, 'profs', teacherId, 'enCours', eleveId), nettoyer(data), { merge: true })
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture présence impossible', e); return false })
+}
+
+export function cloudMajEnCours(teacherId, eleveId, patch) {
+  if (!db || !teacherId || !eleveId) return Promise.resolve(false)
+  return updateDoc(doc(db, 'profs', teacherId, 'enCours', eleveId), nettoyer(patch))
+    .then(() => true)
+    .catch(() => false)
+}
+
+export function cloudSupprimerEnCours(teacherId, eleveId) {
+  if (!db || !teacherId || !eleveId) return Promise.resolve(false)
+  return deleteDoc(doc(db, 'profs', teacherId, 'enCours', eleveId))
+    .then(() => true)
+    .catch(() => false)
+}
+
+// Écoute en temps réel de toutes les présences de l'espace (tableau de bord enseignant).
+export function ecouterEnCours(teacherId, callback) {
+  if (!db || !teacherId) { callback([]); return () => {} }
+  return onSnapshot(
+    collection(db, 'profs', teacherId, 'enCours'),
+    (snap) => callback(snap.docs.map((d) => ({ eleveId: d.id, ...d.data() }))),
+    (e) => { console.warn('Écoute présences impossible', e); callback([]) }
+  )
+}
+
+export function cloudEcrireArret(teacherId, arret) {
+  if (!db || !teacherId) return Promise.resolve(false)
+  return setDoc(doc(db, 'profs', teacherId, 'arrets', arret.id), nettoyer(arret))
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture arrêt impossible', e); return false })
+}
+
+// Écoute en temps réel des ordres d'arrêt d'une classe (téléphone de l'élève pendant sa course).
+// Une seule condition d'égalité : aucun index composite Firestore n'est nécessaire.
+export function ecouterArretsClasse(teacherId, classe, callback) {
+  if (!db || !teacherId || classe == null) return () => {}
+  return onSnapshot(
+    query(collection(db, 'profs', teacherId, 'arrets'), where('classe', '==', classe)),
+    (snap) => callback(snap.docs.map((d) => d.data())),
+    (e) => console.warn('Écoute arrêts impossible', e)
+  )
 }

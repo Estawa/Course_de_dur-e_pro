@@ -220,7 +220,9 @@ export function calculerNoteReelle(realisation, bareme = BAREME) {
   // les appels historiques) plutôt que l'objet complet de la réalisation.
   let penaliteSeance = 0
   if (!Array.isArray(realisation) && realisation) {
-    const pouls = realisation.poulsParPhase
+    // Séance arrêtée par le professeur : les prises de pouls prévues après l'arrêt n'ont pas pu
+    // être faites, elles ne sont donc jamais pénalisées.
+    const pouls = realisation.arretProf ? null : realisation.poulsParPhase
     if (pouls) {
       ;['repos', 'avantTravail', 'apresTravail', 'final'].forEach((cle) => {
         if (pouls[cle] == null) penaliteSeance += bareme.penalitePoulsManquant

@@ -28,7 +28,20 @@ function vitesseCibleMoyenne(phasesTravail) {
 // phasesTravail : [{ duree_s, vitesse_kmh }] cibles, dans l'ordre. repetitions : [{ distanceM,
 // dureeS, recupDureeS, recupDistanceM }] saisies, même longueur/ordre (recupDureeS/recupDistanceM
 // facultatifs, notés pour la fiche récap mais non pris en compte dans la notation).
-export function construireResultatBlocSaisieProf(blocId, phasesTravail, repetitions) {
+// prorata (séance arrêtée par le professeur) : les répétitions à 0 s ne sont pas comptées et la
+// cible d'une répétition interrompue est ramenée au temps réellement couru — l'élève n'est évalué
+// que sur ce qu'il a pu faire.
+export function construireResultatBlocSaisieProf(blocId, phasesTravailPrevues, repetitionsSaisies, { prorata = false } = {}) {
+  let phasesTravail = phasesTravailPrevues
+  let repetitions = repetitionsSaisies
+  if (prorata) {
+    const garder = repetitionsSaisies.map((r) => (Number(r?.dureeS) || 0) > 0)
+    repetitions = repetitionsSaisies.filter((_, i) => garder[i])
+    phasesTravail = phasesTravailPrevues
+      .map((p, i) => (garder[i] ? { ...p, duree_s: Math.min(p.duree_s, Number(repetitionsSaisies[i].dureeS) || 0) } : null))
+      .filter(Boolean)
+    if (!repetitions.length) return resultatBlocNonRealise(blocId, phasesTravailPrevues, false)
+  }
   const distanceCible = distanceCibleTotale(phasesTravail)
   const dureeCible = dureeCibleTotale(phasesTravail)
   const distanceRealisee = Math.round(repetitions.reduce((acc, r) => acc + (Number(r.distanceM) || 0), 0))
