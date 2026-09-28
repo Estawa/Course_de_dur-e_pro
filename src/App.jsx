@@ -334,6 +334,28 @@ export default function App() {
     setEcran('bilan')
   }
 
+  // Séance arrêtée par le professeur avant qu'une seule partie ait pu être courue : une trace est
+  // gardée dans le suivi (motif, heure), sans note et hors moyenne de cycle.
+  function handleArretSansRealisation(arretProf) {
+    const realisation = {
+      id: crypto.randomUUID(),
+      eleve,
+      seanceId: seanceActive?.id || 'libre',
+      seanceTitre: seanceActive?.titre || 'Séance',
+      niveauNom: niveauActif?.nom || '',
+      date: Date.now(),
+      blocsResultats: [],
+      arretProf,
+      aucunePartieRealisee: true,
+      partiesPrevues: niveauActif?.blocs?.length || 0,
+      partiesRealisees: 0,
+      exclureCycle: true
+    }
+    storage.ajouterRealisation(realisation)
+    setRealisations((prev) => [...prev, realisation])
+    handleAbandonSeance()
+  }
+
   function handleAbandonSeance() {
     setBinomeActif(null)
     storage.effacerSessionCours(eleve, 'course')
@@ -500,8 +522,11 @@ export default function App() {
           binome={binomeActif}
           modeGuidage={modeGuidageActif}
           reprise={repriseActive}
+          eleve={eleve}
+          seanceTitre={seanceActive?.titre}
           onProgress={handleProgressSeance}
           onFinSeance={handleFinSeance}
+          onArretSansRealisation={handleArretSansRealisation}
           onAbandon={handleAbandonSeance}
         />
       )}
