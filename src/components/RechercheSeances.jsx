@@ -4,6 +4,7 @@ import { storage } from '../utils/storage'
 import { loadRealisationsTeacher, loadRosterTeacher } from '../utils/cloud'
 import { libelleNiveau } from '../utils/niveauLabels'
 import { normaliser } from '../utils/eleves'
+import RecreerRun from './RecreerRun'
 
 const dateHeure = (ts) =>
   ts ? new Date(ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
@@ -24,6 +25,7 @@ export default function RechercheSeances({ espaceActifId, accesConfig, estAdmin,
   const [filtre, setFiltre] = useState('run')
   const [recherche, setRecherche] = useState('')
   const [message, setMessage] = useState(null)
+  const [recreationOuverte, setRecreationOuverte] = useState(false)
 
   const espaces = useMemo(() => {
     const liste = [{ id: espaceActifId, nom: 'Espace consulté' }]
@@ -117,6 +119,26 @@ export default function RechercheSeances({ espaceActifId, accesConfig, estAdmin,
         </div>
 
         <div className="px-4 py-3 space-y-2">
+          {recreationOuverte && cibleProf ? (
+            <RecreerRun
+              espaceId={espaceActifId}
+              eleve={{ ...cibleProf, classe: 'PROF' }}
+              onAnnuler={() => setRecreationOuverte(false)}
+              onFait={() => {
+                setRecreationOuverte(false)
+                setMessage(`Run recréé dans la fiche de ${cibleProf.prenom} ${cibleProf.nom} ✓`)
+                onTermine()
+                charger()
+              }}
+            />
+          ) : cibleProf ? (
+            <button
+              onClick={() => setRecreationOuverte(true)}
+              className="w-full text-sm font-medium text-piste-800 border border-dashed border-piste-300 rounded-xl py-2.5"
+            >
+              + Recréer un run perdu pour {cibleProf.prenom} {cibleProf.nom} (PROF)
+            </button>
+          ) : null}
           {chargement ? (
             <p className="text-sm text-piste-500 py-6 text-center">Lecture des séances en ligne…</p>
           ) : visibles.length === 0 ? (

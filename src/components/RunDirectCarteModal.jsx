@@ -7,8 +7,8 @@ import RunDirectCarte from './RunDirectCarte'
 // GPS complète est conservée dans la réalisation dès l'enregistrement — voir App.jsx).
 export default function RunDirectCarteModal({ titre, date, resultat, onClose }) {
   const { dureeGlobaleMs, distanceGlobaleM, phases, points } = resultat
-  const vMax = vitesseMax(points)
-  const meilleurKm = meilleurKmMs(points)
+  const vMax = resultat.vitesseMaxKmh ?? vitesseMax(points || [])
+  const meilleurKm = resultat.meilleurKmMs ?? meilleurKmMs(points || [])
   const phaseCourse = phases.find((p) => p.phase === 'course')
 
   return (
@@ -65,7 +65,7 @@ export default function RunDirectCarteModal({ titre, date, resultat, onClose }) 
           )}
 
           <p className="text-xs font-semibold text-piste-500 uppercase tracking-wide mb-2 text-left">Trajet</p>
-          <RunDirectCarte points={points} />
+          <RunDirectCarte points={points || []} image={resultat.imageTrajet} />
         </div>
       </div>
     </div>

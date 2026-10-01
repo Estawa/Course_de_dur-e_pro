@@ -13,8 +13,8 @@ const PHRASES = [
 export default function RunDirectBilan({ resultat, onRetourAccueil }) {
   const { mode, dureeGlobaleMs, distanceGlobaleM, phases, points } = resultat
   const phrase = PHRASES[Math.floor(Math.random() * PHRASES.length)]
-  const vMax = vitesseMax(points)
-  const meilleurKm = meilleurKmMs(points)
+  const vMax = resultat.vitesseMaxKmh ?? vitesseMax(points || [])
+  const meilleurKm = resultat.meilleurKmMs ?? meilleurKmMs(points || [])
   const phaseCourse = phases.find((p) => p.phase === 'course')
 
   return (
@@ -66,7 +66,7 @@ export default function RunDirectBilan({ resultat, onRetourAccueil }) {
 
       <p className="text-xs font-semibold text-piste-500 uppercase tracking-wide mb-2 text-left">Ton trajet</p>
       <div className="mb-8">
-        <RunDirectCarte points={points} />
+        <RunDirectCarte points={points || []} image={resultat.imageTrajet} />
       </div>
 
       <button

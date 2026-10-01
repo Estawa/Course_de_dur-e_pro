@@ -6,7 +6,7 @@ import { LABEL_PHASE, COULEUR_PHASE } from '../utils/runDirect'
 // Trace le trajet GPS d'un run direct sur une carte (fond OpenStreetMap), avec un tronçon de
 // couleur différente par phase (Échauffement/Course/Récupération). Pas d'icône de marqueur
 // image (évite le bug classique Leaflet + bundler) : départ/arrivée en simples cercles colorés.
-export default function RunDirectCarte({ points }) {
+export default function RunDirectCarte({ points, image }) {
   const conteneurRef = useRef(null)
   const carteRef = useRef(null)
 
@@ -49,6 +49,14 @@ export default function RunDirectCarte({ points }) {
   const phasesPresentes = [...new Set(points.map((p) => p.phase))]
 
   if (!points.length) {
+    if (image) {
+      return (
+        <div>
+          <img src={image} alt="Trajet du run" className="w-full rounded-2xl" />
+          <p className="text-[11px] text-piste-500 text-center mt-1.5">Image du trajet (trace GPS non disponible)</p>
+        </div>
+      )
+    }
     return <p className="text-xs text-piste-500 text-center py-6">Aucune trace GPS enregistrée pour ce run.</p>
   }
 
