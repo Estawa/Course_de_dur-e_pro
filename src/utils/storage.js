@@ -386,6 +386,27 @@ export const storage = {
   // - supprimerSourcesVides : retire du roster les élèves sources qui n'ont plus rien
   // Toutes les écritures cloud sont attendues avant de rendre la main.
   transfererVersEleve: async ({ sources, cible, realisationIds, vmaSelection, supprimerSourcesVides }) => {
+    // 0. Anti-écrasement : un test VMA / Fartlek / une séance a pu être enregistré sur un autre
+    // appareil depuis l'ouverture de l'espace prof. On relit l'état en ligne JUSTE AVANT d'écrire,
+    // et les tests choisis sont repérés par leur contenu (date+test+valeur), pas par leur position.
+    const signature = (h) => `${h.date}|${h.test}|${h.valeur}|${h.source}`
+    const signaturesChoisies = {}
+    Object.entries(vmaSelection || {}).forEach(([cle, sel]) => {
+      const histo = cache.vma[cle]?.historique || []
+      signaturesChoisies[cle] = new Set((sel.historique || []).map((i) => histo[i]).filter(Boolean).map(signature))
+    })
+    const [rosterFrais, realisationsFraiches, vmaFraiche] = await Promise.all([
+      cloud.loadRosterTeacher(cache.teacherId),
+      cloud.loadRealisationsTeacher(cache.teacherId),
+      cloud.loadVmaTeacher(cache.teacherId)
+    ])
+    // Fusion prudente : une lecture en échec renvoie un objet vide, qui ne doit rien effacer.
+    if (rosterFrais && Object.keys(rosterFrais).length) cache.roster = rosterFrais
+    const parId = new Map(cache.realisations.map((r) => [r.id, r]))
+    ;(realisationsFraiches || []).forEach((r) => parId.set(r.id, r))
+    cache.realisations = Array.from(parId.values())
+    cache.vma = { ...cache.vma, ...(vmaFraiche || {}) }
+
     // 1. Élève cible (création classe + élève si besoin)
     let eleveCible
     if (cible.id) {
@@ -430,13 +451,14 @@ export const storage = {
     Object.entries(vmaSelection || {}).forEach(([cleSource, sel]) => {
       const detail = vmaSuivant[cleSource]
       if (!detail) return
-      const idxSet = new Set(sel.historique || [])
+      const sigs = signaturesChoisies[cleSource] || new Set()
       const fIds = new Set(sel.fartlek || [])
-      if (!idxSet.size && !fIds.size) return
+      if (!sigs.size && !fIds.size) return
       const histo = detail.historique || []
-      histo.forEach((h, i) => { if (idxSet.has(i)) histoTransfert.push(h) })
+      const choisi = (h) => sigs.has(signature(h))
+      histo.forEach((h) => { if (choisi(h)) histoTransfert.push(h) })
       ;(detail.fartlek || []).forEach((f) => { if (fIds.has(f.id)) fartlekTransfert.push(f) })
-      const histoRestant = histo.filter((_, i) => !idxSet.has(i))
+      const histoRestant = histo.filter((h) => !choisi(h))
       const meilleur = meilleurDe(histoRestant)
       const reste = {
         ...detail,
