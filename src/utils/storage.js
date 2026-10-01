@@ -375,6 +375,121 @@ export const storage = {
     return cache.realisations
   },
 
+  // --- Regroupement : transfère des séances réalisées, des tests VMA et des Fartlek d'un ou
+  // plusieurs élèves "sources" (ex. comptes "test") vers UN élève cible (créé s'il n'existe pas
+  // encore, classe comprise). Seuls les éléments cochés sont déplacés ; rien n'est dupliqué :
+  // chaque élément quitte la source pour la cible.
+  // - sources : [{ id|null, nom, prenom, classe }]
+  // - cible : { classe, id|null, nom, prenom } (id null → élève créé dans la classe)
+  // - realisationIds : ids des réalisations à transférer
+  // - vmaSelection : { [cleSource]: { historique: [index…], fartlek: [id…] } }
+  // - supprimerSourcesVides : retire du roster les élèves sources qui n'ont plus rien
+  // Toutes les écritures cloud sont attendues avant de rendre la main.
+  transfererVersEleve: async ({ sources, cible, realisationIds, vmaSelection, supprimerSourcesVides }) => {
+    // 1. Élève cible (création classe + élève si besoin)
+    let eleveCible
+    if (cible.id) {
+      eleveCible = { ...rosterOps.trouverEleveParId(cache.roster, cible.id) }
+    } else {
+      const { roster: r1, nom: classeNom } = rosterOps.ajouterClasse(cache.roster, cible.classe)
+      const { roster: r2, eleve } = rosterOps.ajouterEleveManuel(r1, classeNom, cible.nom, cible.prenom)
+      cache.roster = r2
+      eleveCible = { ...eleve, classe: classeNom }
+    }
+    const refCible = {
+      id: eleveCible.id,
+      nom: eleveCible.nom,
+      prenom: eleveCible.prenom,
+      classe: eleveCible.classe,
+      classeOrigine: eleveCible.classeOrigine || null,
+      sexe: eleveCible.sexe || null
+    }
+    const ecritures = []
+
+    // 2. Séances réalisées : ré-attribuées à l'élève cible
+    const ids = new Set(realisationIds)
+    let nbRealisations = 0
+    cache.realisations = cache.realisations.map((r) => {
+      if (!ids.has(r.id)) return r
+      nbRealisations++
+      const maj = { ...r, eleve: { ...r.eleve, ...refCible } }
+      ecritures.push(cloud.cloudEcrireRealisation(cache.teacherId, maj))
+      return maj
+    })
+
+    // 3. Tests VMA + Fartlek : retirés de la source, ajoutés à la cible
+    const meilleurDe = (historique) =>
+      historique.filter((h) => h.source === 'test').reduce((max, h) => (max == null || h.valeur > max.valeur ? h : max), null)
+    const derniereCourseDe = (historique) => {
+      const d = historique.filter((h) => h.source === 'test' && h.detail).sort((a, b) => b.date - a.date)[0]
+      return d ? { test: d.test, detail: d.detail, date: d.date } : null
+    }
+    const histoTransfert = []
+    const fartlekTransfert = []
+    const vmaSuivant = { ...cache.vma }
+    Object.entries(vmaSelection || {}).forEach(([cleSource, sel]) => {
+      const detail = vmaSuivant[cleSource]
+      if (!detail) return
+      const idxSet = new Set(sel.historique || [])
+      const fIds = new Set(sel.fartlek || [])
+      if (!idxSet.size && !fIds.size) return
+      const histo = detail.historique || []
+      histo.forEach((h, i) => { if (idxSet.has(i)) histoTransfert.push(h) })
+      ;(detail.fartlek || []).forEach((f) => { if (fIds.has(f.id)) fartlekTransfert.push(f) })
+      const histoRestant = histo.filter((_, i) => !idxSet.has(i))
+      const meilleur = meilleurDe(histoRestant)
+      const reste = {
+        ...detail,
+        historique: histoRestant,
+        fartlek: (detail.fartlek || []).filter((f) => !fIds.has(f.id)),
+        auto: meilleur ? meilleur.valeur : null,
+        autoDate: meilleur ? meilleur.date : null,
+        autoTest: meilleur ? meilleur.test : null,
+        derniereCourse: derniereCourseDe(histoRestant)
+      }
+      vmaSuivant[cleSource] = reste
+      ecritures.push(cloud.cloudEcrireVma(cache.teacherId, cleSource, reste))
+    })
+    if (histoTransfert.length || fartlekTransfert.length) {
+      const cleCible = storage.cleEleve(refCible)
+      const ajout = { manuelle: null, historique: histoTransfert, fartlek: fartlekTransfert, derniereCourse: null }
+      const fusion = fusionnerDetailVma(vmaSuivant[cleCible] || { manuelle: null, historique: [], fartlek: [] }, ajout)
+      fusion.historique = fusion.historique.slice().sort((a, b) => a.date - b.date)
+      fusion.fartlek = (fusion.fartlek || []).slice().sort((a, b) => a.date - b.date)
+      fusion.derniereCourse = derniereCourseDe(fusion.historique)
+      vmaSuivant[cleCible] = fusion
+      ecritures.push(cloud.cloudEcrireVma(cache.teacherId, cleCible, fusion))
+    }
+    cache.vma = vmaSuivant
+
+    // 4. Élèves sources vidés : retirés du roster si demandé
+    let nbSupprimes = 0
+    if (supprimerSourcesVides) {
+      sources.forEach((s) => {
+        if (!s.id || s.id === refCible.id) return
+        const resteRealisations = cache.realisations.some((r) => r.eleve.id === s.id)
+        const d = cache.vma[s.id]
+        const resteVma = d && ((d.historique || []).length || (d.fartlek || []).length || d.manuelle != null)
+        if (resteRealisations || resteVma) return
+        const trouve = rosterOps.trouverEleveParId(cache.roster, s.id)
+        if (!trouve) return
+        cache.roster = rosterOps.supprimerEleve(cache.roster, trouve.classe, s.id)
+        nbSupprimes++
+      })
+    }
+
+    ecritures.push(cloud.saveRosterTeacher(cache.teacherId, cache.roster))
+    const resultats = await Promise.all(ecritures)
+    return {
+      cible: refCible,
+      nbRealisations,
+      nbTests: histoTransfert.length,
+      nbFartlek: fartlekTransfert.length,
+      nbSupprimes,
+      ok: resultats.every((r) => r !== false)
+    }
+  },
+
   cleEleve: (eleve) => (eleve.id ? eleve.id : `${eleve.nom}__${eleve.prenom}__${eleve.classe}`.toLowerCase()),
 
   // --- VMA de l'espace actif ---
