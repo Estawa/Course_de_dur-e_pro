@@ -15,12 +15,19 @@ const cleSource = (e) => e.id || `${e.nom}__${e.prenom}__${e.classe}`
 export default function RegrouperEleves({ realisations, onFermer, onTermine }) {
   const roster = storage.getRoster()
 
-  // Tous les élèves connus : roster (toutes classes) + élèves présents seulement dans les réalisations
+  // Tous les élèves connus : roster (toutes classes) + élèves présents seulement dans les
+  // réalisations : ancien format sans id, ou "fantômes" (id d'un élève retiré de la liste — leurs
+  // séances existent toujours mais n'apparaissent plus nulle part ailleurs).
   const tousEleves = useMemo(() => {
     const liste = []
     Object.entries(roster || {}).forEach(([classe, eleves]) => eleves.forEach((e) => liste.push({ ...e, classe })))
+    const idsRoster = new Set(liste.map((e) => e.id))
     realisations.forEach((r) => {
-      if (r.eleve.id) return
+      if (r.eleve.id) {
+        if (idsRoster.has(r.eleve.id) || liste.some((l) => l.id === r.eleve.id)) return
+        liste.push({ id: r.eleve.id, nom: r.eleve.nom || '?', prenom: r.eleve.prenom || '?', classe: r.eleve.classe, fantome: true })
+        return
+      }
       const e = { id: null, nom: r.eleve.nom, prenom: r.eleve.prenom, classe: r.eleve.classe }
       if (!liste.some((l) => !l.id && cleSource(l) === cleSource(e))) liste.push(e)
     })
@@ -51,9 +58,9 @@ export default function RegrouperEleves({ realisations, onFermer, onTermine }) {
   const [recherche, setRecherche] = useState('test')
   const correspondants = useMemo(() => {
     const q = normaliser(recherche)
-    if (!q) return []
+    // Les élèves "fantômes" sont toujours proposés : c'est le seul endroit où on les voit encore.
     return tousEleves
-      .filter((e) => normaliser(e.nom).includes(q) || normaliser(e.prenom).includes(q))
+      .filter((e) => e.fantome || (q && (normaliser(e.nom).includes(q) || normaliser(e.prenom).includes(q))))
       .filter((e) => !(eleveCibleId !== NOUVEAU && e.id === eleveCibleId))
   }, [recherche, tousEleves, eleveCibleId])
   const [sourcesDecochees, setSourcesDecochees] = useState(() => new Set())
@@ -70,7 +77,7 @@ export default function RegrouperEleves({ realisations, onFermer, onTermine }) {
         .forEach((r) =>
           out.push({
             cle: `r:${r.id}`, type: 'seance', date: r.date, source: nomSource, realisationId: r.id,
-            libelle: `${r.seanceTitre || 'Séance'}${r.niveauNom ? ` · ${libelleNiveau(r.niveauNom)}` : ''}`
+            libelle: `${r.seanceTitre || 'Séance'}${r.niveauNom ? ` · ${libelleNiveau(r.niveauNom)}` : ''}${r.runDirect?.distanceGlobaleM ? ` · ${(r.runDirect.distanceGlobaleM / 1000).toFixed(2).replace('.', ',')} km` : ''}`
           })
         )
       if (s.id) {
@@ -206,7 +213,10 @@ export default function RegrouperEleves({ realisations, onFermer, onTermine }) {
                   {correspondants.map((e) => (
                     <label key={cleSource(e)} className="flex items-center gap-2.5 rounded-xl px-3 py-2 border border-piste-100 cursor-pointer">
                       <input type="checkbox" checked={!sourcesDecochees.has(cleSource(e))} onChange={() => toggleSource(cleSource(e))} className="w-4 h-4 shrink-0" />
-                      <span className="text-sm text-piste-900 flex-1 truncate">{e.prenom} {e.nom}</span>
+                      <span className="text-sm text-piste-900 flex-1 truncate">
+                        {e.prenom} {e.nom}
+                        {e.fantome && <span className="block text-[11px] text-alerte">Retiré de la liste — séances encore enregistrées</span>}
+                      </span>
                       <span className="text-xs text-piste-500 shrink-0">{e.classe || '—'}</span>
                     </label>
                   ))}
