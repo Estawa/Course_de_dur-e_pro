@@ -159,6 +159,32 @@ export function cloudEcrireVma(teacherId, cle, detail) {
     .catch((e) => { console.warn('Écriture VMA impossible', e); return false })
 }
 
+export function cloudSupprimerVma(teacherId, cle) {
+  if (!db) return Promise.resolve(false)
+  return deleteDoc(doc(colVma(teacherId), cle))
+    .then(() => true)
+    .catch((e) => { console.warn('Suppression VMA impossible', e); return false })
+}
+
+// Lecture "stricte" pour l'effacement de fin d'année : une erreur de lecture LÈVE une exception
+// au lieu de renvoyer un objet vide — sinon une coupure réseau ferait croire à un espace vide et
+// la réécriture du roster effacerait tout.
+export async function loadEspaceStrict(teacherId) {
+  if (!db) throw new Error('Connexion au serveur indisponible.')
+  const [snapRoster, snapReal, snapVma] = await Promise.all([
+    getDoc(doc(db, 'profs', teacherId, 'meta', 'roster')),
+    getDocs(colRealisations(teacherId)),
+    getDocs(colVma(teacherId))
+  ])
+  const vma = {}
+  snapVma.docs.forEach((d) => { vma[d.id] = d.data() })
+  return {
+    roster: snapRoster.exists() && snapRoster.data().classes ? snapRoster.data().classes : {},
+    realisations: snapReal.docs.map((d) => d.data()),
+    vma
+  }
+}
+
 // --- Bibliothèque de séances d'un enseignant : un seul document. ---
 
 export async function loadSeancesTeacher(teacherId) {
