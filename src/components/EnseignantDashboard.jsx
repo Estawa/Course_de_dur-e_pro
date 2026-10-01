@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, ArrowRightLeft, FileSpreadsheet, WifiOff, Copy } from 'lucide-react'
+import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, ArrowRightLeft, FileSpreadsheet, WifiOff, Copy, Search } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import VmaEleveLigne, { LABEL_TEST, formatDateVma } from './VmaEleveLigne'
@@ -12,6 +12,8 @@ import PanneauDirect from './PanneauDirect'
 import VisibiliteClasses from './VisibiliteClasses'
 import EspaceAcces from './EspaceAcces'
 import RegrouperEleves from './RegrouperEleves'
+import RechercheSeances from './RechercheSeances'
+import FinAnnee from './FinAnnee'
 import BaremeNotation from './BaremeNotation'
 import { storage } from '../utils/storage'
 import { loadSeancesTeacherStrict, cloudEcrireSeances } from '../utils/cloud'
@@ -58,6 +60,7 @@ export default function EnseignantDashboard({
   const [testPourVisibilite, setTestPourVisibilite] = useState(null)
   const [sansTelephoneOuvert, setSansTelephoneOuvert] = useState(false)
   const [regroupementOuvert, setRegroupementOuvert] = useState(false)
+  const [rechercheOuverte, setRechercheOuverte] = useState(false)
   // Confirmation/erreur d'enregistrement (séance créée/éditée ou visibilité changée), affichée
   // brièvement en haut de la liste des séances — l'écriture cloud peut échouer en silence côté
   // réseau, il faut donc que l'enseignant voie explicitement si ça a marché ou non.
@@ -588,6 +591,7 @@ export default function EnseignantDashboard({
           onMigrerListe={migrerListeDeCodes}
         />
       )}
+      {onglet === 'acces' && estAdmin && <FinAnnee accesConfig={accesConfig} onTermine={actualiser} />}
 
       {onglet === 'seances' && (
         <section>
@@ -777,6 +781,9 @@ export default function EnseignantDashboard({
               <button onClick={() => setRegroupementOuvert(true)} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
                 <ArrowRightLeft size={14} /> Regrouper des séances
               </button>
+              <button onClick={() => setRechercheOuverte(true)} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
+                <Search size={14} /> Retrouver une séance
+              </button>
               {classeActive !== null && (
                 <>
                   <button onClick={() => setSansTelephoneOuvert(true)} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
@@ -947,6 +954,16 @@ export default function EnseignantDashboard({
               />
             )
           })()}
+
+          {rechercheOuverte && (
+            <RechercheSeances
+              espaceActifId={espaceActifId}
+              accesConfig={accesConfig}
+              estAdmin={estAdmin}
+              onFermer={() => setRechercheOuverte(false)}
+              onTermine={() => { onRealisationsRecalculees(); setRosterVersion((v) => v + 1) }}
+            />
+          )}
 
           {regroupementOuvert && (
             <RegrouperEleves
