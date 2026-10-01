@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, FileSpreadsheet, WifiOff, Copy } from 'lucide-react'
+import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, ArrowRightLeft, FileSpreadsheet, WifiOff, Copy } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import VmaEleveLigne, { LABEL_TEST, formatDateVma } from './VmaEleveLigne'
@@ -11,6 +11,7 @@ import SuiviSansTelephone from './SuiviSansTelephone'
 import PanneauDirect from './PanneauDirect'
 import VisibiliteClasses from './VisibiliteClasses'
 import EspaceAcces from './EspaceAcces'
+import RegrouperEleves from './RegrouperEleves'
 import BaremeNotation from './BaremeNotation'
 import { storage } from '../utils/storage'
 import { loadSeancesTeacherStrict, cloudEcrireSeances } from '../utils/cloud'
@@ -56,6 +57,7 @@ export default function EnseignantDashboard({
   const [draggedId, setDraggedId] = useState(null)
   const [testPourVisibilite, setTestPourVisibilite] = useState(null)
   const [sansTelephoneOuvert, setSansTelephoneOuvert] = useState(false)
+  const [regroupementOuvert, setRegroupementOuvert] = useState(false)
   // Confirmation/erreur d'enregistrement (séance créée/éditée ou visibilité changée), affichée
   // brièvement en haut de la liste des séances — l'écriture cloud peut échouer en silence côté
   // réseau, il faut donc que l'enseignant voie explicitement si ça a marché ou non.
@@ -772,6 +774,9 @@ export default function EnseignantDashboard({
               <button onClick={exporterEpsProExcel} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
                 <FileSpreadsheet size={14} /> Exporter pour EPS Pro
               </button>
+              <button onClick={() => setRegroupementOuvert(true)} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
+                <ArrowRightLeft size={14} /> Regrouper des séances
+              </button>
               {classeActive !== null && (
                 <>
                   <button onClick={() => setSansTelephoneOuvert(true)} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
@@ -942,6 +947,14 @@ export default function EnseignantDashboard({
               />
             )
           })()}
+
+          {regroupementOuvert && (
+            <RegrouperEleves
+              realisations={realisations}
+              onFermer={() => setRegroupementOuvert(false)}
+              onTermine={() => { onRealisationsRecalculees(); setRosterVersion((v) => v + 1) }}
+            />
+          )}
 
           {sansTelephoneOuvert && classeActive !== null && (
             <SuiviSansTelephone
