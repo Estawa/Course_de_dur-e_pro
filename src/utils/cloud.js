@@ -388,3 +388,29 @@ export function ecouterArretsClasse(teacherId, classe, callback) {
     (e) => console.warn('Écoute arrêts impossible', e)
   )
 }
+
+// --- Note du bac par classe (v1.64.0) : profs/{teacherId}/meta/bac__{classe}. Saisies du prof
+// (thème de l'épreuve, passages hors zone, degrés) et note retenue (cycle ou bac) par élève.
+// Document séparé : roster, réalisations et notes de cycle ne sont pas touchés. ---
+function idDocBac(classe) {
+  return 'bac__' + String(classe || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9-]+/g, '_')
+}
+
+export async function loadBacClasse(teacherId, classe) {
+  if (!db || !teacherId) return { eleves: {}, retenue: {} }
+  try {
+    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', idDocBac(classe)))
+    const d = snap.exists() ? snap.data().data || {} : {}
+    return { eleves: d.eleves || {}, retenue: d.retenue || {} }
+  } catch (e) {
+    console.warn('Chargement note du bac impossible', e)
+    return { eleves: {}, retenue: {} }
+  }
+}
+
+export function cloudEcrireBacClasse(teacherId, classe, donnees) {
+  if (!db || !teacherId) return Promise.resolve(false)
+  return setDoc(doc(db, 'profs', teacherId, 'meta', idDocBac(classe)), { data: nettoyer({ classe, ...donnees }) })
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture note du bac impossible', e); return false })
+}

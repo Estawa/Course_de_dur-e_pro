@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, ArrowRightLeft, FileSpreadsheet, WifiOff, Copy, Search } from 'lucide-react'
+import { Download, Plus, Trash2, Upload, ChevronRight, FolderPlus, FolderX, UserPlus, Sparkles, GripVertical, RefreshCw, Users, ArrowLeftRight, ArrowRightLeft, FileSpreadsheet, WifiOff, Copy, Search, GraduationCap } from 'lucide-react'
 import SeanceEditor from './SeanceEditor'
 import ImportEleves from './ImportEleves'
 import VmaEleveLigne, { LABEL_TEST, formatDateVma } from './VmaEleveLigne'
@@ -15,6 +15,7 @@ import RegrouperEleves from './RegrouperEleves'
 import RechercheSeances from './RechercheSeances'
 import FinAnnee from './FinAnnee'
 import BaremeNotation from './BaremeNotation'
+import EpreuveBacCourse from './EpreuveBacCourse'
 import { storage } from '../utils/storage'
 import { loadSeancesTeacherStrict, cloudEcrireSeances } from '../utils/cloud'
 import { noteFinale, pourcentagesReussite, syntheseCycle, criteresSeance, formatDuree } from '../utils/calc'
@@ -70,6 +71,7 @@ export default function EnseignantDashboard({
   const [draggedId, setDraggedId] = useState(null)
   const [testPourVisibilite, setTestPourVisibilite] = useState(null)
   const [sansTelephoneOuvert, setSansTelephoneOuvert] = useState(false)
+  const [bacOuvert, setBacOuvert] = useState(false) // v1.64.0 : épreuve et note du bac de la classe
   const [regroupementOuvert, setRegroupementOuvert] = useState(false)
   const [rechercheOuverte, setRechercheOuverte] = useState(false)
   // Confirmation/erreur d'enregistrement (séance créée/éditée ou visibilité changée), affichée
@@ -800,6 +802,9 @@ export default function EnseignantDashboard({
                   <button onClick={() => setSansTelephoneOuvert(true)} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
                     <WifiOff size={14} /> Sans téléphone
                   </button>
+                  <button onClick={() => setBacOuvert(true)} className="flex items-center gap-1.5 text-xs font-medium text-piste-700 hover:text-piste-900">
+                    <GraduationCap size={14} /> Épreuve et note du bac
+                  </button>
                   {lignesEleves.some((l) => l.realisations.length > 0) && (
                     <button onClick={supprimerSeancesClasse} className="flex items-center gap-1.5 text-xs font-medium text-alerte hover:text-alerte/80">
                       <Trash2 size={14} /> Effacer les séances de la classe
@@ -999,6 +1004,17 @@ export default function EnseignantDashboard({
               realisations={realisations}
               onFermer={() => setRegroupementOuvert(false)}
               onTermine={() => { onRealisationsRecalculees(); setRosterVersion((v) => v + 1) }}
+            />
+          )}
+
+          {bacOuvert && classeActive !== null && (
+            <EpreuveBacCourse
+              key={`${espaceActifId}-${classeActive}`}
+              classe={classeActive}
+              eleves={lignesEleves}
+              teacherId={espaceActifId}
+              typeBac={storage.getTypeBac(classeActive)}
+              onFermer={() => setBacOuvert(false)}
             />
           )}
 

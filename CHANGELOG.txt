@@ -1,3 +1,12 @@
+v1.64.0 — Épreuve et note du bac (protocole du lycée) à côté de la note de cycle
+- Espace enseignant, onglet des élèves : nouveau bouton "Épreuve et note du bac" pour la classe ouverte, selon son type de bac
+- Les 3 thèmes d'épreuve du protocole : puissance aérobie (100-120 % VMA, 25 min), capacité aérobie (80-95 %, 30 min), endurance fondamentale (60-75 %, 35 min), après 10 min d'échauffement ; les allures en km/h sont calculées avec la VMA de l'élève. Les thèmes d'entraînement de l'appli restent pour les séances
+- Compteur de passages hors zone par élève (boutons + / −) : plus de 12 → degré 1, 9 à 12 → 2, 3 à 8 → 3, moins de 3 → 4 ; le degré conseillé est repéré (★) dans l'élément 1 / l'AFLP 1
+- Bac GT : élément 1 "produire" /8 (0-1,75 / 2-3,75 / 4-5,75 / 6-8) + élément 2 "analyser" /4 (1 / 2 / 3 / 4) ; fil de séquence AFL 2 (carnet) + AFL 3 (un rôle : coach ou observateur-collecteur), points fixes
+- Bac Pro : AFLP 1 /7 (0-1 / 1,5-3 / 3,5-5 / 5,5-7) + AFLP 2 /5 (0-0,5 / 1-2 / 2,5-4 / 4,5-5) ; fil de séquence AFLP 3 + AFLP 4, plages de points
+- Note de cycle /20 (moyenne des séances, inchangée) et note du bac côte à côte : tu coches celle que tu retiens. Export CSV de la classe
+- Données existantes intactes : les saisies du bac sont enregistrées dans un document à part (/profs/{code}/meta/bac__{classe}), sous /profs/{code}/, déjà couvert par les règles Firestore
+
 v1.63.0 — Type d'évaluation par classe : Bac GT ou Bac Pro
 - Espace enseignant, onglet des élèves : chaque classe a un réglage "Bac GT" (général et technologique) ou "Bac Pro", avec deux boutons au-dessus de la liste des élèves ; le type s'affiche aussi sur le bouton de chaque classe (GT, Pro ou ?)
 - Données existantes intactes : le réglage est enregistré dans un document à part (/profs/{code}/meta/typesBac). Roster, séances, réalisations, VMA et notes ne sont pas modifiés. Une classe sans réglage s'affiche "Type de bac à préciser"
