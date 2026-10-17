@@ -29,6 +29,17 @@ const GROUPES_SCOLAIRES = [
   { id: 'premiere_terminale', label: 'Premières / Terminales' }
 ]
 
+// Type d'évaluation d'une classe (v1.63.0) : Bac général et technologique ou Bac professionnel
+const TYPES_BAC = [
+  { valeur: 'gt', court: 'Bac GT', long: 'Bac général et technologique' },
+  { valeur: 'pro', court: 'Bac Pro', long: 'Bac professionnel' },
+]
+function libelleTypeBac(valeur, long = false) {
+  const t = TYPES_BAC.find((x) => x.valeur === valeur)
+  if (!t) return 'Type de bac à préciser'
+  return long ? t.long : t.court
+}
+
 export default function EnseignantDashboard({
   role, nomCollegue, teacherIdEnseignant, accesConfig, onChangerEspace, onMigrer,
   onChangerPinAdmin, onChangerNomAdmin, onAjouterCollegue, onSupprimerCollegue, onReinitialiserPinCollegue,
@@ -833,8 +844,26 @@ export default function EnseignantDashboard({
                     className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition ${classeActive === c ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-600'}`}
                   >
                     {c || '(sans nom)'}
+                    <span className="opacity-60"> · {storage.getTypeBac(c) ? libelleTypeBac(storage.getTypeBac(c)).replace('Bac ', '') : '?'}</span>
                   </button>
                 ))}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <span className={`text-xs font-medium ${storage.getTypeBac(classeActive) ? 'text-piste-700' : 'text-red-600'}`}>
+                  Évaluation : {libelleTypeBac(storage.getTypeBac(classeActive), true)}
+                </span>
+                <div className="flex gap-1 bg-piste-50 rounded-full p-1">
+                  {TYPES_BAC.map((t) => (
+                    <button
+                      key={t.valeur}
+                      onClick={() => { storage.setTypeBac(classeActive, t.valeur); setRosterVersion((v) => v + 1) }}
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition ${storage.getTypeBac(classeActive) === t.valeur ? 'bg-piste-800 text-white' : 'text-piste-600'}`}
+                    >
+                      {t.court}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="flex items-center justify-between mb-3">
@@ -1003,6 +1032,7 @@ export default function EnseignantDashboard({
                     className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition ${classeActive === c ? 'bg-piste-800 text-white border-piste-800' : 'border-piste-200 text-piste-600'}`}
                   >
                     {c || '(sans nom)'}
+                    <span className="opacity-60"> · {storage.getTypeBac(c) ? libelleTypeBac(storage.getTypeBac(c)).replace('Bac ', '') : '?'}</span>
                   </button>
                 ))}
               </div>

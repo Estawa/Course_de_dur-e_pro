@@ -31,7 +31,7 @@ function write(key, value) {
 // depuis Firestore via storage.chargerEspace(teacherId), puis tenues à jour en mémoire au fil
 // des actions (avec écriture "best effort" vers Firestore à chaque changement). Changer
 // d'espace (autre professeur, "Vue globale"...) recharge entièrement ce cache.
-let cache = { teacherId: null, roster: {}, seances: [], realisations: [], vma: {}, testsVisibilite: {}, bareme: null }
+let cache = { teacherId: null, roster: {}, seances: [], realisations: [], vma: {}, testsVisibilite: {}, bareme: null, typesBac: {} }
 
 function idEleve() {
   return crypto.randomUUID ? crypto.randomUUID() : `e_${Date.now()}_${Math.random().toString(36).slice(2)}`
@@ -80,16 +80,24 @@ export const storage = {
   // --- Chargement / état de l'espace actif ---
   espaceCharge: () => cache.teacherId,
   chargerEspace: async (teacherId) => {
-    const [roster, seances, realisations, vma, testsVisibilite, bareme] = await Promise.all([
+    const [roster, seances, realisations, vma, testsVisibilite, bareme, typesBac] = await Promise.all([
       cloud.loadRosterTeacher(teacherId),
       cloud.loadSeancesTeacher(teacherId),
       cloud.loadRealisationsTeacher(teacherId),
       cloud.loadVmaTeacher(teacherId),
       cloud.loadTestsVisibiliteTeacher(teacherId),
-      cloud.loadBaremeTeacher(teacherId)
+      cloud.loadBaremeTeacher(teacherId),
+      cloud.loadTypesBacTeacher(teacherId)
     ])
-    cache = { teacherId, roster, seances, realisations, vma, testsVisibilite, bareme }
+    cache = { teacherId, roster, seances, realisations, vma, testsVisibilite, bareme, typesBac }
     return cache
+  },
+
+  // --- Type d'évaluation des classes (v1.63.0) : "gt" | "pro", absent = à préciser ---
+  getTypeBac: (classe) => (cache.typesBac || {})[classe] || null,
+  setTypeBac: (classe, typeBac) => {
+    cache.typesBac = { ...(cache.typesBac || {}), [classe]: typeBac }
+    return cloud.cloudEcrireTypesBac(cache.teacherId, cache.typesBac)
   },
 
   // --- Roster (classes + élèves) de l'espace actif ---

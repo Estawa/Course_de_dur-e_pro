@@ -1,3 +1,8 @@
+v1.63.0 — Type d'évaluation par classe : Bac GT ou Bac Pro
+- Espace enseignant, onglet des élèves : chaque classe a un réglage "Bac GT" (général et technologique) ou "Bac Pro", avec deux boutons au-dessus de la liste des élèves ; le type s'affiche aussi sur le bouton de chaque classe (GT, Pro ou ?)
+- Données existantes intactes : le réglage est enregistré dans un document à part (/profs/{code}/meta/typesBac). Roster, séances, réalisations, VMA et notes ne sont pas modifiés. Une classe sans réglage s'affiche "Type de bac à préciser"
+- Aucune nouvelle règle Firestore à ajouter : le document est sous /profs/{code}/, déjà couvert
+
 v1.59.0 — Arrêt d'une séance par le professeur (météo, blessure, fin du cours…)
 - Nouvel onglet enseignant "En direct" : liste en temps réel des élèves en train de courir (séance, Fartlek, test VMA), par classe, avec l'heure de départ, le binôme éventuel et l'état de la connexion ("signal perdu" au-delà de 3 min sans nouvelles)
 - Bouton "Arrêter" par élève et bouton "Arrêter la séance de toute la classe". Confirmation obligatoire dans une fenêtre dédiée, avec motif (Conditions météo / Blessure-malaise / Fin du temps de cours / Autre, précision libre) et bouton "Confirmer l'arrêt"

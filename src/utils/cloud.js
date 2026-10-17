@@ -216,6 +216,26 @@ export function cloudEcrireSeances(teacherId, seances) {
 
 // --- Visibilité des tests VMA/Fartlek d'un enseignant : un seul document. ---
 
+// --- Type d'évaluation de chaque classe (v1.63.0) : { [classe]: "gt" | "pro" }, document à part
+// profs/{teacherId}/meta/typesBac. Le roster, les réalisations et les notes ne sont pas touchés. ---
+export async function loadTypesBacTeacher(teacherId) {
+  if (!db) return {}
+  try {
+    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'typesBac'))
+    return snap.exists() ? snap.data().data || {} : {}
+  } catch (e) {
+    console.warn('Chargement types de bac impossible', e)
+    return {}
+  }
+}
+
+export function cloudEcrireTypesBac(teacherId, typesBac) {
+  if (!db) return Promise.resolve(false)
+  return setDoc(doc(db, 'profs', teacherId, 'meta', 'typesBac'), { data: nettoyer(typesBac) })
+    .then(() => true)
+    .catch((e) => { console.warn('Écriture types de bac impossible', e); return false })
+}
+
 export async function loadTestsVisibiliteTeacher(teacherId) {
   if (!db) return {}
   try {
