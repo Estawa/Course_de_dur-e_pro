@@ -16,7 +16,7 @@
 // partagée, comme pour la synchro des autres applis de Christophe.
 
 import { initializeApp } from 'firebase/app'
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, onSnapshot, query, where, updateDoc } from 'firebase/firestore'
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, onSnapshot, query, where, updateDoc, collectionGroup, getDocsFromServer, writeBatch } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBkvREh1dwRmMZOriWka5rCK9WdER2oJOQ',
@@ -413,4 +413,51 @@ export function cloudEcrireBacClasse(teacherId, classe, donnees) {
   return setDoc(doc(db, 'profs', teacherId, 'meta', idDocBac(classe)), { data: nettoyer({ classe, ...donnees }) })
     .then(() => true)
     .catch((e) => { console.warn('Écriture note du bac impossible', e); return false })
+}
+
+// --- Sauvegarde complète (administrateur) ---
+// Un seul fichier avec TOUTES les données du cloud : accès (admin + collègues) et, pour chaque
+// espace professeur (y compris collègues retirés et anciens codes), le roster, les séances,
+// réalisations, VMA, barèmes, types de bac, notes du bac, etc.
+// Chaque document est enregistré avec son chemin (profs/…, cdp_acces/…) : le fichier ne dépend
+// pas du projet Firebase et pourra être restauré tel quel après un changement de projet.
+const RACINE_PROFS = 'profs'
+const SOUS_COLLECTIONS = ['meta', 'realisations', 'vma', 'eleves', 'enCours', 'arrets']
+
+async function lireServeur(ref) {
+  try { return await getDocsFromServer(ref) } catch (e) { return await getDocs(ref) }
+}
+
+export async function exporterTout() {
+  if (!db) throw new Error('Cloud indisponible')
+  const documents = {}
+  const ajouter = (d) => { documents[d.ref.path.replace(new RegExp('^' + RACINE_PROFS + '/'), 'profs/')] = d.data() }
+  ;(await lireServeur(collection(db, 'cdp_acces'))).forEach(ajouter)
+  ;(await lireServeur(collection(db, RACINE_PROFS))).forEach(ajouter)
+  for (const nom of SOUS_COLLECTIONS) {
+    const snap = await lireServeur(collectionGroup(db, nom))
+    snap.forEach((d) => { if (d.ref.parent.parent?.parent?.id === RACINE_PROFS) ajouter(d) })
+  }
+  const profs = new Set(Object.keys(documents).filter((k) => k.startsWith('profs/')).map((k) => k.split('/')[1]))
+  return {
+    app: 'course-duree-pro',
+    format: 1,
+    exportLe: new Date().toISOString(),
+    documents,
+    compte: { documents: Object.keys(documents).length, espaces: profs.size }
+  }
+}
+
+export async function restaurerTout(sauvegarde) {
+  if (!db) throw new Error('Cloud indisponible')
+  if (!sauvegarde || sauvegarde.app !== 'course-duree-pro') throw new Error("Ce fichier n'est pas une sauvegarde Course de Durée Pro.")
+  const ecritures = Object.entries(sauvegarde.documents || {}).map(([chemin, data]) => [
+    doc(db, chemin.replace(/^profs\//, RACINE_PROFS + '/')), data
+  ])
+  for (let i = 0; i < ecritures.length; i += 400) {
+    const b = writeBatch(db)
+    ecritures.slice(i, i + 400).forEach(([ref, data]) => b.set(ref, data))
+    await b.commit()
+  }
+  return ecritures.length
 }

@@ -11,6 +11,7 @@ import SuiviSansTelephone from './SuiviSansTelephone'
 import PanneauDirect from './PanneauDirect'
 import VisibiliteClasses from './VisibiliteClasses'
 import EspaceAcces from './EspaceAcces'
+import SauvegardeComplete from './SauvegardeComplete'
 import RegrouperEleves from './RegrouperEleves'
 import RechercheSeances from './RechercheSeances'
 import FinAnnee from './FinAnnee'
@@ -604,6 +605,7 @@ export default function EnseignantDashboard({
           onMigrerListe={migrerListeDeCodes}
         />
       )}
+      {onglet === 'acces' && estAdmin && <SauvegardeComplete />}
       {onglet === 'acces' && estAdmin && <FinAnnee accesConfig={accesConfig} onTermine={actualiser} />}
 
       {onglet === 'seances' && (
