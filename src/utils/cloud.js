@@ -19,13 +19,17 @@ import { initializeApp } from 'firebase/app'
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, onSnapshot, query, where, updateDoc, getDocsFromServer, writeBatch } from 'firebase/firestore'
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyBkvREh1dwRmMZOriWka5rCK9WdER2oJOQ',
-  authDomain: 'course-duree-pro.firebaseapp.com',
-  projectId: 'course-duree-pro',
-  storageBucket: 'course-duree-pro.firebasestorage.app',
-  messagingSenderId: '165570802992',
-  appId: '1:165570802992:web:5ea14d50283abdbca284f5'
+  apiKey: 'AIzaSyDqRihpVWPqmw54T6X6zx3PS3F92Wol3Bg',
+  authDomain: 'vma-pro-seances.firebaseapp.com',
+  projectId: 'vma-pro-seances',
+  storageBucket: 'vma-pro-seances.firebasestorage.app',
+  messagingSenderId: '378967245770',
+  appId: '1:378967245770:web:668b5f0f7251ec8a124533'
 }
+
+// Projet Firebase « Running » (vma-pro-seances), partagé avec VMA Pro et Relais 200m.
+// Les espaces professeurs sont rangés sous cdp_profs (au lieu de profs) pour ne rien mélanger.
+const RACINE_PROFS = 'cdp_profs'
 
 let db = null
 try {
@@ -86,7 +90,7 @@ export async function saveAccesConfig(config) {
 export async function loadRosterTeacher(teacherId) {
   if (!db) return {}
   try {
-    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'roster'))
+    const snap = await getDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'roster'))
     return snap.exists() && snap.data().classes ? snap.data().classes : {}
   } catch (e) {
     console.warn('Chargement roster impossible', e)
@@ -96,7 +100,7 @@ export async function loadRosterTeacher(teacherId) {
 
 export async function saveRosterTeacher(teacherId, roster) {
   if (!db) return false
-  return setDoc(doc(db, 'profs', teacherId, 'meta', 'roster'), { classes: nettoyer(roster) })
+  return setDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'roster'), { classes: nettoyer(roster) })
     .then(() => true)
     .catch((e) => { console.warn('Écriture roster impossible', e); return false })
 }
@@ -105,7 +109,7 @@ export async function saveRosterTeacher(teacherId, roster) {
 // réalisation. ---
 
 function colRealisations(teacherId) {
-  return collection(db, 'profs', teacherId, 'realisations')
+  return collection(db, RACINE_PROFS, teacherId, 'realisations')
 }
 
 export async function loadRealisationsTeacher(teacherId) {
@@ -136,7 +140,7 @@ export function cloudSupprimerRealisation(teacherId, id) {
 // --- VMA (par élève) d'un enseignant : une collection, un document par élève (clé = cleEleve). ---
 
 function colVma(teacherId) {
-  return collection(db, 'profs', teacherId, 'vma')
+  return collection(db, RACINE_PROFS, teacherId, 'vma')
 }
 
 export async function loadVmaTeacher(teacherId) {
@@ -172,7 +176,7 @@ export function cloudSupprimerVma(teacherId, cle) {
 export async function loadEspaceStrict(teacherId) {
   if (!db) throw new Error('Connexion au serveur indisponible.')
   const [snapRoster, snapReal, snapVma] = await Promise.all([
-    getDoc(doc(db, 'profs', teacherId, 'meta', 'roster')),
+    getDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'roster')),
     getDocs(colRealisations(teacherId)),
     getDocs(colVma(teacherId))
   ])
@@ -190,7 +194,7 @@ export async function loadEspaceStrict(teacherId) {
 export async function loadSeancesTeacher(teacherId) {
   if (!db) return []
   try {
-    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'seances'))
+    const snap = await getDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'seances'))
     return snap.exists() ? snap.data().liste || [] : []
   } catch (e) {
     console.warn('Chargement séances impossible', e)
@@ -203,13 +207,13 @@ export async function loadSeancesTeacher(teacherId) {
 // jamais réécrire cette bibliothèque à partir d'une liste vide par erreur.
 export async function loadSeancesTeacherStrict(teacherId) {
   if (!db) throw new Error('Cloud indisponible')
-  const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'seances'))
+  const snap = await getDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'seances'))
   return snap.exists() ? snap.data().liste || [] : []
 }
 
 export function cloudEcrireSeances(teacherId, seances) {
   if (!db) return Promise.resolve(false)
-  return setDoc(doc(db, 'profs', teacherId, 'meta', 'seances'), { liste: nettoyer(seances) })
+  return setDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'seances'), { liste: nettoyer(seances) })
     .then(() => true)
     .catch((e) => { console.warn('Écriture séances impossible', e); return false })
 }
@@ -221,7 +225,7 @@ export function cloudEcrireSeances(teacherId, seances) {
 export async function loadTypesBacTeacher(teacherId) {
   if (!db) return {}
   try {
-    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'typesBac'))
+    const snap = await getDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'typesBac'))
     return snap.exists() ? snap.data().data || {} : {}
   } catch (e) {
     console.warn('Chargement types de bac impossible', e)
@@ -231,7 +235,7 @@ export async function loadTypesBacTeacher(teacherId) {
 
 export function cloudEcrireTypesBac(teacherId, typesBac) {
   if (!db) return Promise.resolve(false)
-  return setDoc(doc(db, 'profs', teacherId, 'meta', 'typesBac'), { data: nettoyer(typesBac) })
+  return setDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'typesBac'), { data: nettoyer(typesBac) })
     .then(() => true)
     .catch((e) => { console.warn('Écriture types de bac impossible', e); return false })
 }
@@ -239,7 +243,7 @@ export function cloudEcrireTypesBac(teacherId, typesBac) {
 export async function loadTestsVisibiliteTeacher(teacherId) {
   if (!db) return {}
   try {
-    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'testsVisibilite'))
+    const snap = await getDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'testsVisibilite'))
     return snap.exists() ? snap.data().data || {} : {}
   } catch (e) {
     console.warn('Chargement visibilité tests impossible', e)
@@ -249,7 +253,7 @@ export async function loadTestsVisibiliteTeacher(teacherId) {
 
 export function cloudEcrireTestsVisibilite(teacherId, visibilite) {
   if (!db) return Promise.resolve(false)
-  return setDoc(doc(db, 'profs', teacherId, 'meta', 'testsVisibilite'), { data: nettoyer(visibilite) })
+  return setDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'testsVisibilite'), { data: nettoyer(visibilite) })
     .then(() => true)
     .catch((e) => { console.warn('Écriture visibilité tests impossible', e); return false })
 }
@@ -260,7 +264,7 @@ export function cloudEcrireTestsVisibilite(teacherId, visibilite) {
 export async function loadBaremeTeacher(teacherId) {
   if (!db) return null
   try {
-    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', 'bareme'))
+    const snap = await getDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'bareme'))
     return snap.exists() ? snap.data().data || null : null
   } catch (e) {
     console.warn('Chargement barème impossible', e)
@@ -270,7 +274,7 @@ export async function loadBaremeTeacher(teacherId) {
 
 export function cloudEcrireBareme(teacherId, bareme) {
   if (!db) return Promise.resolve(false)
-  return setDoc(doc(db, 'profs', teacherId, 'meta', 'bareme'), { data: nettoyer(bareme) })
+  return setDoc(doc(db, RACINE_PROFS, teacherId, 'meta', 'bareme'), { data: nettoyer(bareme) })
     .then(() => true)
     .catch((e) => { console.warn('Écriture barème impossible', e); return false })
 }
@@ -283,11 +287,11 @@ export function cloudEcrireBareme(teacherId, bareme) {
 export async function chargerAncienEspace(ancienCode) {
   if (!db || !ancienCode) return null
   const [elevesSnap, realisationsSnap, vmaSnap, seancesSnap, testsSnap] = await Promise.all([
-    getDocs(collection(db, 'profs', ancienCode, 'eleves')),
-    getDocs(collection(db, 'profs', ancienCode, 'realisations')),
-    getDocs(collection(db, 'profs', ancienCode, 'vma')),
-    getDoc(doc(db, 'profs', ancienCode, 'meta', 'seances')),
-    getDoc(doc(db, 'profs', ancienCode, 'meta', 'testsVisibilite'))
+    getDocs(collection(db, RACINE_PROFS, ancienCode, 'eleves')),
+    getDocs(collection(db, RACINE_PROFS, ancienCode, 'realisations')),
+    getDocs(collection(db, RACINE_PROFS, ancienCode, 'vma')),
+    getDoc(doc(db, RACINE_PROFS, ancienCode, 'meta', 'seances')),
+    getDoc(doc(db, RACINE_PROFS, ancienCode, 'meta', 'testsVisibilite'))
   ])
 
   // Les anciens documents élève portaient leur classe en propriété ("classe") ; le nouveau
@@ -322,7 +326,7 @@ export async function chargerAncienEspace(ancienCode) {
 export async function listerDocumentsProfs() {
   if (!db) return []
   try {
-    const snap = await getDocs(collection(db, 'profs'))
+    const snap = await getDocs(collection(db, RACINE_PROFS))
     return snap.docs.map((d) => d.id)
   } catch (e) {
     console.warn('Listage des espaces profs impossible', e)
@@ -342,21 +346,21 @@ export async function listerDocumentsProfs() {
 
 export function cloudEcrireEnCours(teacherId, eleveId, data) {
   if (!db || !teacherId || !eleveId) return Promise.resolve(false)
-  return setDoc(doc(db, 'profs', teacherId, 'enCours', eleveId), nettoyer(data), { merge: true })
+  return setDoc(doc(db, RACINE_PROFS, teacherId, 'enCours', eleveId), nettoyer(data), { merge: true })
     .then(() => true)
     .catch((e) => { console.warn('Écriture présence impossible', e); return false })
 }
 
 export function cloudMajEnCours(teacherId, eleveId, patch) {
   if (!db || !teacherId || !eleveId) return Promise.resolve(false)
-  return updateDoc(doc(db, 'profs', teacherId, 'enCours', eleveId), nettoyer(patch))
+  return updateDoc(doc(db, RACINE_PROFS, teacherId, 'enCours', eleveId), nettoyer(patch))
     .then(() => true)
     .catch(() => false)
 }
 
 export function cloudSupprimerEnCours(teacherId, eleveId) {
   if (!db || !teacherId || !eleveId) return Promise.resolve(false)
-  return deleteDoc(doc(db, 'profs', teacherId, 'enCours', eleveId))
+  return deleteDoc(doc(db, RACINE_PROFS, teacherId, 'enCours', eleveId))
     .then(() => true)
     .catch(() => false)
 }
@@ -365,7 +369,7 @@ export function cloudSupprimerEnCours(teacherId, eleveId) {
 export function ecouterEnCours(teacherId, callback) {
   if (!db || !teacherId) { callback([]); return () => {} }
   return onSnapshot(
-    collection(db, 'profs', teacherId, 'enCours'),
+    collection(db, RACINE_PROFS, teacherId, 'enCours'),
     (snap) => callback(snap.docs.map((d) => ({ eleveId: d.id, ...d.data() }))),
     (e) => { console.warn('Écoute présences impossible', e); callback([]) }
   )
@@ -373,7 +377,7 @@ export function ecouterEnCours(teacherId, callback) {
 
 export function cloudEcrireArret(teacherId, arret) {
   if (!db || !teacherId) return Promise.resolve(false)
-  return setDoc(doc(db, 'profs', teacherId, 'arrets', arret.id), nettoyer(arret))
+  return setDoc(doc(db, RACINE_PROFS, teacherId, 'arrets', arret.id), nettoyer(arret))
     .then(() => true)
     .catch((e) => { console.warn('Écriture arrêt impossible', e); return false })
 }
@@ -383,7 +387,7 @@ export function cloudEcrireArret(teacherId, arret) {
 export function ecouterArretsClasse(teacherId, classe, callback) {
   if (!db || !teacherId || classe == null) return () => {}
   return onSnapshot(
-    query(collection(db, 'profs', teacherId, 'arrets'), where('classe', '==', classe)),
+    query(collection(db, RACINE_PROFS, teacherId, 'arrets'), where('classe', '==', classe)),
     (snap) => callback(snap.docs.map((d) => d.data())),
     (e) => console.warn('Écoute arrêts impossible', e)
   )
@@ -399,7 +403,7 @@ function idDocBac(classe) {
 export async function loadBacClasse(teacherId, classe) {
   if (!db || !teacherId) return { eleves: {}, retenue: {} }
   try {
-    const snap = await getDoc(doc(db, 'profs', teacherId, 'meta', idDocBac(classe)))
+    const snap = await getDoc(doc(db, RACINE_PROFS, teacherId, 'meta', idDocBac(classe)))
     const d = snap.exists() ? snap.data().data || {} : {}
     return { eleves: d.eleves || {}, retenue: d.retenue || {} }
   } catch (e) {
@@ -410,7 +414,7 @@ export async function loadBacClasse(teacherId, classe) {
 
 export function cloudEcrireBacClasse(teacherId, classe, donnees) {
   if (!db || !teacherId) return Promise.resolve(false)
-  return setDoc(doc(db, 'profs', teacherId, 'meta', idDocBac(classe)), { data: nettoyer({ classe, ...donnees }) })
+  return setDoc(doc(db, RACINE_PROFS, teacherId, 'meta', idDocBac(classe)), { data: nettoyer({ classe, ...donnees }) })
     .then(() => true)
     .catch((e) => { console.warn('Écriture note du bac impossible', e); return false })
 }
@@ -421,7 +425,6 @@ export function cloudEcrireBacClasse(teacherId, classe, donnees) {
 // réalisations, VMA, barèmes, types de bac, notes du bac, etc.
 // Chaque document est enregistré avec son chemin (profs/…, cdp_acces/…) : le fichier ne dépend
 // pas du projet Firebase et pourra être restauré tel quel après un changement de projet.
-const RACINE_PROFS = 'profs'
 const SOUS_COLLECTIONS = ['meta', 'realisations', 'vma', 'eleves', 'enCours', 'arrets']
 
 async function lireServeur(ref) {

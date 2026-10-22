@@ -1,3 +1,7 @@
+v1.66.0 — Déménagement vers le projet Firebase « Running »
+- L'appli utilise maintenant le projet Firebase « Running » (vma-pro-seances), partagé avec VMA Pro et Relais 200m ; ses espaces professeurs y sont rangés à part (cdp_profs, cdp_acces)
+- Après la mise à jour : Accès > Restaurer un fichier avec la sauvegarde complète faite avant le déménagement
+
 v1.65.1 — Correctif sauvegarde complète
 - « Sauvegarder tout » échouait : la lecture se fait maintenant espace par espace (admin, collègues, anciens codes) au lieu d'une recherche globale refusée par les règles Firestore
 - En cas d'erreur, le message précis s'affiche
