@@ -1,3 +1,7 @@
+v1.65.1 — Correctif sauvegarde complète
+- « Sauvegarder tout » échouait : la lecture se fait maintenant espace par espace (admin, collègues, anciens codes) au lieu d'une recherche globale refusée par les règles Firestore
+- En cas d'erreur, le message précis s'affiche
+
 v1.65.0 — Sauvegarde complète du cloud
 - Onglet Accès (administrateur) : nouvelle carte « Sauvegarde complète ». « Sauvegarder tout » télécharge un fichier avec les accès et les espaces de tous les professeurs (roster, séances, réalisations, VMA, barèmes, types de bac, notes du bac…) ; « Restaurer un fichier » remet ces données dans le cloud
 - Prépare le regroupement des applis Running dans un même projet Firebase

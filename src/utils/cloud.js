@@ -16,7 +16,7 @@
 // partagée, comme pour la synchro des autres applis de Christophe.
 
 import { initializeApp } from 'firebase/app'
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, onSnapshot, query, where, updateDoc, collectionGroup, getDocsFromServer, writeBatch } from 'firebase/firestore'
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, getDocs, collection, onSnapshot, query, where, updateDoc, getDocsFromServer, writeBatch } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBkvREh1dwRmMZOriWka5rCK9WdER2oJOQ',
@@ -432,19 +432,28 @@ export async function exporterTout() {
   if (!db) throw new Error('Cloud indisponible')
   const documents = {}
   const ajouter = (d) => { documents[d.ref.path.replace(new RegExp('^' + RACINE_PROFS + '/'), 'profs/')] = d.data() }
+  // Accès (admin + collègues)
   ;(await lireServeur(collection(db, 'cdp_acces'))).forEach(ajouter)
-  ;(await lireServeur(collection(db, RACINE_PROFS))).forEach(ajouter)
-  for (const nom of SOUS_COLLECTIONS) {
-    const snap = await lireServeur(collectionGroup(db, nom))
-    snap.forEach((d) => { if (d.ref.parent.parent?.parent?.id === RACINE_PROFS) ajouter(d) })
+  // Liste des espaces : admin, collègues (même retirés s'ils ont un document), anciens codes
+  const espaces = new Set(['admin'])
+  const acces = documents['cdp_acces/config']
+  ;(acces?.collegues || []).forEach((c) => c?.id && espaces.add(c.id))
+  try {
+    ;(await lireServeur(collection(db, RACINE_PROFS))).forEach((d) => { espaces.add(d.id); ajouter(d) })
+  } catch (e) { console.warn('Liste des espaces indisponible', e) }
+  // Chaque espace : toutes ses sous-collections connues
+  for (const t of espaces) {
+    for (const nom of SOUS_COLLECTIONS) {
+      ;(await lireServeur(collection(db, RACINE_PROFS, t, nom))).forEach(ajouter)
+    }
   }
-  const profs = new Set(Object.keys(documents).filter((k) => k.startsWith('profs/')).map((k) => k.split('/')[1]))
+  const avecDonnees = new Set(Object.keys(documents).filter((k) => k.split('/').length > 2 && k.startsWith('profs/')).map((k) => k.split('/')[1]))
   return {
     app: 'course-duree-pro',
     format: 1,
     exportLe: new Date().toISOString(),
     documents,
-    compte: { documents: Object.keys(documents).length, espaces: profs.size }
+    compte: { documents: Object.keys(documents).length, espaces: avecDonnees.size }
   }
 }
 

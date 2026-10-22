@@ -19,7 +19,7 @@ export default function SauvegardeComplete() {
       setTimeout(() => URL.revokeObjectURL(a.href), 2000)
       setEtat(`✅ Sauvegarde téléchargée : ${s.compte.espaces} espace(s) professeur, ${s.compte.documents} document(s) (accès, classes, séances, réalisations, VMA, notes…). Garde ce fichier précieusement (Drive, mail…).`)
     } catch (e) {
-      setEtat('❌ Sauvegarde impossible (réseau ?). Réessaie avec une bonne connexion.')
+      setEtat('❌ Sauvegarde impossible : ' + (e?.code || e?.message || 'erreur inconnue') + '. Réessaie avec une bonne connexion ; si le message revient, envoie-le à Claude.')
     }
     setOccupe(false)
   }
